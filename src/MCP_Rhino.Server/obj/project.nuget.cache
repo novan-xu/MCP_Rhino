@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "KhY3GTuQAScVh4OGsA6UDK6K4Nhpdbja0KBY0k3sBDhiajTd1rdfcqU3alwP5FKOIalQnA/gtwFnn1EhEQelZw==",
+  "dgSpecHash": "gjOtT1ksa/x+JLSk61+XVw10IjKVX/hZlb4fU67TQEWO9C3wlsfigNy0pQdUhVDKNkOAzLiphnIX3OxMrxC+lA==",
   "success": true,
-  "projectFilePath": "c:\\Projects\\MCP_Rhino\\src\\MCP_Rhino.Server\\MCP_Rhino.Server.csproj",
+  "projectFilePath": "C:\\Projects\\MCP_Rhino\\src\\MCP_Rhino.Server\\MCP_Rhino.Server.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\nxu\\.nuget\\packages\\microsoft.extensions.ai.abstractions\\10.3.0\\microsoft.extensions.ai.abstractions.10.3.0.nupkg.sha512",
     "C:\\Users\\nxu\\.nuget\\packages\\microsoft.extensions.caching.abstractions\\10.0.3\\microsoft.extensions.caching.abstractions.10.0.3.nupkg.sha512",

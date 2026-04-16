@@ -8,6 +8,6 @@ build_property.PlatformNeutralAssembly =
 build_property.EnforceExtendedAnalyzerRules = 
 build_property._SupportedPlatformList = Linux,macOS,Windows
 build_property.RootNamespace = MCP_Rhino.Server
-build_property.ProjectDir = c:\Projects\MCP_Rhino\src\MCP_Rhino.Server\
+build_property.ProjectDir = C:\Projects\MCP_Rhino\src\MCP_Rhino.Server\
 build_property.EnableComHosting = 
 build_property.EnableGeneratedComInterfaceComImportInterop = 

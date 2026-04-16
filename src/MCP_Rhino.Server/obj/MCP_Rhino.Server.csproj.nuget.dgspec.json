@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "c:\\Projects\\MCP_Rhino\\src\\MCP_Rhino.Server\\MCP_Rhino.Server.csproj": {}
+    "C:\\Projects\\MCP_Rhino\\src\\MCP_Rhino.Server\\MCP_Rhino.Server.csproj": {}
   },
   "projects": {
-    "c:\\Projects\\MCP_Rhino\\src\\MCP_Rhino.Server\\MCP_Rhino.Server.csproj": {
+    "C:\\Projects\\MCP_Rhino\\src\\MCP_Rhino.Server\\MCP_Rhino.Server.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "c:\\Projects\\MCP_Rhino\\src\\MCP_Rhino.Server\\MCP_Rhino.Server.csproj",
+        "projectUniqueName": "C:\\Projects\\MCP_Rhino\\src\\MCP_Rhino.Server\\MCP_Rhino.Server.csproj",
         "projectName": "MCP_Rhino.Server",
-        "projectPath": "c:\\Projects\\MCP_Rhino\\src\\MCP_Rhino.Server\\MCP_Rhino.Server.csproj",
+        "projectPath": "C:\\Projects\\MCP_Rhino\\src\\MCP_Rhino.Server\\MCP_Rhino.Server.csproj",
         "packagesPath": "C:\\Users\\nxu\\.nuget\\packages\\",
-        "outputPath": "c:\\Projects\\MCP_Rhino\\src\\MCP_Rhino.Server\\obj\\",
+        "outputPath": "C:\\Projects\\MCP_Rhino\\src\\MCP_Rhino.Server\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
