@@ -1,0 +1,72 @@
+# =========================
+# .NET / C# build outputs
+# =========================
+**/bin/
+**/obj/
+
+# =========================
+# Test results & coverage
+# =========================
+TestResults/
+**/TestResults/
+coverage/
+coverage-results/
+*.coverage
+*.coveragexml
+
+# =========================
+# Visual Studio / VS Code
+# =========================
+.vs/
+.vscode/
+*.user
+*.rsuser
+*.suo
+*.userosscache
+*.sln.docstates
+
+# =========================
+# Rider / ReSharper
+# =========================
+_ReSharper*/
+*.DotSettings.user
+
+# =========================
+# NuGet / package restore caches
+# =========================
+packages/
+*.nupkg
+*.snupkg
+project.assets.json
+project.nuget.cache
+*.nuget.dgspec.json
+
+# =========================
+# Logs / temp / local caches
+# =========================
+*.log
+*.tmp
+*.temp
+*.cache
+
+# =========================
+# Project-specific generated artifacts
+# =========================
+_validation/file-safeguard-build/
+*.3dmbak
+_tmp*.csx
+.cline/
+
+# =========================
+# OS-generated files
+# =========================
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# =========================
+# Keep repository assets under version control
+# =========================
+!docs/
+!Project_Plan/
+!test-files/
