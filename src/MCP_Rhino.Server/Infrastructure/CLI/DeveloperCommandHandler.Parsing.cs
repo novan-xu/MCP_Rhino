@@ -158,6 +158,114 @@ public sealed partial class DeveloperCommandHandler
         return entries;
     }
 
+    private static List<ObjectScopedUserTextKeyRequest> ParseObjectScopedUserTextKeys(string input)
+    {
+        var entries = new List<ObjectScopedUserTextKeyRequest>();
+        foreach (string token in input.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            int pipeIndex = token.IndexOf('|');
+            if (pipeIndex <= 0)
+            {
+                throw new InvalidOperationException($"无效 entrySpec 片段: {token}。期望 objectId|key");
+            }
+
+            if (!Guid.TryParse(token[..pipeIndex], out Guid objectId))
+            {
+                throw new InvalidOperationException($"无效 ObjectId: {token[..pipeIndex]}");
+            }
+
+            string key = token[(pipeIndex + 1)..].Trim();
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                throw new InvalidOperationException($"entrySpec key 不能为空，收到: {token}");
+            }
+
+            entries.Add(new ObjectScopedUserTextKeyRequest
+            {
+                ObjectId = objectId,
+                Key = key
+            });
+        }
+
+        return entries;
+    }
+
+    private static List<DocumentUserStringEntryRequest> ParseDocumentUserStringWriteEntries(string input)
+    {
+        var entries = new List<DocumentUserStringEntryRequest>();
+        foreach (string token in input.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            int equalIndex = token.IndexOf('=');
+            if (equalIndex <= 0)
+            {
+                throw new InvalidOperationException($"entrySpec 格式应为 key=value 或 section|entry=value，收到: {token}");
+            }
+
+            string keyPart = token[..equalIndex].Trim();
+            string value = token[(equalIndex + 1)..];
+            (string? section, string key) = SplitSectionKey(keyPart);
+
+            entries.Add(new DocumentUserStringEntryRequest
+            {
+                Section = section,
+                Key = key,
+                Value = value
+            });
+        }
+
+        return entries;
+    }
+
+    private static List<DocumentUserStringEntryRequest> ParseDocumentUserStringDeleteEntries(string input)
+    {
+        var entries = new List<DocumentUserStringEntryRequest>();
+        foreach (string token in input.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            (string? section, string key) = SplitSectionKey(token.Trim());
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                throw new InvalidOperationException($"entrySpec key 不能为空，收到: {token}");
+            }
+
+            entries.Add(new DocumentUserStringEntryRequest
+            {
+                Section = section,
+                Key = key
+            });
+        }
+
+        return entries;
+    }
+
+    private static (string? Section, string Key) SplitSectionKey(string keyPart)
+    {
+        int pipeIndex = keyPart.IndexOf('|');
+        if (pipeIndex < 0)
+        {
+            return (null, keyPart);
+        }
+
+        string section = keyPart[..pipeIndex].Trim();
+        string entry = keyPart[(pipeIndex + 1)..].Trim();
+        return (string.IsNullOrEmpty(section) ? null : section, entry);
+    }
+
+    private static List<Guid> ParseGuidCsv(string input)
+    {
+        var guids = new List<Guid>();
+        foreach (string token in input.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (!Guid.TryParse(token, out Guid objectId))
+            {
+                throw new InvalidOperationException($"无效 ObjectId: {token}");
+            }
+
+            guids.Add(objectId);
+        }
+
+        return guids;
+    }
+
     private static List<string> ParseNamedCsv(string[] args, string prefix)
     {
         string? token = args.FirstOrDefault(arg => arg.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));

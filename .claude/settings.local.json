@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls c:\\\\\\\\01_Projects\\\\\\\\MCP_Rhino\\\\\\\\src\\\\\\\\MCP_Rhino.Server)"
+    ]
+  }
+}

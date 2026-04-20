@@ -25,6 +25,7 @@ public static class DependencyInjection
         services.AddSingleton<RhinoObjectFilterService>();
         services.AddSingleton<RhinoObjectEditingService>();
         services.AddSingleton<RhinoObjectUserTextService>();
+        services.AddSingleton<RhinoDocumentUserStringService>();
         services.AddSingleton<DeveloperCommandHandler>();
 
         return services;

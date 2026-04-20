@@ -13,6 +13,7 @@ public sealed partial class DeveloperCommandHandler
     private readonly RhinoObjectFilterService _filterService;
     private readonly RhinoObjectEditingService _editingService;
     private readonly RhinoObjectUserTextService _userTextService;
+    private readonly RhinoDocumentUserStringService _documentUserStringService;
     private readonly LayerObjectFilterSkill _layerSkill;
     private readonly ObjectTypeFilterSkill _typeSkill;
     private readonly UserAttributeObjectFilterSkill _userAttributeSkill;
@@ -24,6 +25,7 @@ public sealed partial class DeveloperCommandHandler
         RhinoObjectFilterService filterService,
         RhinoObjectEditingService editingService,
         RhinoObjectUserTextService userTextService,
+        RhinoDocumentUserStringService documentUserStringService,
         LayerObjectFilterSkill layerSkill,
         ObjectTypeFilterSkill typeSkill,
         UserAttributeObjectFilterSkill userAttributeSkill,
@@ -34,6 +36,7 @@ public sealed partial class DeveloperCommandHandler
         _filterService = filterService;
         _editingService = editingService;
         _userTextService = userTextService;
+        _documentUserStringService = documentUserStringService;
         _layerSkill = layerSkill;
         _typeSkill = typeSkill;
         _userAttributeSkill = userAttributeSkill;
@@ -60,6 +63,11 @@ public sealed partial class DeveloperCommandHandler
             "apply-object-edits" => HandleApplyObjectEdits(args),
             "preview-object-user-text-writes" => HandlePreviewObjectUserTextWrites(args),
             "apply-object-user-text-writes" => HandleApplyObjectUserTextWrites(args),
+            "get-object-user-strings" => HandleGetObjectUserStrings(args),
+            "delete-object-user-text" => HandleDeleteObjectUserText(args),
+            "get-document-user-strings" => HandleGetDocumentUserStrings(args),
+            "set-document-user-strings" => HandleSetDocumentUserStrings(args),
+            "delete-document-user-strings" => HandleDeleteDocumentUserStrings(args),
             "inspect-file-mutation-readiness" => HandleInspectFileMutationReadiness(args),
             "create-archive-snapshot" => HandleCreateArchiveSnapshot(args),
             "cleanup-archive" => HandleCleanupArchive(args),
@@ -268,6 +276,141 @@ public sealed partial class DeveloperCommandHandler
         catch (Exception ex)
         {
             Console.WriteLine($"对象级 user text 执行参数解析失败: {ex.Message}");
+        }
+
+        return true;
+    }
+
+    private bool HandleGetObjectUserStrings(string[] args)
+    {
+        if (args.Length < 3)
+        {
+            Console.WriteLine("用法: dotnet run --project src/MCP_Rhino.Server -- get-object-user-strings <3dm文件路径> <guid1,guid2,...>");
+            return true;
+        }
+
+        try
+        {
+            var request = new ObjectUserTextReadRequest
+            {
+                FilePath = args[1],
+                ObjectIds = ParseGuidCsv(args[2])
+            };
+
+            var result = _userTextService.Read(request);
+            Console.WriteLine(result.Success && result.Data is not null
+                ? _userTextService.FormatRead(result.Data)
+                : result.Message);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"对象级 user string 读取参数解析失败: {ex.Message}");
+        }
+
+        return true;
+    }
+
+    private bool HandleDeleteObjectUserText(string[] args)
+    {
+        if (args.Length < 3)
+        {
+            Console.WriteLine("用法: dotnet run --project src/MCP_Rhino.Server -- delete-object-user-text <3dm文件路径> <entrySpec>。entrySpec 格式: objectId|key;objectId|key");
+            return true;
+        }
+
+        try
+        {
+            var request = new ObjectUserTextDeleteRequest
+            {
+                FilePath = args[1],
+                Entries = ParseObjectScopedUserTextKeys(args[2])
+            };
+
+            var result = _userTextService.Delete(request);
+            Console.WriteLine(result.Success && result.Data is not null
+                ? _userTextService.FormatExecution(result.Data)
+                : result.Message);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"对象级 user text 删除参数解析失败: {ex.Message}");
+        }
+
+        return true;
+    }
+
+    private bool HandleGetDocumentUserStrings(string[] args)
+    {
+        if (args.Length < 2)
+        {
+            Console.WriteLine("用法: dotnet run --project src/MCP_Rhino.Server -- get-document-user-strings <3dm文件路径>");
+            return true;
+        }
+
+        var result = _documentUserStringService.Read(new DocumentUserStringReadRequest
+        {
+            FilePath = args[1]
+        });
+
+        Console.WriteLine(result.Success && result.Data is not null
+            ? _documentUserStringService.FormatRead(result.Data)
+            : result.Message);
+        return true;
+    }
+
+    private bool HandleSetDocumentUserStrings(string[] args)
+    {
+        if (args.Length < 3)
+        {
+            Console.WriteLine("用法: dotnet run --project src/MCP_Rhino.Server -- set-document-user-strings <3dm文件路径> <entrySpec>。entrySpec 格式: key=value;section|entry=value");
+            return true;
+        }
+
+        try
+        {
+            var request = new DocumentUserStringWriteRequest
+            {
+                FilePath = args[1],
+                Entries = ParseDocumentUserStringWriteEntries(args[2])
+            };
+
+            var result = _documentUserStringService.Set(request);
+            Console.WriteLine(result.Success && result.Data is not null
+                ? _documentUserStringService.FormatMutation(result.Data, "Document User String Write")
+                : result.Message);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"文档级 user string 写入参数解析失败: {ex.Message}");
+        }
+
+        return true;
+    }
+
+    private bool HandleDeleteDocumentUserStrings(string[] args)
+    {
+        if (args.Length < 3)
+        {
+            Console.WriteLine("用法: dotnet run --project src/MCP_Rhino.Server -- delete-document-user-strings <3dm文件路径> <entrySpec>。entrySpec 格式: key;section|entry");
+            return true;
+        }
+
+        try
+        {
+            var request = new DocumentUserStringDeleteRequest
+            {
+                FilePath = args[1],
+                Entries = ParseDocumentUserStringDeleteEntries(args[2])
+            };
+
+            var result = _documentUserStringService.Delete(request);
+            Console.WriteLine(result.Success && result.Data is not null
+                ? _documentUserStringService.FormatMutation(result.Data, "Document User String Delete")
+                : result.Message);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"文档级 user string 删除参数解析失败: {ex.Message}");
         }
 
         return true;
