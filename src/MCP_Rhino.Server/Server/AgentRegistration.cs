@@ -5,6 +5,7 @@ using MCP_Rhino.Server.Agents.Inspection;
 using MCP_Rhino.Server.Skills.File;
 using MCP_Rhino.Server.Skills.Editing;
 using MCP_Rhino.Server.Skills.Inspection;
+using MCP_Rhino.Server.Skills.Modeling;
 
 namespace MCP_Rhino.Server.Server;
 
@@ -23,6 +24,8 @@ public static class AgentRegistration
         services.AddSingleton<ObjectSelectionSkill>();
         services.AddSingleton<ObjectEditPreviewSkill>();
         services.AddSingleton<ObjectEditApplySkill>();
+        services.AddSingleton<GeometryCreationSkill>();
+        services.AddSingleton<GeometryModificationSkill>();
         services.AddSingleton<FileArchiveAgent>();
         services.AddSingleton<RhinoObjectFilterAgent>();
         services.AddSingleton<RhinoObjectEditingAgent>();

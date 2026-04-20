@@ -6,4 +6,7 @@ public interface IEditResultFormatter
 {
     string FormatPreview(ObjectEditPreviewResponse response);
     string FormatExecution(ObjectEditExecutionResponse response);
+    string FormatGeometryCreation(GeometryCreationResponse response);
+    string FormatGeometryModification(GeometryModificationResponse response);
+    string FormatGeometryModificationPreview(GeometryModificationPreviewResponse response);
 }

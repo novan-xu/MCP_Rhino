@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(ls c:\\\\\\\\01_Projects\\\\\\\\MCP_Rhino\\\\\\\\src\\\\\\\\MCP_Rhino.Server)"
+      "Bash(ls c:\\\\\\\\01_Projects\\\\\\\\MCP_Rhino\\\\\\\\src\\\\\\\\MCP_Rhino.Server)",
+      "Bash(xargs ls *)",
+      "WebFetch(domain:developer.rhino3d.com)",
+      "Bash(awk '{print $NF}')",
+      "Bash(dotnet run *)",
+      "Bash(echo \"---EXIT:$?---\")"
     ]
   }
 }

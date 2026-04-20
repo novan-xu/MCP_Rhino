@@ -5,6 +5,7 @@ using MCP_Rhino.Server.Application.Services;
 using MCP_Rhino.Server.Contracts.Requests;
 using MCP_Rhino.Server.Domain.Enums;
 using MCP_Rhino.Server.Skills.Inspection;
+using MCP_Rhino.Server.Skills.Modeling;
 
 namespace MCP_Rhino.Server.Infrastructure.CLI;
 
@@ -20,6 +21,8 @@ public sealed partial class DeveloperCommandHandler
     private readonly RhinoObjectFilterAgent _filterAgent;
     private readonly RhinoObjectEditingAgent _editingAgent;
     private readonly FileArchiveAgent _fileArchiveAgent;
+    private readonly GeometryCreationSkill _geometryCreationSkill;
+    private readonly GeometryModificationSkill _geometryModificationSkill;
 
     public DeveloperCommandHandler(
         RhinoObjectFilterService filterService,
@@ -31,7 +34,9 @@ public sealed partial class DeveloperCommandHandler
         UserAttributeObjectFilterSkill userAttributeSkill,
         RhinoObjectFilterAgent filterAgent,
         RhinoObjectEditingAgent editingAgent,
-        FileArchiveAgent fileArchiveAgent)
+        FileArchiveAgent fileArchiveAgent,
+        GeometryCreationSkill geometryCreationSkill,
+        GeometryModificationSkill geometryModificationSkill)
     {
         _filterService = filterService;
         _editingService = editingService;
@@ -43,6 +48,8 @@ public sealed partial class DeveloperCommandHandler
         _filterAgent = filterAgent;
         _editingAgent = editingAgent;
         _fileArchiveAgent = fileArchiveAgent;
+        _geometryCreationSkill = geometryCreationSkill;
+        _geometryModificationSkill = geometryModificationSkill;
     }
 
     public bool TryHandle(string[] args)
@@ -71,6 +78,7 @@ public sealed partial class DeveloperCommandHandler
             "inspect-file-mutation-readiness" => HandleInspectFileMutationReadiness(args),
             "create-archive-snapshot" => HandleCreateArchiveSnapshot(args),
             "cleanup-archive" => HandleCleanupArchive(args),
+            "geometry-smoke-test" => HandleGeometrySmokeTest(args),
             _ => false
         };
     }

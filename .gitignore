@@ -53,6 +53,7 @@ project.nuget.cache
 # Project-specific generated artifacts
 # =========================
 _validation/file-safeguard-build/
+_validation/geometry-smoke-test/
 *.3dmbak
 _tmp*.csx
 .cline/

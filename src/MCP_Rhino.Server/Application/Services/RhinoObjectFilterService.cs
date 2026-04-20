@@ -128,6 +128,67 @@ public sealed class RhinoObjectFilterService
         }
     }
 
+    public OperationResponse<RhinoObjectFilterResult> ResolveByObjectIds(string filePath, IReadOnlyList<Guid> objectIds)
+    {
+        if (!_repository.Exists(filePath))
+        {
+            return OperationResponse<RhinoObjectFilterResult>.Fail($"错误：未找到文件 {filePath}");
+        }
+
+        List<Guid> distinctObjectIds = objectIds
+            .Where(objectId => objectId != Guid.Empty)
+            .Distinct()
+            .ToList();
+
+        if (distinctObjectIds.Count == 0)
+        {
+            return OperationResponse<RhinoObjectFilterResult>.Fail("错误：至少需要提供一个非空 ObjectId。");
+        }
+
+        try
+        {
+            using var model = _repository.Read(filePath);
+            List<RhinoObjectInfo> objectInfos = BuildObjectInfos(model);
+            Dictionary<Guid, RhinoObjectInfo> objectLookup = objectInfos.ToDictionary(objectInfo => objectInfo.ObjectId);
+
+            var resolvedObjects = new List<RhinoObjectInfo>(distinctObjectIds.Count);
+            var missingObjectIds = new List<Guid>();
+
+            foreach (Guid objectId in distinctObjectIds)
+            {
+                if (objectLookup.TryGetValue(objectId, out RhinoObjectInfo? objectInfo))
+                {
+                    resolvedObjects.Add(objectInfo);
+                }
+                else
+                {
+                    missingObjectIds.Add(objectId);
+                }
+            }
+
+            if (missingObjectIds.Count > 0)
+            {
+                return OperationResponse<RhinoObjectFilterResult>.Fail(
+                    $"错误：以下 ObjectId 在当前模型中不存在: {string.Join(", ", missingObjectIds)}");
+            }
+
+            var result = new RhinoObjectFilterResult
+            {
+                FilePath = filePath,
+                TotalObjectCount = objectInfos.Count,
+                MatchedCount = resolvedObjects.Count,
+                CriteriaSummary = SummarizeObjectIds(distinctObjectIds),
+                Objects = resolvedObjects
+            };
+
+            return OperationResponse<RhinoObjectFilterResult>.Ok(result, $"已解析 {resolvedObjects.Count} 个显式 ObjectId。");
+        }
+        catch (Exception ex)
+        {
+            return OperationResponse<RhinoObjectFilterResult>.Fail($"按 ObjectId 解析对象失败: {ex.Message}");
+        }
+    }
+
     public string FormatLayerCandidates(string layerQuery, IReadOnlyList<RhinoLayerCandidate>? candidates, string message)
     {
         if (candidates is null || candidates.Count == 0)
@@ -339,5 +400,15 @@ public sealed class RhinoObjectFilterService
 
         fragments.Add($"MatchMode={criteria.MatchMode}");
         return string.Join("; ", fragments);
+    }
+
+    private static string SummarizeObjectIds(IReadOnlyList<Guid> objectIds)
+    {
+        if (objectIds.Count <= 5)
+        {
+            return $"ConfirmedObjectIds=[{string.Join(", ", objectIds)}]";
+        }
+
+        return $"ConfirmedObjectIds.Count={objectIds.Count}";
     }
 }

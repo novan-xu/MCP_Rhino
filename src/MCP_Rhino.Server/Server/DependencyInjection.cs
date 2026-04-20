@@ -20,10 +20,15 @@ public static class DependencyInjection
         services.AddSingleton<IArchiveRetentionService, ArchiveRetentionService>();
         services.AddSingleton<IObjectEditValidator, RhinoObjectEditValidator>();
         services.AddSingleton<IObjectEditOperationApplier, RhinoObjectEditOperationApplier>();
+        services.AddSingleton<IGeometryBuilder, RhinoGeometryBuilder>();
+        services.AddSingleton<IGeometryMutator, RhinoGeometryMutator>();
+        services.AddSingleton<IGeometryValidator, RhinoGeometryValidator>();
         services.AddSingleton<IFileMutationSafeguard, RhinoFileMutationSafeguard>();
         services.AddSingleton<IEditResultFormatter, PassThroughEditResultFormatter>();
         services.AddSingleton<RhinoObjectFilterService>();
         services.AddSingleton<RhinoObjectEditingService>();
+        services.AddSingleton<RhinoGeometryCreationService>();
+        services.AddSingleton<RhinoGeometryModificationService>();
         services.AddSingleton<RhinoObjectUserTextService>();
         services.AddSingleton<RhinoDocumentUserStringService>();
         services.AddSingleton<DeveloperCommandHandler>();
