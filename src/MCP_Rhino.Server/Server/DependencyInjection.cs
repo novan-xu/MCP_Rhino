@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using MCP_Rhino.Server.Application.Interfaces;
 using MCP_Rhino.Server.Application.Services;
 using MCP_Rhino.Server.Application.Services.Filters;
+using MCP_Rhino.Server.Infrastructure.CLI;
 using MCP_Rhino.Server.Infrastructure.Rhino;
 
 namespace MCP_Rhino.Server.Server;
@@ -24,6 +25,7 @@ public static class DependencyInjection
         services.AddSingleton<RhinoObjectFilterService>();
         services.AddSingleton<RhinoObjectEditingService>();
         services.AddSingleton<RhinoObjectUserTextService>();
+        services.AddSingleton<DeveloperCommandHandler>();
 
         return services;
     }

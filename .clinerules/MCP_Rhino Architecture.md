@@ -46,9 +46,10 @@
 - 这里回答“业务概念和规则是什么”。
 
 ### 8. Infrastructure/
-- 放置 Rhino3dm、文件系统、配置、日志等具体实现。
+- 放置 Rhino3dm、文件系统、配置、日志、命令行入口适配等具体实现。
 - 所有 `File3dm.Read/Write` 等细节集中在这里。
 - 这里回答“具体如何和外部技术打交道”。
+- `CLI/` 放置面向开发者 / 终端的命令行适配实现（例如 `DeveloperCommandHandler`），作为外部入口到 Application / Agent 层的薄适配层；`Program.cs` 只负责解析并委托给这里。
 
 ### 9. Contracts/
 - 放置 Request / Response / Agent 消息 DTO。
