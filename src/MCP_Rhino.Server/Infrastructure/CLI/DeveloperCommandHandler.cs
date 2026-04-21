@@ -22,6 +22,13 @@ public sealed partial class DeveloperCommandHandler
     private readonly RhinoObjectEditingAgent _editingAgent;
     private readonly GeometryCreationSkill _geometryCreationSkill;
     private readonly GeometryModificationSkill _geometryModificationSkill;
+    private readonly Dictionary<string, Func<string[], bool>> _extensionHandlers = new(StringComparer.OrdinalIgnoreCase);
+
+    // Optional hook for partial-class smoke-test files that live under Project_Test/ to
+    // register their own CLI commands without the main switch below knowing about them.
+    // If no partial implementation exists (e.g. the test folder has been removed), this
+    // call compiles to a no-op and _extensionHandlers stays empty.
+    partial void RegisterExtensionHandlers();
 
     public DeveloperCommandHandler(
         RhinoObjectFilterService filterService,
@@ -49,6 +56,7 @@ public sealed partial class DeveloperCommandHandler
         _editingAgent = editingAgent;
         _geometryCreationSkill = geometryCreationSkill;
         _geometryModificationSkill = geometryModificationSkill;
+        RegisterExtensionHandlers();
     }
 
     public bool TryHandle(string[] args)
@@ -58,7 +66,13 @@ public sealed partial class DeveloperCommandHandler
             return false;
         }
 
-        return args[0].ToLowerInvariant() switch
+        string key = args[0].ToLowerInvariant();
+        if (_extensionHandlers.TryGetValue(key, out Func<string[], bool>? extensionHandler))
+        {
+            return extensionHandler(args);
+        }
+
+        return key switch
         {
             "find-layer-candidates" => HandleFindLayerCandidates(args),
             "filter-objects-by-layer" => HandleFilterObjectsByLayer(args),
