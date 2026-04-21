@@ -1,8 +1,12 @@
+extern alias rhinocommon;
+
 using System.Text;
 using MCP_Rhino.Server.Application.Interfaces;
 using MCP_Rhino.Server.Contracts.Requests;
 using MCP_Rhino.Server.Contracts.Responses;
 using Rhino.FileIO;
+using RhinoDoc = rhinocommon::Rhino.RhinoDoc;
+using StringTable = rhinocommon::Rhino.DocObjects.Tables.StringTable;
 
 namespace MCP_Rhino.Server.Application.Services;
 
@@ -11,21 +15,21 @@ public sealed class RhinoDocumentUserStringService
     private const int DisplayLimit = 50;
 
     private readonly IRhinoDocumentRepository _repository;
-    private readonly IFileMutationSafeguard _fileMutationSafeguard;
+    private readonly ILiveRhinoDocumentAccessor _documentAccessor;
 
     public RhinoDocumentUserStringService(
         IRhinoDocumentRepository repository,
-        IFileMutationSafeguard fileMutationSafeguard)
+        ILiveRhinoDocumentAccessor documentAccessor)
     {
         _repository = repository;
-        _fileMutationSafeguard = fileMutationSafeguard;
+        _documentAccessor = documentAccessor;
     }
 
     public OperationResponse<DocumentUserStringReadResponse> Read(DocumentUserStringReadRequest request)
     {
         if (!_repository.Exists(request.FilePath))
         {
-            return OperationResponse<DocumentUserStringReadResponse>.Fail($"错误：未找到文件 {request.FilePath}");
+            return OperationResponse<DocumentUserStringReadResponse>.Fail($"File was not found: {request.FilePath}");
         }
 
         try
@@ -51,24 +55,20 @@ public sealed class RhinoDocumentUserStringService
             {
                 FilePath = request.FilePath,
                 TotalCount = count,
+                Warnings = CreateOfflineWarnings(request.FilePath),
                 Entries = entries
             };
 
-            return OperationResponse<DocumentUserStringReadResponse>.Ok(response, "文档级 user string 读取完成。");
+            return OperationResponse<DocumentUserStringReadResponse>.Ok(response, "Document user strings read completed.");
         }
         catch (Exception ex)
         {
-            return OperationResponse<DocumentUserStringReadResponse>.Fail($"文档级 user string 读取失败: {ex.Message}");
+            return OperationResponse<DocumentUserStringReadResponse>.Fail($"Document user string read failed: {ex.Message}");
         }
     }
 
     public OperationResponse<DocumentUserStringMutationResponse> Set(DocumentUserStringWriteRequest request)
     {
-        if (!_repository.Exists(request.FilePath))
-        {
-            return OperationResponse<DocumentUserStringMutationResponse>.Fail($"错误：未找到文件 {request.FilePath}");
-        }
-
         OperationResponse<List<DocumentUserStringEntryRequest>> validation = ValidateEntries(request.Entries, requireValue: true);
         if (!validation.Success || validation.Data is null)
         {
@@ -77,6 +77,7 @@ public sealed class RhinoDocumentUserStringService
 
         return Mutate(
             request.FilePath,
+            "MCP: SetDocumentUserStrings",
             validation.Data,
             (table, entry) =>
             {
@@ -89,17 +90,11 @@ public sealed class RhinoDocumentUserStringService
                 table.SetString(entry.Section, entry.Key, entry.Value ?? string.Empty);
                 return $"SetString: {entry.Section}|{entry.Key}=[{entry.Value}]";
             },
-            successMessage: "文档级 user string 写入完成。",
-            failureFallbackMessage: "文档级 user string 写回失败。请检查文件是否可写。");
+            "Document user strings updated.");
     }
 
     public OperationResponse<DocumentUserStringMutationResponse> Delete(DocumentUserStringDeleteRequest request)
     {
-        if (!_repository.Exists(request.FilePath))
-        {
-            return OperationResponse<DocumentUserStringMutationResponse>.Fail($"错误：未找到文件 {request.FilePath}");
-        }
-
         OperationResponse<List<DocumentUserStringEntryRequest>> validation = ValidateEntries(request.Entries, requireValue: false);
         if (!validation.Success || validation.Data is null)
         {
@@ -108,6 +103,7 @@ public sealed class RhinoDocumentUserStringService
 
         return Mutate(
             request.FilePath,
+            "MCP: DeleteDocumentUserStrings",
             validation.Data,
             (table, entry) =>
             {
@@ -120,21 +116,30 @@ public sealed class RhinoDocumentUserStringService
                 table.Delete(entry.Section, entry.Key);
                 return $"Delete: {entry.Section}|{entry.Key}";
             },
-            successMessage: "文档级 user string 删除完成。",
-            failureFallbackMessage: "文档级 user string 删除写回失败。请检查文件是否可写。");
+            "Document user strings deleted.");
     }
 
     public string FormatRead(DocumentUserStringReadResponse response)
     {
         var builder = new StringBuilder();
         builder.AppendLine("# Document User Strings");
-        builder.AppendLine($"- 文件: {response.FilePath}");
-        builder.AppendLine($"- 总数: {response.TotalCount}");
+        builder.AppendLine($"- File: {response.FilePath}");
+        builder.AppendLine($"- Total: {response.TotalCount}");
+
+        if (response.Warnings.Count > 0)
+        {
+            builder.AppendLine();
+            builder.AppendLine("Warnings:");
+            foreach (ObjectEditWarning warning in response.Warnings)
+            {
+                builder.AppendLine($"- [{warning.Code}] {warning.Message}");
+            }
+        }
 
         if (response.Entries.Count == 0)
         {
             builder.AppendLine();
-            builder.AppendLine("没有文档级 user string。");
+            builder.AppendLine("No document user strings.");
             return builder.ToString();
         }
 
@@ -148,7 +153,7 @@ public sealed class RhinoDocumentUserStringService
 
         if (response.Entries.Count > DisplayLimit)
         {
-            builder.AppendLine($"... 仅展示前 {DisplayLimit} 项。");
+            builder.AppendLine($"... only the first {DisplayLimit} entries are shown.");
         }
 
         return builder.ToString();
@@ -158,10 +163,10 @@ public sealed class RhinoDocumentUserStringService
     {
         var builder = new StringBuilder();
         builder.AppendLine($"# {title}");
-        builder.AppendLine($"- 文件: {response.FilePath}");
-        builder.AppendLine($"- 请求项数: {response.RequestedCount}");
-        builder.AppendLine($"- 成功: {response.SucceededCount}");
-        builder.AppendLine($"- 失败: {response.FailedCount}");
+        builder.AppendLine($"- File: {response.FilePath}");
+        builder.AppendLine($"- Requested: {response.RequestedCount}");
+        builder.AppendLine($"- Succeeded: {response.SucceededCount}");
+        builder.AppendLine($"- Failed: {response.FailedCount}");
 
         if (response.Warnings.Count > 0)
         {
@@ -185,79 +190,66 @@ public sealed class RhinoDocumentUserStringService
 
             if (response.Results.Count > DisplayLimit)
             {
-                builder.AppendLine($"... 仅展示前 {DisplayLimit} 项。");
+                builder.AppendLine($"... only the first {DisplayLimit} entries are shown.");
             }
         }
 
         return builder.ToString();
     }
 
+    private List<ObjectEditWarning> CreateOfflineWarnings(string filePath)
+    {
+        var warnings = new List<ObjectEditWarning>();
+        if (_documentAccessor.TryGetActiveDocumentState(filePath, out bool hasUnsavedChanges) && hasUnsavedChanges)
+        {
+            warnings.Add(new ObjectEditWarning
+            {
+                Code = "OFFLINE_READ_STALE",
+                Message = "The target file is open in Rhino with unsaved changes, so offline read results may be stale."
+            });
+        }
+
+        return warnings;
+    }
+
     private OperationResponse<DocumentUserStringMutationResponse> Mutate(
         string filePath,
+        string undoDescription,
         List<DocumentUserStringEntryRequest> entries,
-        Func<File3dmStringTable, DocumentUserStringEntryRequest, string> apply,
-        string successMessage,
-        string failureFallbackMessage)
+        Func<StringTable, DocumentUserStringEntryRequest, string> apply,
+        string successMessage)
     {
-        try
+        return _documentAccessor.ExecuteWithUndo(filePath, undoDescription, document =>
         {
-            using var model = _repository.Read(filePath);
-            OperationResponse<FileMutationPreflightResponse> safeguard = _fileMutationSafeguard.BeforeOverwrite(filePath, entries.Count);
-            if (!safeguard.Success)
-            {
-                return OperationResponse<DocumentUserStringMutationResponse>.Fail(safeguard.Message);
-            }
-
-            var warnings = new List<ObjectEditWarning>();
-            if (safeguard.Data is not null)
-            {
-                warnings.AddRange(safeguard.Data.Warnings.Select(message => new ObjectEditWarning
-                {
-                    Code = "FILE_MUTATION_PREFLIGHT",
-                    Message = message
-                }));
-            }
-
             var results = new List<DocumentUserStringMutationResultResponse>(entries.Count);
-            bool writeSucceeded = false;
-
-            try
+            foreach (DocumentUserStringEntryRequest entry in entries)
             {
-                File3dmStringTable table = model.Strings;
-                foreach (DocumentUserStringEntryRequest entry in entries)
+                try
                 {
-                    try
+                    string message = apply(document.Strings, entry);
+                    results.Add(new DocumentUserStringMutationResultResponse
                     {
-                        string message = apply(table, entry);
-                        results.Add(new DocumentUserStringMutationResultResponse
-                        {
-                            Section = entry.Section,
-                            Key = entry.Key,
-                            Success = true,
-                            Message = message
-                        });
-                    }
-                    catch (Exception ex)
-                    {
-                        results.Add(new DocumentUserStringMutationResultResponse
-                        {
-                            Section = entry.Section,
-                            Key = entry.Key,
-                            Success = false,
-                            Message = ex.Message
-                        });
-                    }
+                        Section = entry.Section,
+                        Key = entry.Key,
+                        Success = true,
+                        Message = message
+                    });
                 }
-
-                writeSucceeded = results.All(result => result.Success) && _repository.Write(model, filePath);
-                if (!writeSucceeded)
+                catch (Exception ex)
                 {
-                    return OperationResponse<DocumentUserStringMutationResponse>.Fail(failureFallbackMessage);
+                    results.Add(new DocumentUserStringMutationResultResponse
+                    {
+                        Section = entry.Section,
+                        Key = entry.Key,
+                        Success = false,
+                        Message = ex.Message
+                    });
                 }
             }
-            finally
+
+            if (results.Any(result => result.Success))
             {
-                _fileMutationSafeguard.AfterOverwrite(filePath, writeSucceeded);
+                document.Views.Redraw();
             }
 
             var response = new DocumentUserStringMutationResponse
@@ -266,16 +258,14 @@ public sealed class RhinoDocumentUserStringService
                 RequestedCount = entries.Count,
                 SucceededCount = results.Count(result => result.Success),
                 FailedCount = results.Count(result => !result.Success),
-                Warnings = warnings,
+                Warnings = Array.Empty<ObjectEditWarning>(),
                 Results = results
             };
 
-            return OperationResponse<DocumentUserStringMutationResponse>.Ok(response, successMessage);
-        }
-        catch (Exception ex)
-        {
-            return OperationResponse<DocumentUserStringMutationResponse>.Fail($"文档级 user string 操作失败: {ex.Message}");
-        }
+            return OperationResponse<(bool Mutated, DocumentUserStringMutationResponse Result)>.Ok(
+                (results.Any(result => result.Success), response),
+                successMessage);
+        });
     }
 
     private static OperationResponse<List<DocumentUserStringEntryRequest>> ValidateEntries(
@@ -284,7 +274,7 @@ public sealed class RhinoDocumentUserStringService
     {
         if (entries.Count == 0)
         {
-            return OperationResponse<List<DocumentUserStringEntryRequest>>.Fail("错误：至少需要提供一个文档级 user string 条目。");
+            return OperationResponse<List<DocumentUserStringEntryRequest>>.Fail("At least one document user string entry is required.");
         }
 
         var duplicateLookup = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -293,7 +283,7 @@ public sealed class RhinoDocumentUserStringService
         {
             if (string.IsNullOrWhiteSpace(entry.Key))
             {
-                return OperationResponse<List<DocumentUserStringEntryRequest>>.Fail("错误：文档级 user string key 不能为空。");
+                return OperationResponse<List<DocumentUserStringEntryRequest>>.Fail("Document user string key cannot be empty.");
             }
 
             string section = string.IsNullOrWhiteSpace(entry.Section) ? string.Empty : entry.Section.Trim();
@@ -301,7 +291,7 @@ public sealed class RhinoDocumentUserStringService
             string compositeKey = string.IsNullOrEmpty(section) ? key : $"{section}|{key}";
             if (!duplicateLookup.Add(compositeKey))
             {
-                return OperationResponse<List<DocumentUserStringEntryRequest>>.Fail($"错误：文档级 user string 条目 [{compositeKey}] 被重复指定。");
+                return OperationResponse<List<DocumentUserStringEntryRequest>>.Fail($"Duplicate document user string entry: {compositeKey}");
             }
 
             normalized.Add(new DocumentUserStringEntryRequest

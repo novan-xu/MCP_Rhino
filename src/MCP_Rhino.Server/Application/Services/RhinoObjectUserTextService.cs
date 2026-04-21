@@ -1,8 +1,13 @@
+extern alias rhinocommon;
+
 using System.Text;
 using MCP_Rhino.Server.Application.Interfaces;
 using MCP_Rhino.Server.Contracts.Requests;
 using MCP_Rhino.Server.Contracts.Responses;
 using Rhino.FileIO;
+using ObjectAttributes = rhinocommon::Rhino.DocObjects.ObjectAttributes;
+using RhinoDoc = rhinocommon::Rhino.RhinoDoc;
+using RhinoObject = rhinocommon::Rhino.DocObjects.RhinoObject;
 
 namespace MCP_Rhino.Server.Application.Services;
 
@@ -11,16 +16,16 @@ public sealed class RhinoObjectUserTextService
     private const int PreviewLimit = 20;
 
     private readonly IRhinoDocumentRepository _repository;
-    private readonly IFileMutationSafeguard _fileMutationSafeguard;
+    private readonly ILiveRhinoDocumentAccessor _documentAccessor;
     private readonly IEditResultFormatter _formatter;
 
     public RhinoObjectUserTextService(
         IRhinoDocumentRepository repository,
-        IFileMutationSafeguard fileMutationSafeguard,
+        ILiveRhinoDocumentAccessor documentAccessor,
         IEditResultFormatter formatter)
     {
         _repository = repository;
-        _fileMutationSafeguard = fileMutationSafeguard;
+        _documentAccessor = documentAccessor;
         _formatter = formatter;
     }
 
@@ -28,7 +33,7 @@ public sealed class RhinoObjectUserTextService
     {
         if (!_repository.Exists(request.FilePath))
         {
-            return OperationResponse<ObjectEditPreviewResponse>.Fail($"错误：未找到文件 {request.FilePath}");
+            return OperationResponse<ObjectEditPreviewResponse>.Fail($"File was not found: {request.FilePath}");
         }
 
         try
@@ -46,13 +51,13 @@ public sealed class RhinoObjectUserTextService
                 .Select(entryGroup => BuildPreviewResult(model, entryGroup.Key, entryGroup.Value))
                 .ToList();
 
-            var warnings = new List<ObjectEditWarning>();
+            var warnings = CreateOfflineWarnings(request.FilePath);
             if (entriesByObjectId.Count > PreviewLimit)
             {
                 warnings.Add(new ObjectEditWarning
                 {
                     Code = "PREVIEW_TRUNCATED",
-                    Message = $"预览仅展示前 {PreviewLimit} 个对象。"
+                    Message = $"Preview only shows the first {PreviewLimit} objects."
                 });
             }
 
@@ -67,88 +72,45 @@ public sealed class RhinoObjectUserTextService
                 ObjectResults = previewResults
             };
 
-            return OperationResponse<ObjectEditPreviewResponse>.Ok(response, "对象级 user text 写入预览生成完成。");
+            return OperationResponse<ObjectEditPreviewResponse>.Ok(response, "Object user text preview generated.");
         }
         catch (Exception ex)
         {
-            return OperationResponse<ObjectEditPreviewResponse>.Fail($"对象级 user text 写入预览失败: {ex.Message}");
+            return OperationResponse<ObjectEditPreviewResponse>.Fail($"Object user text preview failed: {ex.Message}");
         }
     }
 
     public OperationResponse<ObjectEditExecutionResponse> Apply(ObjectUserTextBatchWriteRequest request)
     {
-        if (!_repository.Exists(request.FilePath))
+        return _documentAccessor.ExecuteWithUndo(request.FilePath, "MCP: ApplyObjectUserTextWrites", document =>
         {
-            return OperationResponse<ObjectEditExecutionResponse>.Fail($"错误：未找到文件 {request.FilePath}");
-        }
-
-        try
-        {
-            using var model = _repository.Read(request.FilePath);
-            OperationResponse<Dictionary<Guid, List<ObjectScopedUserTextEntryRequest>>> validation = ValidateEntries(model, request.Entries);
+            OperationResponse<Dictionary<Guid, List<ObjectScopedUserTextEntryRequest>>> validation = ValidateEntries(document, request.Entries);
             if (!validation.Success || validation.Data is null)
             {
-                return OperationResponse<ObjectEditExecutionResponse>.Fail(validation.Message);
+                return OperationResponse<(bool Mutated, ObjectEditExecutionResponse Result)>.Fail(validation.Message);
             }
 
             Dictionary<Guid, List<ObjectScopedUserTextEntryRequest>> entriesByObjectId = validation.Data;
-            OperationResponse<FileMutationPreflightResponse> safeguard = _fileMutationSafeguard.BeforeOverwrite(request.FilePath, entriesByObjectId.Count);
-            if (!safeguard.Success)
+            var operationResults = new List<ObjectEditOperationResult>(entriesByObjectId.Count);
+
+            foreach ((Guid objectId, List<ObjectScopedUserTextEntryRequest> objectEntries) in entriesByObjectId)
             {
-                return OperationResponse<ObjectEditExecutionResponse>.Fail(safeguard.Message);
+                OperationResponse<ObjectEditOperationResult> applyResult = ApplyEntriesToObject(document, objectId, objectEntries);
+                operationResults.Add(ToOperationResult(document, objectId, applyResult));
+            }
+
+            if (operationResults.Any(result => result.Success))
+            {
+                document.Views.Redraw();
             }
 
             var warnings = new List<ObjectEditWarning>();
-            if (safeguard.Data is not null)
-            {
-                warnings.AddRange(safeguard.Data.Warnings.Select(message => new ObjectEditWarning
-                {
-                    Code = "FILE_MUTATION_PREFLIGHT",
-                    Message = message
-                }));
-            }
-
-            var operationResults = new List<ObjectEditOperationResult>();
-            bool writeSucceeded = false;
-
-            try
-            {
-                foreach ((Guid objectId, List<ObjectScopedUserTextEntryRequest> objectEntries) in entriesByObjectId)
-                {
-                    OperationResponse<ObjectEditOperationResult> applyResult = ApplyEntriesToObject(model, objectId, objectEntries);
-                    if (applyResult.Success && applyResult.Data is not null)
-                    {
-                        operationResults.Add(applyResult.Data);
-                    }
-                    else
-                    {
-                        operationResults.Add(new ObjectEditOperationResult
-                        {
-                            ObjectId = objectId,
-                            LayerFullPath = "Unknown",
-                            Success = false,
-                            Messages = new[] { applyResult.Message }
-                        });
-                    }
-                }
-
-                writeSucceeded = operationResults.All(result => result.Success) && _repository.Write(model, request.FilePath);
-                if (!writeSucceeded)
-                {
-                    return OperationResponse<ObjectEditExecutionResponse>.Fail("对象级 user text 写回失败。请检查文件是否可写。");
-                }
-            }
-            finally
-            {
-                _fileMutationSafeguard.AfterOverwrite(request.FilePath, writeSucceeded);
-            }
-
             if (operationResults.Count > PreviewLimit)
             {
                 warnings.Add(new ObjectEditWarning
                 {
                     Code = "RESULT_TRUNCATED",
-                    Message = $"执行结果仅展示前 {PreviewLimit} 个对象。"
+                    Message = $"Result list only shows the first {PreviewLimit} objects."
                 });
             }
 
@@ -164,24 +126,22 @@ public sealed class RhinoObjectUserTextService
                 ObjectResults = operationResults.Take(PreviewLimit).ToList()
             };
 
-            return OperationResponse<ObjectEditExecutionResponse>.Ok(response, "对象级 user text 写入执行完成。");
-        }
-        catch (Exception ex)
-        {
-            return OperationResponse<ObjectEditExecutionResponse>.Fail($"对象级 user text 写入执行失败: {ex.Message}");
-        }
+            return OperationResponse<(bool Mutated, ObjectEditExecutionResponse Result)>.Ok(
+                (operationResults.Any(result => result.Success), response),
+                "Object user text write completed.");
+        });
     }
 
     public OperationResponse<ObjectUserTextReadResponse> Read(ObjectUserTextReadRequest request)
     {
         if (!_repository.Exists(request.FilePath))
         {
-            return OperationResponse<ObjectUserTextReadResponse>.Fail($"错误：未找到文件 {request.FilePath}");
+            return OperationResponse<ObjectUserTextReadResponse>.Fail($"File was not found: {request.FilePath}");
         }
 
         if (request.ObjectIds.Count == 0)
         {
-            return OperationResponse<ObjectUserTextReadResponse>.Fail("错误：至少需要提供一个 ObjectId。");
+            return OperationResponse<ObjectUserTextReadResponse>.Fail("At least one ObjectId is required.");
         }
 
         try
@@ -194,7 +154,7 @@ public sealed class RhinoObjectUserTextService
 
             if (distinctObjectIds.Count == 0)
             {
-                return OperationResponse<ObjectUserTextReadResponse>.Fail("错误：所有 ObjectId 均为空 GUID。");
+                return OperationResponse<ObjectUserTextReadResponse>.Fail("All requested ObjectIds were empty GUID values.");
             }
 
             var records = new List<ObjectUserTextRecordResponse>(distinctObjectIds.Count);
@@ -210,7 +170,7 @@ public sealed class RhinoObjectUserTextService
                         LayerFullPath = "Unknown",
                         ObjectName = string.Empty,
                         Found = false,
-                        Message = "对象不存在于当前模型中。",
+                        Message = "Object was not found in the file.",
                         Entries = Array.Empty<ObjectUserTextEntryResponse>()
                     });
                     continue;
@@ -224,7 +184,7 @@ public sealed class RhinoObjectUserTextService
                     LayerFullPath = ResolveLayerFullPath(model, modelObject.Attributes.LayerIndex),
                     ObjectName = modelObject.Attributes.Name ?? string.Empty,
                     Found = true,
-                    Message = $"读取到 {entries.Count} 条 user string。",
+                    Message = $"Read {entries.Count} user string entries.",
                     Entries = entries
                 });
             }
@@ -236,91 +196,49 @@ public sealed class RhinoObjectUserTextService
                 FoundObjectCount = records.Count(record => record.Found),
                 MissingObjectCount = records.Count(record => !record.Found),
                 TotalEntryCount = totalEntries,
+                Warnings = CreateOfflineWarnings(request.FilePath),
                 Records = records
             };
 
-            return OperationResponse<ObjectUserTextReadResponse>.Ok(response, "对象级 user string 读取完成。");
+            return OperationResponse<ObjectUserTextReadResponse>.Ok(response, "Object user strings read completed.");
         }
         catch (Exception ex)
         {
-            return OperationResponse<ObjectUserTextReadResponse>.Fail($"对象级 user string 读取失败: {ex.Message}");
+            return OperationResponse<ObjectUserTextReadResponse>.Fail($"Object user string read failed: {ex.Message}");
         }
     }
 
     public OperationResponse<ObjectEditExecutionResponse> Delete(ObjectUserTextDeleteRequest request)
     {
-        if (!_repository.Exists(request.FilePath))
+        return _documentAccessor.ExecuteWithUndo(request.FilePath, "MCP: DeleteObjectUserText", document =>
         {
-            return OperationResponse<ObjectEditExecutionResponse>.Fail($"错误：未找到文件 {request.FilePath}");
-        }
-
-        try
-        {
-            using var model = _repository.Read(request.FilePath);
-            OperationResponse<Dictionary<Guid, List<ObjectScopedUserTextKeyRequest>>> validation = ValidateDeleteEntries(model, request.Entries);
+            OperationResponse<Dictionary<Guid, List<ObjectScopedUserTextKeyRequest>>> validation = ValidateDeleteEntries(document, request.Entries);
             if (!validation.Success || validation.Data is null)
             {
-                return OperationResponse<ObjectEditExecutionResponse>.Fail(validation.Message);
+                return OperationResponse<(bool Mutated, ObjectEditExecutionResponse Result)>.Fail(validation.Message);
             }
 
             Dictionary<Guid, List<ObjectScopedUserTextKeyRequest>> entriesByObjectId = validation.Data;
-            OperationResponse<FileMutationPreflightResponse> safeguard = _fileMutationSafeguard.BeforeOverwrite(request.FilePath, entriesByObjectId.Count);
-            if (!safeguard.Success)
+            var operationResults = new List<ObjectEditOperationResult>(entriesByObjectId.Count);
+
+            foreach ((Guid objectId, List<ObjectScopedUserTextKeyRequest> objectEntries) in entriesByObjectId)
             {
-                return OperationResponse<ObjectEditExecutionResponse>.Fail(safeguard.Message);
+                OperationResponse<ObjectEditOperationResult> applyResult = DeleteEntriesFromObject(document, objectId, objectEntries);
+                operationResults.Add(ToOperationResult(document, objectId, applyResult));
+            }
+
+            if (operationResults.Any(result => result.Success))
+            {
+                document.Views.Redraw();
             }
 
             var warnings = new List<ObjectEditWarning>();
-            if (safeguard.Data is not null)
-            {
-                warnings.AddRange(safeguard.Data.Warnings.Select(message => new ObjectEditWarning
-                {
-                    Code = "FILE_MUTATION_PREFLIGHT",
-                    Message = message
-                }));
-            }
-
-            var operationResults = new List<ObjectEditOperationResult>();
-            bool writeSucceeded = false;
-
-            try
-            {
-                foreach ((Guid objectId, List<ObjectScopedUserTextKeyRequest> objectEntries) in entriesByObjectId)
-                {
-                    OperationResponse<ObjectEditOperationResult> applyResult = DeleteEntriesFromObject(model, objectId, objectEntries);
-                    if (applyResult.Success && applyResult.Data is not null)
-                    {
-                        operationResults.Add(applyResult.Data);
-                    }
-                    else
-                    {
-                        operationResults.Add(new ObjectEditOperationResult
-                        {
-                            ObjectId = objectId,
-                            LayerFullPath = "Unknown",
-                            Success = false,
-                            Messages = new[] { applyResult.Message }
-                        });
-                    }
-                }
-
-                writeSucceeded = operationResults.All(result => result.Success) && _repository.Write(model, request.FilePath);
-                if (!writeSucceeded)
-                {
-                    return OperationResponse<ObjectEditExecutionResponse>.Fail("对象级 user text 删除写回失败。请检查文件是否可写。");
-                }
-            }
-            finally
-            {
-                _fileMutationSafeguard.AfterOverwrite(request.FilePath, writeSucceeded);
-            }
-
             if (operationResults.Count > PreviewLimit)
             {
                 warnings.Add(new ObjectEditWarning
                 {
                     Code = "RESULT_TRUNCATED",
-                    Message = $"执行结果仅展示前 {PreviewLimit} 个对象。"
+                    Message = $"Result list only shows the first {PreviewLimit} objects."
                 });
             }
 
@@ -336,12 +254,10 @@ public sealed class RhinoObjectUserTextService
                 ObjectResults = operationResults.Take(PreviewLimit).ToList()
             };
 
-            return OperationResponse<ObjectEditExecutionResponse>.Ok(response, "对象级 user text 删除完成。");
-        }
-        catch (Exception ex)
-        {
-            return OperationResponse<ObjectEditExecutionResponse>.Fail($"对象级 user text 删除失败: {ex.Message}");
-        }
+            return OperationResponse<(bool Mutated, ObjectEditExecutionResponse Result)>.Ok(
+                (operationResults.Any(result => result.Success), response),
+                "Object user text delete completed.");
+        });
     }
 
     public string FormatPreview(ObjectEditPreviewResponse response)
@@ -358,16 +274,26 @@ public sealed class RhinoObjectUserTextService
     {
         var builder = new StringBuilder();
         builder.AppendLine("# Object User Strings");
-        builder.AppendLine($"- 文件: {response.FilePath}");
-        builder.AppendLine($"- 请求对象数: {response.RequestedObjectCount}");
-        builder.AppendLine($"- 命中对象数: {response.FoundObjectCount}");
-        builder.AppendLine($"- 缺失对象数: {response.MissingObjectCount}");
-        builder.AppendLine($"- user string 总数: {response.TotalEntryCount}");
+        builder.AppendLine($"- File: {response.FilePath}");
+        builder.AppendLine($"- Requested objects: {response.RequestedObjectCount}");
+        builder.AppendLine($"- Found objects: {response.FoundObjectCount}");
+        builder.AppendLine($"- Missing objects: {response.MissingObjectCount}");
+        builder.AppendLine($"- Total user strings: {response.TotalEntryCount}");
+
+        if (response.Warnings.Count > 0)
+        {
+            builder.AppendLine();
+            builder.AppendLine("Warnings:");
+            foreach (ObjectEditWarning warning in response.Warnings)
+            {
+                builder.AppendLine($"- [{warning.Code}] {warning.Message}");
+            }
+        }
 
         if (response.Records.Count == 0)
         {
             builder.AppendLine();
-            builder.AppendLine("没有对象记录可展示。");
+            builder.AppendLine("No object records to display.");
             return builder.ToString();
         }
 
@@ -385,19 +311,49 @@ public sealed class RhinoObjectUserTextService
 
         if (response.Records.Count > PreviewLimit)
         {
-            builder.AppendLine($"... 仅展示前 {PreviewLimit} 个对象。");
+            builder.AppendLine($"... only the first {PreviewLimit} objects are shown.");
         }
 
         return builder.ToString();
+    }
+
+    private List<ObjectEditWarning> CreateOfflineWarnings(string filePath)
+    {
+        var warnings = new List<ObjectEditWarning>();
+        if (_documentAccessor.TryGetActiveDocumentState(filePath, out bool hasUnsavedChanges) && hasUnsavedChanges)
+        {
+            warnings.Add(new ObjectEditWarning
+            {
+                Code = "OFFLINE_READ_STALE",
+                Message = "The target file is open in Rhino with unsaved changes, so offline read results may be stale."
+            });
+        }
+
+        return warnings;
     }
 
     private static OperationResponse<Dictionary<Guid, List<ObjectScopedUserTextEntryRequest>>> ValidateEntries(
         File3dm model,
         IReadOnlyList<ObjectScopedUserTextEntryRequest> entries)
     {
+        HashSet<Guid> objectIds = model.Objects.Select(modelObject => modelObject.Attributes.ObjectId).ToHashSet();
+        return ValidateEntries(entries, objectIds.Contains);
+    }
+
+    private static OperationResponse<Dictionary<Guid, List<ObjectScopedUserTextEntryRequest>>> ValidateEntries(
+        RhinoDoc document,
+        IReadOnlyList<ObjectScopedUserTextEntryRequest> entries)
+    {
+        return ValidateEntries(entries, objectId => document.Objects.FindId(objectId) is not null);
+    }
+
+    private static OperationResponse<Dictionary<Guid, List<ObjectScopedUserTextEntryRequest>>> ValidateEntries(
+        IReadOnlyList<ObjectScopedUserTextEntryRequest> entries,
+        Func<Guid, bool> objectExists)
+    {
         if (entries.Count == 0)
         {
-            return OperationResponse<Dictionary<Guid, List<ObjectScopedUserTextEntryRequest>>>.Fail("错误：至少需要提供一个对象级 user text 写入项。");
+            return OperationResponse<Dictionary<Guid, List<ObjectScopedUserTextEntryRequest>>>.Fail("At least one object-scoped user text entry is required.");
         }
 
         var duplicateLookup = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -405,40 +361,34 @@ public sealed class RhinoObjectUserTextService
         {
             if (entry.ObjectId == Guid.Empty)
             {
-                return OperationResponse<Dictionary<Guid, List<ObjectScopedUserTextEntryRequest>>>.Fail("错误：存在空 ObjectId。\n请为每条 user text 写入项提供有效对象 GUID。");
+                return OperationResponse<Dictionary<Guid, List<ObjectScopedUserTextEntryRequest>>>.Fail("ObjectId cannot be empty.");
             }
 
             if (string.IsNullOrWhiteSpace(entry.Key))
             {
-                return OperationResponse<Dictionary<Guid, List<ObjectScopedUserTextEntryRequest>>>.Fail($"错误：对象 [{entry.ObjectId}] 的 user text key 不能为空。");
+                return OperationResponse<Dictionary<Guid, List<ObjectScopedUserTextEntryRequest>>>.Fail($"User text key cannot be empty for object [{entry.ObjectId}].");
             }
 
             string duplicateKey = $"{entry.ObjectId:N}|{entry.Key}";
             if (!duplicateLookup.Add(duplicateKey))
             {
-                return OperationResponse<Dictionary<Guid, List<ObjectScopedUserTextEntryRequest>>>.Fail($"错误：对象 [{entry.ObjectId}] 的 user text key [{entry.Key}] 被重复指定。\n请确保同一对象的同一个 key 仅出现一次。");
+                return OperationResponse<Dictionary<Guid, List<ObjectScopedUserTextEntryRequest>>>.Fail(
+                    $"Duplicate user text key [{entry.Key}] was provided for object [{entry.ObjectId}].");
             }
         }
-
-        var modelObjectIds = model.Objects
-            .Select(modelObject => modelObject.Attributes.ObjectId)
-            .ToHashSet();
 
         Guid? missingObjectId = entries
             .Select(entry => entry.ObjectId)
             .Distinct()
-            .FirstOrDefault(objectId => !modelObjectIds.Contains(objectId));
+            .FirstOrDefault(objectId => !objectExists(objectId));
 
         if (missingObjectId.HasValue && missingObjectId.Value != Guid.Empty)
         {
-            return OperationResponse<Dictionary<Guid, List<ObjectScopedUserTextEntryRequest>>>.Fail($"错误：文件中不存在对象 [{missingObjectId.Value}]。");
+            return OperationResponse<Dictionary<Guid, List<ObjectScopedUserTextEntryRequest>>>.Fail($"Object was not found: {missingObjectId.Value}");
         }
 
-        Dictionary<Guid, List<ObjectScopedUserTextEntryRequest>> groupedEntries = entries
-            .GroupBy(entry => entry.ObjectId)
-            .ToDictionary(group => group.Key, group => group.ToList());
-
-        return OperationResponse<Dictionary<Guid, List<ObjectScopedUserTextEntryRequest>>>.Ok(groupedEntries);
+        return OperationResponse<Dictionary<Guid, List<ObjectScopedUserTextEntryRequest>>>.Ok(
+            entries.GroupBy(entry => entry.ObjectId).ToDictionary(group => group.Key, group => group.ToList()));
     }
 
     private static ObjectEditOperationResult BuildPreviewResult(
@@ -454,7 +404,7 @@ public sealed class RhinoObjectUserTextService
                 ObjectId = objectId,
                 LayerFullPath = "Unknown",
                 Success = false,
-                Messages = new[] { "对象不存在于当前模型中，无法预览。" }
+                Messages = new[] { "Object was not found in the file." }
             };
         }
 
@@ -468,18 +418,17 @@ public sealed class RhinoObjectUserTextService
     }
 
     private static OperationResponse<ObjectEditOperationResult> ApplyEntriesToObject(
-        File3dm model,
+        RhinoDoc document,
         Guid objectId,
         IReadOnlyList<ObjectScopedUserTextEntryRequest> entries)
     {
-        File3dmObject? currentObject = FindModelObject(model, objectId);
+        RhinoObject? currentObject = document.Objects.FindId(objectId);
         if (currentObject is null)
         {
-            return OperationResponse<ObjectEditOperationResult>.Fail($"对象不存在: {objectId}");
+            return OperationResponse<ObjectEditOperationResult>.Fail($"Object was not found: {objectId}");
         }
 
-        var attributes = currentObject.Attributes.Duplicate();
-        attributes.ObjectId = currentObject.Attributes.ObjectId;
+        ObjectAttributes attributes = currentObject.Attributes.Duplicate();
         var messages = new List<string>();
 
         foreach (ObjectScopedUserTextEntryRequest entry in entries)
@@ -488,28 +437,15 @@ public sealed class RhinoObjectUserTextService
             messages.Add($"SetUserText: {entry.Key}={entry.Value}");
         }
 
-        global::Rhino.Geometry.GeometryBase? geometry = currentObject.Geometry?.Duplicate();
-        if (geometry is null)
+        if (!document.Objects.ModifyAttributes(objectId, attributes, true))
         {
-            return OperationResponse<ObjectEditOperationResult>.Fail($"对象几何为空，无法更新: {objectId}");
-        }
-
-        bool deleted = model.Objects.Delete(currentObject.Attributes.ObjectId);
-        if (!deleted)
-        {
-            return OperationResponse<ObjectEditOperationResult>.Fail($"删除原对象失败: {objectId}");
-        }
-
-        Guid newObjectId = model.Objects.Add(geometry, attributes);
-        if (newObjectId == Guid.Empty)
-        {
-            return OperationResponse<ObjectEditOperationResult>.Fail($"重新写入对象失败: {objectId}");
+            return OperationResponse<ObjectEditOperationResult>.Fail($"ModifyAttributes failed: {objectId}");
         }
 
         return OperationResponse<ObjectEditOperationResult>.Ok(new ObjectEditOperationResult
         {
-            ObjectId = attributes.ObjectId != Guid.Empty ? attributes.ObjectId : newObjectId,
-            LayerFullPath = ResolveLayerFullPath(model, attributes.LayerIndex),
+            ObjectId = objectId,
+            LayerFullPath = ResolveLayerFullPath(document, attributes.LayerIndex),
             Success = true,
             Messages = messages
         });
@@ -529,9 +465,12 @@ public sealed class RhinoObjectUserTextService
 
     private static string ResolveLayerFullPath(File3dm model, int layerIndex)
     {
-        return model.AllLayers
-            .FirstOrDefault(layer => !layer.IsDeleted && layer.Index == layerIndex)?.FullPath
-            ?? "Unknown";
+        return model.AllLayers.FindIndex(layerIndex)?.FullPath ?? "Unknown";
+    }
+
+    private static string ResolveLayerFullPath(RhinoDoc document, int layerIndex)
+    {
+        return document.Layers.FindIndex(layerIndex)?.FullPath ?? "Unknown";
     }
 
     private static File3dmObject? FindModelObject(File3dm model, Guid objectId)
@@ -574,12 +513,12 @@ public sealed class RhinoObjectUserTextService
     }
 
     private static OperationResponse<Dictionary<Guid, List<ObjectScopedUserTextKeyRequest>>> ValidateDeleteEntries(
-        File3dm model,
+        RhinoDoc document,
         IReadOnlyList<ObjectScopedUserTextKeyRequest> entries)
     {
         if (entries.Count == 0)
         {
-            return OperationResponse<Dictionary<Guid, List<ObjectScopedUserTextKeyRequest>>>.Fail("错误：至少需要提供一个对象级 user text 删除项。");
+            return OperationResponse<Dictionary<Guid, List<ObjectScopedUserTextKeyRequest>>>.Fail("At least one object-scoped user text delete entry is required.");
         }
 
         var duplicateLookup = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -587,55 +526,48 @@ public sealed class RhinoObjectUserTextService
         {
             if (entry.ObjectId == Guid.Empty)
             {
-                return OperationResponse<Dictionary<Guid, List<ObjectScopedUserTextKeyRequest>>>.Fail("错误：存在空 ObjectId。\n请为每条 user text 删除项提供有效对象 GUID。");
+                return OperationResponse<Dictionary<Guid, List<ObjectScopedUserTextKeyRequest>>>.Fail("ObjectId cannot be empty.");
             }
 
             if (string.IsNullOrWhiteSpace(entry.Key))
             {
-                return OperationResponse<Dictionary<Guid, List<ObjectScopedUserTextKeyRequest>>>.Fail($"错误：对象 [{entry.ObjectId}] 的 user text key 不能为空。");
+                return OperationResponse<Dictionary<Guid, List<ObjectScopedUserTextKeyRequest>>>.Fail($"User text key cannot be empty for object [{entry.ObjectId}].");
             }
 
             string duplicateKey = $"{entry.ObjectId:N}|{entry.Key}";
             if (!duplicateLookup.Add(duplicateKey))
             {
-                return OperationResponse<Dictionary<Guid, List<ObjectScopedUserTextKeyRequest>>>.Fail($"错误：对象 [{entry.ObjectId}] 的 user text key [{entry.Key}] 被重复指定。\n请确保同一对象的同一个 key 仅出现一次。");
+                return OperationResponse<Dictionary<Guid, List<ObjectScopedUserTextKeyRequest>>>.Fail(
+                    $"Duplicate user text key [{entry.Key}] was provided for object [{entry.ObjectId}].");
             }
         }
-
-        var modelObjectIds = model.Objects
-            .Select(modelObject => modelObject.Attributes.ObjectId)
-            .ToHashSet();
 
         Guid? missingObjectId = entries
             .Select(entry => entry.ObjectId)
             .Distinct()
-            .FirstOrDefault(objectId => !modelObjectIds.Contains(objectId));
+            .FirstOrDefault(objectId => document.Objects.FindId(objectId) is null);
 
         if (missingObjectId.HasValue && missingObjectId.Value != Guid.Empty)
         {
-            return OperationResponse<Dictionary<Guid, List<ObjectScopedUserTextKeyRequest>>>.Fail($"错误：文件中不存在对象 [{missingObjectId.Value}]。");
+            return OperationResponse<Dictionary<Guid, List<ObjectScopedUserTextKeyRequest>>>.Fail($"Object was not found: {missingObjectId.Value}");
         }
 
-        Dictionary<Guid, List<ObjectScopedUserTextKeyRequest>> grouped = entries
-            .GroupBy(entry => entry.ObjectId)
-            .ToDictionary(group => group.Key, group => group.ToList());
-
-        return OperationResponse<Dictionary<Guid, List<ObjectScopedUserTextKeyRequest>>>.Ok(grouped);
+        return OperationResponse<Dictionary<Guid, List<ObjectScopedUserTextKeyRequest>>>.Ok(
+            entries.GroupBy(entry => entry.ObjectId).ToDictionary(group => group.Key, group => group.ToList()));
     }
 
     private static OperationResponse<ObjectEditOperationResult> DeleteEntriesFromObject(
-        File3dm model,
+        RhinoDoc document,
         Guid objectId,
         IReadOnlyList<ObjectScopedUserTextKeyRequest> entries)
     {
-        File3dmObject? currentObject = FindModelObject(model, objectId);
+        RhinoObject? currentObject = document.Objects.FindId(objectId);
         if (currentObject is null)
         {
-            return OperationResponse<ObjectEditOperationResult>.Fail($"对象不存在: {objectId}");
+            return OperationResponse<ObjectEditOperationResult>.Fail($"Object was not found: {objectId}");
         }
 
-        var attributes = currentObject.Attributes.Duplicate();
-        attributes.ObjectId = currentObject.Attributes.ObjectId;
+        ObjectAttributes attributes = currentObject.Attributes.Duplicate();
         var messages = new List<string>();
 
         foreach (ObjectScopedUserTextKeyRequest entry in entries)
@@ -646,28 +578,15 @@ public sealed class RhinoObjectUserTextService
             messages.Add($"DeleteUserText: {entry.Key} [{fromValue}] -> <removed>");
         }
 
-        global::Rhino.Geometry.GeometryBase? geometry = currentObject.Geometry?.Duplicate();
-        if (geometry is null)
+        if (!document.Objects.ModifyAttributes(objectId, attributes, true))
         {
-            return OperationResponse<ObjectEditOperationResult>.Fail($"对象几何为空，无法更新: {objectId}");
-        }
-
-        bool deleted = model.Objects.Delete(currentObject.Attributes.ObjectId);
-        if (!deleted)
-        {
-            return OperationResponse<ObjectEditOperationResult>.Fail($"删除原对象失败: {objectId}");
-        }
-
-        Guid newObjectId = model.Objects.Add(geometry, attributes);
-        if (newObjectId == Guid.Empty)
-        {
-            return OperationResponse<ObjectEditOperationResult>.Fail($"重新写入对象失败: {objectId}");
+            return OperationResponse<ObjectEditOperationResult>.Fail($"ModifyAttributes failed: {objectId}");
         }
 
         return OperationResponse<ObjectEditOperationResult>.Ok(new ObjectEditOperationResult
         {
-            ObjectId = attributes.ObjectId != Guid.Empty ? attributes.ObjectId : newObjectId,
-            LayerFullPath = ResolveLayerFullPath(model, attributes.LayerIndex),
+            ObjectId = objectId,
+            LayerFullPath = ResolveLayerFullPath(document, attributes.LayerIndex),
             Success = true,
             Messages = messages
         });
@@ -676,5 +595,25 @@ public sealed class RhinoObjectUserTextService
     private static string SummarizeDeleteEntries(IReadOnlyList<ObjectScopedUserTextKeyRequest> entries, int objectCount)
     {
         return $"ObjectScopedUserTextDeleteEntries={entries.Count}; Objects={objectCount}";
+    }
+
+    private static ObjectEditOperationResult ToOperationResult(
+        RhinoDoc document,
+        Guid objectId,
+        OperationResponse<ObjectEditOperationResult> result)
+    {
+        if (result.Success && result.Data is not null)
+        {
+            return result.Data;
+        }
+
+        RhinoObject? currentObject = document.Objects.FindId(objectId);
+        return new ObjectEditOperationResult
+        {
+            ObjectId = objectId,
+            LayerFullPath = currentObject is null ? "Unknown" : ResolveLayerFullPath(document, currentObject.Attributes.LayerIndex),
+            Success = false,
+            Messages = new[] { result.Message }
+        };
     }
 }

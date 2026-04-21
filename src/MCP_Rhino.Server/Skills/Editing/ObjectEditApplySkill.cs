@@ -6,11 +6,11 @@ namespace MCP_Rhino.Server.Skills.Editing;
 
 public sealed class ObjectEditApplySkill
 {
-    private readonly ObjectSelectionSkill _objectSelectionSkill;
+    private readonly LiveObjectSelectionSkill _objectSelectionSkill;
     private readonly RhinoObjectEditingService _editingService;
 
     public ObjectEditApplySkill(
-        ObjectSelectionSkill objectSelectionSkill,
+        LiveObjectSelectionSkill objectSelectionSkill,
         RhinoObjectEditingService editingService)
     {
         _objectSelectionSkill = objectSelectionSkill;

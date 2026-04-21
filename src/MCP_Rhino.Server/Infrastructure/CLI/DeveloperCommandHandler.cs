@@ -1,5 +1,4 @@
 using MCP_Rhino.Server.Agents.Editing;
-using MCP_Rhino.Server.Agents.File;
 using MCP_Rhino.Server.Agents.Inspection;
 using MCP_Rhino.Server.Application.Services;
 using MCP_Rhino.Server.Contracts.Requests;
@@ -20,7 +19,6 @@ public sealed partial class DeveloperCommandHandler
     private readonly UserAttributeObjectFilterSkill _userAttributeSkill;
     private readonly RhinoObjectFilterAgent _filterAgent;
     private readonly RhinoObjectEditingAgent _editingAgent;
-    private readonly FileArchiveAgent _fileArchiveAgent;
     private readonly GeometryCreationSkill _geometryCreationSkill;
     private readonly GeometryModificationSkill _geometryModificationSkill;
 
@@ -34,7 +32,6 @@ public sealed partial class DeveloperCommandHandler
         UserAttributeObjectFilterSkill userAttributeSkill,
         RhinoObjectFilterAgent filterAgent,
         RhinoObjectEditingAgent editingAgent,
-        FileArchiveAgent fileArchiveAgent,
         GeometryCreationSkill geometryCreationSkill,
         GeometryModificationSkill geometryModificationSkill)
     {
@@ -47,7 +44,6 @@ public sealed partial class DeveloperCommandHandler
         _userAttributeSkill = userAttributeSkill;
         _filterAgent = filterAgent;
         _editingAgent = editingAgent;
-        _fileArchiveAgent = fileArchiveAgent;
         _geometryCreationSkill = geometryCreationSkill;
         _geometryModificationSkill = geometryModificationSkill;
     }
@@ -75,10 +71,8 @@ public sealed partial class DeveloperCommandHandler
             "get-document-user-strings" => HandleGetDocumentUserStrings(args),
             "set-document-user-strings" => HandleSetDocumentUserStrings(args),
             "delete-document-user-strings" => HandleDeleteDocumentUserStrings(args),
-            "inspect-file-mutation-readiness" => HandleInspectFileMutationReadiness(args),
-            "create-archive-snapshot" => HandleCreateArchiveSnapshot(args),
-            "cleanup-archive" => HandleCleanupArchive(args),
             "geometry-smoke-test" => HandleGeometrySmokeTest(args),
+            "online-mutation-refactor-smoke-test" => HandleOnlineMutationRefactorSmokeTest(args),
             _ => false
         };
     }
@@ -424,48 +418,4 @@ public sealed partial class DeveloperCommandHandler
         return true;
     }
 
-    private bool HandleInspectFileMutationReadiness(string[] args)
-    {
-        if (args.Length < 2)
-        {
-            Console.WriteLine("用法: dotnet run --project src/MCP_Rhino.Server -- inspect-file-mutation-readiness <3dm文件路径>");
-            return true;
-        }
-
-        var result = _fileArchiveAgent.InspectReadiness(args[1]);
-        Console.WriteLine(result.Success && result.Data is not null
-            ? FormatFileMutationReadiness(result.Data)
-            : result.Message);
-        return true;
-    }
-
-    private bool HandleCreateArchiveSnapshot(string[] args)
-    {
-        if (args.Length < 2)
-        {
-            Console.WriteLine("用法: dotnet run --project src/MCP_Rhino.Server -- create-archive-snapshot <3dm文件路径>");
-            return true;
-        }
-
-        var result = _fileArchiveAgent.CreateSnapshot(args[1]);
-        Console.WriteLine(result.Success && result.Data is not null
-            ? FormatArchiveSnapshot(result.Data)
-            : result.Message);
-        return true;
-    }
-
-    private bool HandleCleanupArchive(string[] args)
-    {
-        if (args.Length < 2)
-        {
-            Console.WriteLine("用法: dotnet run --project src/MCP_Rhino.Server -- cleanup-archive <3dm文件路径>");
-            return true;
-        }
-
-        var result = _fileArchiveAgent.CleanupArchive(args[1]);
-        Console.WriteLine(result.Success && result.Data is not null
-            ? FormatArchiveCleanup(result.Data)
-            : result.Message);
-        return true;
-    }
 }

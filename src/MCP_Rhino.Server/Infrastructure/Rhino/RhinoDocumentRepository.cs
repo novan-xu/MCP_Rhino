@@ -12,11 +12,7 @@ public sealed class RhinoDocumentRepository : IRhinoDocumentRepository
 
     public File3dm Read(string filePath)
     {
-        return File3dm.Read(filePath);
-    }
-
-    public bool Write(File3dm model, string filePath)
-    {
-        return model.Write(filePath, 0);
+        return File3dm.Read(filePath)
+            ?? throw new InvalidOperationException($"Failed to read Rhino model: {filePath}");
     }
 }

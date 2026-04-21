@@ -1,13 +1,15 @@
+extern alias rhinocommon;
+
 using MCP_Rhino.Server.Contracts.Responses;
 using MCP_Rhino.Server.Domain.Models;
-using Rhino.FileIO;
+using RhinoDoc = rhinocommon::Rhino.RhinoDoc;
 
 namespace MCP_Rhino.Server.Application.Interfaces;
 
-public interface IObjectEditValidator
+public interface ILiveObjectEditValidator
 {
-    OperationResponse<IReadOnlyList<ObjectEditWarning>> Validate(
-        File3dm model,
+    OperationResponse ValidateAgainstDocument(
+        RhinoDoc document,
         IReadOnlyList<RhinoObjectEditOperation> operations,
         IReadOnlyList<RhinoObjectInfo> matchedObjects);
 }

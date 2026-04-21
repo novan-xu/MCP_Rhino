@@ -11,13 +11,16 @@ namespace MCP_Rhino.Server.Application.Services;
 public sealed class RhinoObjectFilterService
 {
     private readonly IRhinoDocumentRepository _repository;
+    private readonly ILiveRhinoDocumentAccessor _documentAccessor;
     private readonly IEnumerable<IObjectFilterCriterionEvaluator> _evaluators;
 
     public RhinoObjectFilterService(
         IRhinoDocumentRepository repository,
+        ILiveRhinoDocumentAccessor documentAccessor,
         IEnumerable<IObjectFilterCriterionEvaluator> evaluators)
     {
         _repository = repository;
+        _documentAccessor = documentAccessor;
         _evaluators = evaluators;
     }
 
@@ -25,12 +28,12 @@ public sealed class RhinoObjectFilterService
     {
         if (!_repository.Exists(request.FilePath))
         {
-            return OperationResponse<IReadOnlyList<RhinoLayerCandidate>>.Fail($"错误：未找到文件 {request.FilePath}");
+            return OperationResponse<IReadOnlyList<RhinoLayerCandidate>>.Fail($"File was not found: {request.FilePath}");
         }
 
         if (string.IsNullOrWhiteSpace(request.LayerQuery))
         {
-            return OperationResponse<IReadOnlyList<RhinoLayerCandidate>>.Fail("错误：layerQuery 不能为空");
+            return OperationResponse<IReadOnlyList<RhinoLayerCandidate>>.Fail("LayerQuery cannot be empty.");
         }
 
         try
@@ -50,13 +53,13 @@ public sealed class RhinoObjectFilterService
                 .OrderBy(layer => layer.FullPath, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            return OperationResponse<IReadOnlyList<RhinoLayerCandidate>>.Ok(candidates, candidates.Count == 0
-                ? "未找到匹配图层。"
-                : $"已找到 {candidates.Count} 个匹配图层。");
+            return OperationResponse<IReadOnlyList<RhinoLayerCandidate>>.Ok(
+                candidates,
+                candidates.Count == 0 ? "No matching layers were found." : $"Found {candidates.Count} matching layers.");
         }
         catch (Exception ex)
         {
-            return OperationResponse<IReadOnlyList<RhinoLayerCandidate>>.Fail($"读取图层失败: {ex.Message}");
+            return OperationResponse<IReadOnlyList<RhinoLayerCandidate>>.Fail($"Layer lookup failed: {ex.Message}");
         }
     }
 
@@ -92,13 +95,13 @@ public sealed class RhinoObjectFilterService
     {
         if (!_repository.Exists(request.FilePath))
         {
-            return OperationResponse<RhinoObjectFilterResult>.Fail($"错误：未找到文件 {request.FilePath}");
+            return OperationResponse<RhinoObjectFilterResult>.Fail($"File was not found: {request.FilePath}");
         }
 
         RhinoObjectFilterCriteria criteria = CreateCriteria(request);
         if (!criteria.HasAnyCriteria())
         {
-            return OperationResponse<RhinoObjectFilterResult>.Fail("错误：至少需要提供一个筛查条件。");
+            return OperationResponse<RhinoObjectFilterResult>.Fail("At least one filter criterion is required.");
         }
 
         try
@@ -117,14 +120,15 @@ public sealed class RhinoObjectFilterService
                 TotalObjectCount = objectInfos.Count,
                 MatchedCount = matchedObjects.Count,
                 CriteriaSummary = SummarizeCriteria(criteria),
+                Warnings = CreateOfflineWarnings(request.FilePath),
                 Objects = matchedObjects
             };
 
-            return OperationResponse<RhinoObjectFilterResult>.Ok(result, $"筛查完成，匹配到 {matchedObjects.Count} 个对象。");
+            return OperationResponse<RhinoObjectFilterResult>.Ok(result, $"Filter completed. Matched {matchedObjects.Count} objects.");
         }
         catch (Exception ex)
         {
-            return OperationResponse<RhinoObjectFilterResult>.Fail($"对象筛查失败: {ex.Message}");
+            return OperationResponse<RhinoObjectFilterResult>.Fail($"Object filter failed: {ex.Message}");
         }
     }
 
@@ -132,7 +136,7 @@ public sealed class RhinoObjectFilterService
     {
         if (!_repository.Exists(filePath))
         {
-            return OperationResponse<RhinoObjectFilterResult>.Fail($"错误：未找到文件 {filePath}");
+            return OperationResponse<RhinoObjectFilterResult>.Fail($"File was not found: {filePath}");
         }
 
         List<Guid> distinctObjectIds = objectIds
@@ -142,7 +146,7 @@ public sealed class RhinoObjectFilterService
 
         if (distinctObjectIds.Count == 0)
         {
-            return OperationResponse<RhinoObjectFilterResult>.Fail("错误：至少需要提供一个非空 ObjectId。");
+            return OperationResponse<RhinoObjectFilterResult>.Fail("At least one non-empty ObjectId is required.");
         }
 
         try
@@ -169,7 +173,7 @@ public sealed class RhinoObjectFilterService
             if (missingObjectIds.Count > 0)
             {
                 return OperationResponse<RhinoObjectFilterResult>.Fail(
-                    $"错误：以下 ObjectId 在当前模型中不存在: {string.Join(", ", missingObjectIds)}");
+                    $"The following ObjectIds were not found in the file: {string.Join(", ", missingObjectIds)}");
             }
 
             var result = new RhinoObjectFilterResult
@@ -178,14 +182,15 @@ public sealed class RhinoObjectFilterService
                 TotalObjectCount = objectInfos.Count,
                 MatchedCount = resolvedObjects.Count,
                 CriteriaSummary = SummarizeObjectIds(distinctObjectIds),
+                Warnings = CreateOfflineWarnings(filePath),
                 Objects = resolvedObjects
             };
 
-            return OperationResponse<RhinoObjectFilterResult>.Ok(result, $"已解析 {resolvedObjects.Count} 个显式 ObjectId。");
+            return OperationResponse<RhinoObjectFilterResult>.Ok(result, $"Resolved {resolvedObjects.Count} explicit ObjectIds.");
         }
         catch (Exception ex)
         {
-            return OperationResponse<RhinoObjectFilterResult>.Fail($"按 ObjectId 解析对象失败: {ex.Message}");
+            return OperationResponse<RhinoObjectFilterResult>.Fail($"ObjectId resolution failed: {ex.Message}");
         }
     }
 
@@ -194,12 +199,12 @@ public sealed class RhinoObjectFilterService
         if (candidates is null || candidates.Count == 0)
         {
             return string.IsNullOrWhiteSpace(message)
-                ? $"未找到与 [{layerQuery}] 匹配的图层。"
+                ? $"No layers matched [{layerQuery}]."
                 : message;
         }
 
         var builder = new StringBuilder();
-        builder.AppendLine($"找到 {candidates.Count} 个与 [{layerQuery}] 匹配的图层：");
+        builder.AppendLine($"Found {candidates.Count} layers matching [{layerQuery}]:");
         for (int i = 0; i < candidates.Count; i++)
         {
             RhinoLayerCandidate candidate = candidates[i];
@@ -213,20 +218,30 @@ public sealed class RhinoObjectFilterService
     {
         var builder = new StringBuilder();
         builder.AppendLine("# Rhino Object Filter Result");
-        builder.AppendLine($"- 文件: {result.FilePath}");
-        builder.AppendLine($"- 总对象数: {result.TotalObjectCount}");
-        builder.AppendLine($"- 匹配对象数: {result.MatchedCount}");
-        builder.AppendLine($"- 条件摘要: {result.CriteriaSummary}");
+        builder.AppendLine($"- File: {result.FilePath}");
+        builder.AppendLine($"- Total objects: {result.TotalObjectCount}");
+        builder.AppendLine($"- Matched objects: {result.MatchedCount}");
+        builder.AppendLine($"- Criteria: {result.CriteriaSummary}");
+
+        if (result.Warnings.Count > 0)
+        {
+            builder.AppendLine("- Warnings:");
+            foreach (ObjectEditWarning warning in result.Warnings)
+            {
+                builder.AppendLine($"  - [{warning.Code}] {warning.Message}");
+            }
+        }
+
         builder.AppendLine();
 
         if (result.Objects.Count == 0)
         {
-            builder.AppendLine("没有匹配对象。");
+            builder.AppendLine("No matching objects.");
             return builder.ToString();
         }
 
         int previewCount = Math.Min(result.Objects.Count, 20);
-        builder.AppendLine($"以下展示前 {previewCount} 个匹配对象：");
+        builder.AppendLine($"Showing the first {previewCount} matched objects:");
         for (int i = 0; i < previewCount; i++)
         {
             RhinoObjectInfo objectInfo = result.Objects[i];
@@ -247,6 +262,23 @@ public sealed class RhinoObjectFilterService
         }
 
         return builder.ToString();
+    }
+
+    private IReadOnlyList<ObjectEditWarning> CreateOfflineWarnings(string filePath)
+    {
+        if (_documentAccessor.TryGetActiveDocumentState(filePath, out bool hasUnsavedChanges) && hasUnsavedChanges)
+        {
+            return new[]
+            {
+                new ObjectEditWarning
+                {
+                    Code = "OFFLINE_READ_STALE",
+                    Message = "The target file is open in Rhino with unsaved changes, so offline read results may be stale."
+                }
+            };
+        }
+
+        return Array.Empty<ObjectEditWarning>();
     }
 
     private static bool MatchesLayer(Layer layer, string query, bool exactMatch)

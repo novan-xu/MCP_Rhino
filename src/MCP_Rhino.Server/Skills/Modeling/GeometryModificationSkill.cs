@@ -8,17 +8,14 @@ namespace MCP_Rhino.Server.Skills.Modeling;
 
 public sealed class GeometryModificationSkill
 {
-    private readonly ObjectSelectionSkill _objectSelectionSkill;
-    private readonly RhinoObjectFilterService _filterService;
+    private readonly LiveObjectSelectionSkill _objectSelectionSkill;
     private readonly RhinoGeometryModificationService _modificationService;
 
     public GeometryModificationSkill(
-        ObjectSelectionSkill objectSelectionSkill,
-        RhinoObjectFilterService filterService,
+        LiveObjectSelectionSkill objectSelectionSkill,
         RhinoGeometryModificationService modificationService)
     {
         _objectSelectionSkill = objectSelectionSkill;
-        _filterService = filterService;
         _modificationService = modificationService;
     }
 
@@ -174,7 +171,7 @@ public sealed class GeometryModificationSkill
     {
         if (confirmedObjectIds.Count > 0)
         {
-            return _filterService.ResolveByObjectIds(filePath, confirmedObjectIds);
+            return _objectSelectionSkill.ResolveByObjectIds(filePath, confirmedObjectIds);
         }
 
         if (layerQueries.Count == 0
@@ -182,7 +179,7 @@ public sealed class GeometryModificationSkill
             && objectTypes.Count == 0
             && userAttributeConditions.Count == 0)
         {
-            return OperationResponse<RhinoObjectFilterResult>.Fail("错误：至少需要提供 ConfirmedObjectIds 或筛查条件。");
+            return OperationResponse<RhinoObjectFilterResult>.Fail("ConfirmedObjectIds or filter criteria are required.");
         }
 
         return _objectSelectionSkill.Select(new FilterObjectsRequest
@@ -202,10 +199,10 @@ public sealed class GeometryModificationSkill
         List<Guid> ids = objectIds.ToList();
         if (ids.Count == 0)
         {
-            return OperationResponse<RhinoObjectFilterResult>.Fail("错误：至少需要提供一个 ObjectId。");
+            return OperationResponse<RhinoObjectFilterResult>.Fail("At least one ObjectId is required.");
         }
 
-        return _filterService.ResolveByObjectIds(filePath, ids);
+        return _objectSelectionSkill.ResolveByObjectIds(filePath, ids);
     }
 
     private static GeometryReplacementSpec MapReplacement(GeometryReplacementEntryRequest request)

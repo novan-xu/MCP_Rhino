@@ -1,8 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
-using MCP_Rhino.Server.Agents.File;
 using MCP_Rhino.Server.Agents.Editing;
 using MCP_Rhino.Server.Agents.Inspection;
-using MCP_Rhino.Server.Skills.File;
 using MCP_Rhino.Server.Skills.Editing;
 using MCP_Rhino.Server.Skills.Inspection;
 using MCP_Rhino.Server.Skills.Modeling;
@@ -17,19 +15,14 @@ public static class AgentRegistration
         services.AddSingleton<ObjectTypeFilterSkill>();
         services.AddSingleton<UserAttributeObjectFilterSkill>();
         services.AddSingleton<CompositeObjectFilterSkill>();
-        services.AddSingleton<FileOpenStateCheckSkill>();
-        services.AddSingleton<ArchiveSnapshotSkill>();
-        services.AddSingleton<ArchiveRetentionSkill>();
-        services.AddSingleton<FileMutationPreflightSkill>();
         services.AddSingleton<ObjectSelectionSkill>();
+        services.AddSingleton<LiveObjectSelectionSkill>();
         services.AddSingleton<ObjectEditPreviewSkill>();
         services.AddSingleton<ObjectEditApplySkill>();
         services.AddSingleton<GeometryCreationSkill>();
         services.AddSingleton<GeometryModificationSkill>();
-        services.AddSingleton<FileArchiveAgent>();
         services.AddSingleton<RhinoObjectFilterAgent>();
         services.AddSingleton<RhinoObjectEditingAgent>();
-
         return services;
     }
 }

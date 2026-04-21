@@ -2,7 +2,6 @@ using MCP_Rhino.Server.Application.Interfaces;
 using MCP_Rhino.Server.Contracts.Requests;
 using MCP_Rhino.Server.Contracts.Responses;
 using MCP_Rhino.Server.Domain.Models;
-using Rhino.FileIO;
 
 namespace MCP_Rhino.Server.Application.Services;
 
@@ -10,23 +9,23 @@ public sealed class RhinoGeometryModificationService
 {
     private const int PreviewLimit = 20;
 
-    private readonly IRhinoDocumentRepository _repository;
+    private readonly ILiveRhinoDocumentAccessor _documentAccessor;
     private readonly IGeometryValidator _validator;
+    private readonly ILiveGeometryValidator _liveGeometryValidator;
     private readonly IGeometryMutator _mutator;
-    private readonly IFileMutationSafeguard _fileMutationSafeguard;
     private readonly IEditResultFormatter _formatter;
 
     public RhinoGeometryModificationService(
-        IRhinoDocumentRepository repository,
+        ILiveRhinoDocumentAccessor documentAccessor,
         IGeometryValidator validator,
+        ILiveGeometryValidator liveGeometryValidator,
         IGeometryMutator mutator,
-        IFileMutationSafeguard fileMutationSafeguard,
         IEditResultFormatter formatter)
     {
-        _repository = repository;
+        _documentAccessor = documentAccessor;
         _validator = validator;
+        _liveGeometryValidator = liveGeometryValidator;
         _mutator = mutator;
-        _fileMutationSafeguard = fileMutationSafeguard;
         _formatter = formatter;
     }
 
@@ -34,15 +33,17 @@ public sealed class RhinoGeometryModificationService
         PreviewTransformObjectsRequest request,
         RhinoObjectFilterResult selection)
     {
-        return PreviewTransformInternal(
+        return _documentAccessor.Execute(
             request.FilePath,
-            request.Transform,
-            selection,
-            request.ConfirmedObjectIds.Count > 0 && HasAnySelectionCriteria(
-                request.LayerQueries,
-                request.ConfirmedLayerFullPaths,
-                request.ObjectTypes,
-                request.UserAttributeConditions));
+            _ => PreviewTransformInternal(
+                request.FilePath,
+                request.Transform,
+                selection,
+                request.ConfirmedObjectIds.Count > 0 && HasAnySelectionCriteria(
+                    request.LayerQueries,
+                    request.ConfirmedLayerFullPaths,
+                    request.ObjectTypes,
+                    request.UserAttributeConditions)));
     }
 
     public OperationResponse<GeometryModificationResponse> Apply(
@@ -64,14 +65,16 @@ public sealed class RhinoGeometryModificationService
         PreviewDeleteObjectsRequest request,
         RhinoObjectFilterResult selection)
     {
-        return PreviewDeleteInternal(
+        return _documentAccessor.Execute(
             request.FilePath,
-            selection,
-            request.ConfirmedObjectIds.Count > 0 && HasAnySelectionCriteria(
-                request.LayerQueries,
-                request.ConfirmedLayerFullPaths,
-                request.ObjectTypes,
-                request.UserAttributeConditions));
+            _ => PreviewDeleteInternal(
+                request.FilePath,
+                selection,
+                request.ConfirmedObjectIds.Count > 0 && HasAnySelectionCriteria(
+                    request.LayerQueries,
+                    request.ConfirmedLayerFullPaths,
+                    request.ObjectTypes,
+                    request.UserAttributeConditions)));
     }
 
     public OperationResponse<GeometryModificationResponse> Apply(
@@ -93,197 +96,26 @@ public sealed class RhinoGeometryModificationService
         IReadOnlyList<GeometryReplacementSpec> specs,
         IReadOnlyList<RhinoObjectInfo> targets)
     {
-        if (!_repository.Exists(filePath))
-        {
-            return OperationResponse<GeometryModificationPreviewResponse>.Fail($"错误：未找到文件 {filePath}");
-        }
-
         if (specs.Count == 0)
         {
-            return OperationResponse<GeometryModificationPreviewResponse>.Fail("错误：至少需要提供一个 ReplaceGeometry entry。");
+            return OperationResponse<GeometryModificationPreviewResponse>.Fail("At least one ReplaceGeometry entry is required.");
         }
 
         if (HasDuplicateObjectIds(specs.Select(spec => spec.ObjectId)))
         {
-            return OperationResponse<GeometryModificationPreviewResponse>.Fail("错误：ReplaceGeometry 不允许对同一个 ObjectId 提供多个 entry。");
+            return OperationResponse<GeometryModificationPreviewResponse>.Fail("ReplaceGeometry does not allow duplicate ObjectId entries.");
         }
 
-        Dictionary<Guid, RhinoObjectInfo> targetLookup = targets.ToDictionary(target => target.ObjectId);
-        var warnings = CreateBatchWarnings(specs.Count);
-
-        foreach (GeometryReplacementSpec spec in specs)
+        return _documentAccessor.Execute(filePath, _ =>
         {
-            if (!targetLookup.TryGetValue(spec.ObjectId, out RhinoObjectInfo? target))
-            {
-                return OperationResponse<GeometryModificationPreviewResponse>.Fail($"错误：对象不存在 [{spec.ObjectId}]。");
-            }
-
-            OperationResponse<IReadOnlyList<ObjectEditWarning>> validation = _validator.Validate(spec, target);
-            if (!validation.Success)
-            {
-                return OperationResponse<GeometryModificationPreviewResponse>.Fail(validation.Message);
-            }
-
-            warnings.AddRange(validation.Data ?? Array.Empty<ObjectEditWarning>());
-        }
-
-        List<ObjectEditOperationResult> results = specs
-            .Take(PreviewLimit)
-            .Select(spec =>
-            {
-                RhinoObjectInfo target = targetLookup[spec.ObjectId];
-                return new ObjectEditOperationResult
-                {
-                    ObjectId = target.ObjectId,
-                    LayerFullPath = target.LayerFullPath,
-                    Success = true,
-                    Messages = new[] { $"ReplaceGeometry: {target.GeometryTypeName} -> {spec.Geometry.Primitive}" }
-                };
-            })
-            .ToList();
-
-        AddPreviewTruncationWarning(results.Count, specs.Count, warnings);
-
-        return OperationResponse<GeometryModificationPreviewResponse>.Ok(new GeometryModificationPreviewResponse
-        {
-            FilePath = filePath,
-            CriteriaSummary = SummarizeEntryTargets("ReplaceGeometry", specs.Select(spec => spec.ObjectId)),
-            MatchedObjectCount = specs.Count,
-            PreviewObjectCount = results.Count,
-            OperationCount = specs.Count,
-            Warnings = warnings,
-            ObjectResults = results
-        }, "ReplaceGeometry 预览生成完成。");
-    }
-
-    public OperationResponse<GeometryModificationResponse> ApplyReplace(
-        string filePath,
-        IReadOnlyList<GeometryReplacementSpec> specs,
-        IReadOnlyList<RhinoObjectInfo> targets)
-    {
-        if (!_repository.Exists(filePath))
-        {
-            return OperationResponse<GeometryModificationResponse>.Fail($"错误：未找到文件 {filePath}");
-        }
-
-        if (specs.Count == 0)
-        {
-            return OperationResponse<GeometryModificationResponse>.Fail("错误：至少需要提供一个 ReplaceGeometry entry。");
-        }
-
-        if (HasDuplicateObjectIds(specs.Select(spec => spec.ObjectId)))
-        {
-            return OperationResponse<GeometryModificationResponse>.Fail("错误：ReplaceGeometry 不允许对同一个 ObjectId 提供多个 entry。");
-        }
-
-        Dictionary<Guid, RhinoObjectInfo> targetLookup = targets.ToDictionary(target => target.ObjectId);
-
-        try
-        {
-            using var model = _repository.Read(filePath);
+            Dictionary<Guid, RhinoObjectInfo> targetLookup = targets.ToDictionary(target => target.ObjectId);
             var warnings = CreateBatchWarnings(specs.Count);
 
             foreach (GeometryReplacementSpec spec in specs)
             {
                 if (!targetLookup.TryGetValue(spec.ObjectId, out RhinoObjectInfo? target))
                 {
-                    return OperationResponse<GeometryModificationResponse>.Fail($"错误：对象不存在 [{spec.ObjectId}]。");
-                }
-
-                OperationResponse<IReadOnlyList<ObjectEditWarning>> validation = _validator.Validate(spec, target);
-                if (!validation.Success)
-                {
-                    return OperationResponse<GeometryModificationResponse>.Fail(validation.Message);
-                }
-
-                warnings.AddRange(validation.Data ?? Array.Empty<ObjectEditWarning>());
-            }
-
-            OperationResponse<FileMutationPreflightResponse> safeguard = _fileMutationSafeguard.BeforeOverwrite(filePath, specs.Count);
-            if (!safeguard.Success)
-            {
-                return OperationResponse<GeometryModificationResponse>.Fail(safeguard.Message);
-            }
-
-            if (safeguard.Data is not null)
-            {
-                warnings.AddRange(safeguard.Data.Warnings.Select(message => new ObjectEditWarning
-                {
-                    Code = "FILE_MUTATION_PREFLIGHT",
-                    Message = message
-                }));
-            }
-
-            var results = new List<ObjectEditOperationResult>(specs.Count);
-            bool writeSucceeded = false;
-
-            try
-            {
-                foreach (GeometryReplacementSpec spec in specs)
-                {
-                    RhinoObjectInfo target = targetLookup[spec.ObjectId];
-                    OperationResponse<ObjectEditOperationResult> mutateResult = _mutator.Replace(model, target, spec);
-                    results.Add(ToOperationResult(target, mutateResult));
-                }
-
-                writeSucceeded = results.All(result => result.Success) && _repository.Write(model, filePath);
-                if (!writeSucceeded)
-                {
-                    return OperationResponse<GeometryModificationResponse>.Fail("ReplaceGeometry 写回失败。请检查文件是否可写。");
-                }
-            }
-            finally
-            {
-                _fileMutationSafeguard.AfterOverwrite(filePath, writeSucceeded);
-            }
-
-            AddResultTruncationWarning(results.Count, warnings);
-
-            return OperationResponse<GeometryModificationResponse>.Ok(new GeometryModificationResponse
-            {
-                FilePath = filePath,
-                CriteriaSummary = SummarizeEntryTargets("ReplaceGeometry", specs.Select(spec => spec.ObjectId)),
-                MatchedObjectCount = specs.Count,
-                UpdatedObjectCount = results.Count(result => result.Success),
-                FailedObjectCount = results.Count(result => !result.Success),
-                OperationCount = specs.Count,
-                Warnings = warnings,
-                ObjectResults = results.Take(PreviewLimit).ToList()
-            }, "ReplaceGeometry 执行完成。");
-        }
-        catch (Exception ex)
-        {
-            return OperationResponse<GeometryModificationResponse>.Fail($"ReplaceGeometry 执行失败: {ex.Message}");
-        }
-    }
-
-    public OperationResponse<GeometryModificationPreviewResponse> PreviewEditControlPoints(
-        string filePath,
-        IReadOnlyList<ControlPointEditSpec> specs,
-        IReadOnlyList<RhinoObjectInfo> targets)
-    {
-        if (!_repository.Exists(filePath))
-        {
-            return OperationResponse<GeometryModificationPreviewResponse>.Fail($"错误：未找到文件 {filePath}");
-        }
-
-        if (specs.Count == 0)
-        {
-            return OperationResponse<GeometryModificationPreviewResponse>.Fail("错误：至少需要提供一个 EditControlPoints entry。");
-        }
-
-        Dictionary<Guid, RhinoObjectInfo> targetLookup = targets.ToDictionary(target => target.ObjectId);
-
-        try
-        {
-            using var model = _repository.Read(filePath);
-            var warnings = CreateBatchWarnings(specs.Count);
-
-            foreach (ControlPointEditSpec spec in specs)
-            {
-                if (!targetLookup.TryGetValue(spec.ObjectId, out RhinoObjectInfo? target))
-                {
-                    return OperationResponse<GeometryModificationPreviewResponse>.Fail($"错误：对象不存在 [{spec.ObjectId}]。");
+                    return OperationResponse<GeometryModificationPreviewResponse>.Fail($"Object not found: {spec.ObjectId}");
                 }
 
                 OperationResponse<IReadOnlyList<ObjectEditWarning>> validation = _validator.Validate(spec, target);
@@ -293,7 +125,136 @@ public sealed class RhinoGeometryModificationService
                 }
 
                 warnings.AddRange(validation.Data ?? Array.Empty<ObjectEditWarning>());
-                OperationResponse controlPointValidation = ValidateControlPointIndex(model, spec);
+            }
+
+            List<ObjectEditOperationResult> results = specs
+                .Take(PreviewLimit)
+                .Select(spec =>
+                {
+                    RhinoObjectInfo target = targetLookup[spec.ObjectId];
+                    return new ObjectEditOperationResult
+                    {
+                        ObjectId = target.ObjectId,
+                        LayerFullPath = target.LayerFullPath,
+                        Success = true,
+                        Messages = new[] { $"ReplaceGeometry: {target.GeometryTypeName} -> {spec.Geometry.Primitive}" }
+                    };
+                })
+                .ToList();
+
+            AddPreviewTruncationWarning(results.Count, specs.Count, warnings);
+
+            return OperationResponse<GeometryModificationPreviewResponse>.Ok(new GeometryModificationPreviewResponse
+            {
+                FilePath = filePath,
+                CriteriaSummary = SummarizeEntryTargets("ReplaceGeometry", specs.Select(spec => spec.ObjectId)),
+                MatchedObjectCount = specs.Count,
+                PreviewObjectCount = results.Count,
+                OperationCount = specs.Count,
+                Warnings = warnings,
+                ObjectResults = results
+            }, "ReplaceGeometry preview generated.");
+        });
+    }
+
+    public OperationResponse<GeometryModificationResponse> ApplyReplace(
+        string filePath,
+        IReadOnlyList<GeometryReplacementSpec> specs,
+        IReadOnlyList<RhinoObjectInfo> targets)
+    {
+        if (specs.Count == 0)
+        {
+            return OperationResponse<GeometryModificationResponse>.Fail("At least one ReplaceGeometry entry is required.");
+        }
+
+        if (HasDuplicateObjectIds(specs.Select(spec => spec.ObjectId)))
+        {
+            return OperationResponse<GeometryModificationResponse>.Fail("ReplaceGeometry does not allow duplicate ObjectId entries.");
+        }
+
+        return _documentAccessor.ExecuteWithUndo(filePath, "MCP: ReplaceGeometry", document =>
+        {
+            Dictionary<Guid, RhinoObjectInfo> targetLookup = targets.ToDictionary(target => target.ObjectId);
+            var warnings = CreateBatchWarnings(specs.Count);
+
+            foreach (GeometryReplacementSpec spec in specs)
+            {
+                if (!targetLookup.TryGetValue(spec.ObjectId, out RhinoObjectInfo? target))
+                {
+                    return OperationResponse<(bool Mutated, GeometryModificationResponse Result)>.Fail($"Object not found: {spec.ObjectId}");
+                }
+
+                OperationResponse<IReadOnlyList<ObjectEditWarning>> validation = _validator.Validate(spec, target);
+                if (!validation.Success)
+                {
+                    return OperationResponse<(bool Mutated, GeometryModificationResponse Result)>.Fail(validation.Message);
+                }
+
+                warnings.AddRange(validation.Data ?? Array.Empty<ObjectEditWarning>());
+            }
+
+            var results = new List<ObjectEditOperationResult>(specs.Count);
+            foreach (GeometryReplacementSpec spec in specs)
+            {
+                RhinoObjectInfo target = targetLookup[spec.ObjectId];
+                OperationResponse<ObjectEditOperationResult> mutateResult = _mutator.Replace(target, spec);
+                results.Add(ToOperationResult(target, mutateResult));
+            }
+
+            if (results.Any(result => result.Success))
+            {
+                document.Views.Redraw();
+            }
+
+            AddResultTruncationWarning(results.Count, warnings);
+
+            return OperationResponse<(bool Mutated, GeometryModificationResponse Result)>.Ok(
+                (results.Any(result => result.Success), new GeometryModificationResponse
+                {
+                    FilePath = filePath,
+                    CriteriaSummary = SummarizeEntryTargets("ReplaceGeometry", specs.Select(spec => spec.ObjectId)),
+                    MatchedObjectCount = specs.Count,
+                    UpdatedObjectCount = results.Count(result => result.Success),
+                    FailedObjectCount = results.Count(result => !result.Success),
+                    OperationCount = specs.Count,
+                    Warnings = warnings,
+                    ObjectResults = results.Take(PreviewLimit).ToList()
+                }),
+                "ReplaceGeometry completed.");
+        });
+    }
+
+    public OperationResponse<GeometryModificationPreviewResponse> PreviewEditControlPoints(
+        string filePath,
+        IReadOnlyList<ControlPointEditSpec> specs,
+        IReadOnlyList<RhinoObjectInfo> targets)
+    {
+        if (specs.Count == 0)
+        {
+            return OperationResponse<GeometryModificationPreviewResponse>.Fail("At least one EditControlPoints entry is required.");
+        }
+
+        return _documentAccessor.Execute(filePath, document =>
+        {
+            Dictionary<Guid, RhinoObjectInfo> targetLookup = targets.ToDictionary(target => target.ObjectId);
+            var warnings = CreateBatchWarnings(specs.Count);
+
+            foreach (ControlPointEditSpec spec in specs)
+            {
+                if (!targetLookup.TryGetValue(spec.ObjectId, out RhinoObjectInfo? target))
+                {
+                    return OperationResponse<GeometryModificationPreviewResponse>.Fail($"Object not found: {spec.ObjectId}");
+                }
+
+                OperationResponse<IReadOnlyList<ObjectEditWarning>> validation = _validator.Validate(spec, target);
+                if (!validation.Success)
+                {
+                    return OperationResponse<GeometryModificationPreviewResponse>.Fail(validation.Message);
+                }
+
+                warnings.AddRange(validation.Data ?? Array.Empty<ObjectEditWarning>());
+
+                OperationResponse controlPointValidation = _liveGeometryValidator.ValidateAgainstDocument(document, spec);
                 if (!controlPointValidation.Success)
                 {
                     return OperationResponse<GeometryModificationPreviewResponse>.Fail(controlPointValidation.Message);
@@ -330,12 +291,8 @@ public sealed class RhinoGeometryModificationService
                 OperationCount = specs.Count,
                 Warnings = warnings,
                 ObjectResults = results
-            }, "EditControlPoints 预览生成完成。");
-        }
-        catch (Exception ex)
-        {
-            return OperationResponse<GeometryModificationPreviewResponse>.Fail($"EditControlPoints 预览失败: {ex.Message}");
-        }
+            }, "EditControlPoints preview generated.");
+        });
     }
 
     public OperationResponse<GeometryModificationResponse> ApplyEditControlPoints(
@@ -343,41 +300,35 @@ public sealed class RhinoGeometryModificationService
         IReadOnlyList<ControlPointEditSpec> specs,
         IReadOnlyList<RhinoObjectInfo> targets)
     {
-        if (!_repository.Exists(filePath))
-        {
-            return OperationResponse<GeometryModificationResponse>.Fail($"错误：未找到文件 {filePath}");
-        }
-
         if (specs.Count == 0)
         {
-            return OperationResponse<GeometryModificationResponse>.Fail("错误：至少需要提供一个 EditControlPoints entry。");
+            return OperationResponse<GeometryModificationResponse>.Fail("At least one EditControlPoints entry is required.");
         }
 
-        Dictionary<Guid, RhinoObjectInfo> targetLookup = targets.ToDictionary(target => target.ObjectId);
-
-        try
+        return _documentAccessor.ExecuteWithUndo(filePath, "MCP: EditControlPoints", document =>
         {
-            using var model = _repository.Read(filePath);
+            Dictionary<Guid, RhinoObjectInfo> targetLookup = targets.ToDictionary(target => target.ObjectId);
             var warnings = CreateBatchWarnings(specs.Count);
 
             foreach (ControlPointEditSpec spec in specs)
             {
                 if (!targetLookup.TryGetValue(spec.ObjectId, out RhinoObjectInfo? target))
                 {
-                    return OperationResponse<GeometryModificationResponse>.Fail($"错误：对象不存在 [{spec.ObjectId}]。");
+                    return OperationResponse<(bool Mutated, GeometryModificationResponse Result)>.Fail($"Object not found: {spec.ObjectId}");
                 }
 
                 OperationResponse<IReadOnlyList<ObjectEditWarning>> validation = _validator.Validate(spec, target);
                 if (!validation.Success)
                 {
-                    return OperationResponse<GeometryModificationResponse>.Fail(validation.Message);
+                    return OperationResponse<(bool Mutated, GeometryModificationResponse Result)>.Fail(validation.Message);
                 }
 
                 warnings.AddRange(validation.Data ?? Array.Empty<ObjectEditWarning>());
-                OperationResponse controlPointValidation = ValidateControlPointIndex(model, spec);
+
+                OperationResponse controlPointValidation = _liveGeometryValidator.ValidateAgainstDocument(document, spec);
                 if (!controlPointValidation.Success)
                 {
-                    return OperationResponse<GeometryModificationResponse>.Fail(controlPointValidation.Message);
+                    return OperationResponse<(bool Mutated, GeometryModificationResponse Result)>.Fail(controlPointValidation.Message);
                 }
             }
 
@@ -385,62 +336,35 @@ public sealed class RhinoGeometryModificationService
                 .GroupBy(spec => spec.ObjectId)
                 .ToDictionary(group => group.Key, group => group.ToList());
 
-            OperationResponse<FileMutationPreflightResponse> safeguard = _fileMutationSafeguard.BeforeOverwrite(filePath, groupedSpecs.Count);
-            if (!safeguard.Success)
-            {
-                return OperationResponse<GeometryModificationResponse>.Fail(safeguard.Message);
-            }
-
-            if (safeguard.Data is not null)
-            {
-                warnings.AddRange(safeguard.Data.Warnings.Select(message => new ObjectEditWarning
-                {
-                    Code = "FILE_MUTATION_PREFLIGHT",
-                    Message = message
-                }));
-            }
-
             var results = new List<ObjectEditOperationResult>(groupedSpecs.Count);
-            bool writeSucceeded = false;
-
-            try
+            foreach ((Guid objectId, List<ControlPointEditSpec> objectSpecs) in groupedSpecs)
             {
-                foreach ((Guid objectId, List<ControlPointEditSpec> objectSpecs) in groupedSpecs)
-                {
-                    RhinoObjectInfo target = targetLookup[objectId];
-                    OperationResponse<ObjectEditOperationResult> mutateResult = _mutator.EditControlPoints(model, target, objectSpecs);
-                    results.Add(ToOperationResult(target, mutateResult));
-                }
-
-                writeSucceeded = results.All(result => result.Success) && _repository.Write(model, filePath);
-                if (!writeSucceeded)
-                {
-                    return OperationResponse<GeometryModificationResponse>.Fail("EditControlPoints 写回失败。请检查文件是否可写。");
-                }
+                RhinoObjectInfo target = targetLookup[objectId];
+                OperationResponse<ObjectEditOperationResult> mutateResult = _mutator.EditControlPoints(target, objectSpecs);
+                results.Add(ToOperationResult(target, mutateResult));
             }
-            finally
+
+            if (results.Any(result => result.Success))
             {
-                _fileMutationSafeguard.AfterOverwrite(filePath, writeSucceeded);
+                document.Views.Redraw();
             }
 
             AddResultTruncationWarning(results.Count, warnings);
 
-            return OperationResponse<GeometryModificationResponse>.Ok(new GeometryModificationResponse
-            {
-                FilePath = filePath,
-                CriteriaSummary = SummarizeEntryTargets("EditControlPoints", specs.Select(spec => spec.ObjectId)),
-                MatchedObjectCount = groupedSpecs.Count,
-                UpdatedObjectCount = results.Count(result => result.Success),
-                FailedObjectCount = results.Count(result => !result.Success),
-                OperationCount = specs.Count,
-                Warnings = warnings,
-                ObjectResults = results.Take(PreviewLimit).ToList()
-            }, "EditControlPoints 执行完成。");
-        }
-        catch (Exception ex)
-        {
-            return OperationResponse<GeometryModificationResponse>.Fail($"EditControlPoints 执行失败: {ex.Message}");
-        }
+            return OperationResponse<(bool Mutated, GeometryModificationResponse Result)>.Ok(
+                (results.Any(result => result.Success), new GeometryModificationResponse
+                {
+                    FilePath = filePath,
+                    CriteriaSummary = SummarizeEntryTargets("EditControlPoints", specs.Select(spec => spec.ObjectId)),
+                    MatchedObjectCount = groupedSpecs.Count,
+                    UpdatedObjectCount = results.Count(result => result.Success),
+                    FailedObjectCount = results.Count(result => !result.Success),
+                    OperationCount = specs.Count,
+                    Warnings = warnings,
+                    ObjectResults = results.Take(PreviewLimit).ToList()
+                }),
+                "EditControlPoints completed.");
+        });
     }
 
     public string Format(GeometryModificationResponse response)
@@ -459,11 +383,6 @@ public sealed class RhinoGeometryModificationService
         RhinoObjectFilterResult selection,
         bool ignoredFilters)
     {
-        if (!_repository.Exists(filePath))
-        {
-            return OperationResponse<GeometryModificationPreviewResponse>.Fail($"错误：未找到文件 {filePath}");
-        }
-
         OperationResponse<IReadOnlyList<ObjectEditWarning>> validation = _validator.Validate(transform, selection.Objects);
         if (!validation.Success)
         {
@@ -476,7 +395,7 @@ public sealed class RhinoGeometryModificationService
             warnings.Add(new ObjectEditWarning
             {
                 Code = "NO_MATCHED_OBJECTS",
-                Message = "没有匹配对象，预览为空。"
+                Message = "No objects matched the selection."
             });
         }
 
@@ -502,7 +421,7 @@ public sealed class RhinoGeometryModificationService
             OperationCount = 1,
             Warnings = warnings,
             ObjectResults = results
-        }, "TransformObjects 预览生成完成。");
+        }, "TransformObjects preview generated.");
     }
 
     private OperationResponse<GeometryModificationResponse> ApplyTransformInternal(
@@ -511,81 +430,49 @@ public sealed class RhinoGeometryModificationService
         RhinoObjectFilterResult selection,
         bool ignoredFilters)
     {
-        if (!_repository.Exists(filePath))
-        {
-            return OperationResponse<GeometryModificationResponse>.Fail($"错误：未找到文件 {filePath}");
-        }
-
         if (selection.Objects.Count == 0)
         {
-            return OperationResponse<GeometryModificationResponse>.Fail("错误：没有匹配对象，未执行任何修改。");
+            return OperationResponse<GeometryModificationResponse>.Fail("No objects matched the selection.");
         }
 
-        try
+        return _documentAccessor.ExecuteWithUndo(filePath, "MCP: TransformObjects", document =>
         {
-            using var model = _repository.Read(filePath);
             OperationResponse<IReadOnlyList<ObjectEditWarning>> validation = _validator.Validate(transform, selection.Objects);
             if (!validation.Success)
             {
-                return OperationResponse<GeometryModificationResponse>.Fail(validation.Message);
+                return OperationResponse<(bool Mutated, GeometryModificationResponse Result)>.Fail(validation.Message);
             }
 
             var warnings = CreateWarnings(validation.Data ?? Array.Empty<ObjectEditWarning>(), ignoredFilters, selection.Objects.Count);
-            OperationResponse<FileMutationPreflightResponse> safeguard = _fileMutationSafeguard.BeforeOverwrite(filePath, selection.Objects.Count);
-            if (!safeguard.Success)
-            {
-                return OperationResponse<GeometryModificationResponse>.Fail(safeguard.Message);
-            }
-
-            if (safeguard.Data is not null)
-            {
-                warnings.AddRange(safeguard.Data.Warnings.Select(message => new ObjectEditWarning
-                {
-                    Code = "FILE_MUTATION_PREFLIGHT",
-                    Message = message
-                }));
-            }
-
             var results = new List<ObjectEditOperationResult>();
-            bool writeSucceeded = false;
 
-            try
+            foreach (RhinoObjectInfo objectInfo in selection.Objects)
             {
-                foreach (RhinoObjectInfo objectInfo in selection.Objects)
-                {
-                    OperationResponse<ObjectEditOperationResult> mutateResult = _mutator.Transform(model, objectInfo, transform);
-                    results.Add(ToOperationResult(objectInfo, mutateResult));
-                }
-
-                writeSucceeded = results.All(result => result.Success) && _repository.Write(model, filePath);
-                if (!writeSucceeded)
-                {
-                    return OperationResponse<GeometryModificationResponse>.Fail("TransformObjects 写回失败。请检查文件是否可写。");
-                }
+                OperationResponse<ObjectEditOperationResult> mutateResult = _mutator.Transform(objectInfo, transform);
+                results.Add(ToOperationResult(objectInfo, mutateResult));
             }
-            finally
+
+            if (results.Any(result => result.Success))
             {
-                _fileMutationSafeguard.AfterOverwrite(filePath, writeSucceeded);
+                document.Views.Redraw();
             }
 
             AddResultTruncationWarning(results.Count, warnings);
 
-            return OperationResponse<GeometryModificationResponse>.Ok(new GeometryModificationResponse
-            {
-                FilePath = filePath,
-                CriteriaSummary = selection.CriteriaSummary,
-                MatchedObjectCount = selection.MatchedCount,
-                UpdatedObjectCount = results.Count(result => result.Success),
-                FailedObjectCount = results.Count(result => !result.Success),
-                OperationCount = 1,
-                Warnings = warnings,
-                ObjectResults = results.Take(PreviewLimit).ToList()
-            }, "TransformObjects 执行完成。");
-        }
-        catch (Exception ex)
-        {
-            return OperationResponse<GeometryModificationResponse>.Fail($"TransformObjects 执行失败: {ex.Message}");
-        }
+            return OperationResponse<(bool Mutated, GeometryModificationResponse Result)>.Ok(
+                (results.Any(result => result.Success), new GeometryModificationResponse
+                {
+                    FilePath = filePath,
+                    CriteriaSummary = selection.CriteriaSummary,
+                    MatchedObjectCount = selection.MatchedCount,
+                    UpdatedObjectCount = results.Count(result => result.Success),
+                    FailedObjectCount = results.Count(result => !result.Success),
+                    OperationCount = 1,
+                    Warnings = warnings,
+                    ObjectResults = results.Take(PreviewLimit).ToList()
+                }),
+                "TransformObjects completed.");
+        });
     }
 
     private OperationResponse<GeometryModificationPreviewResponse> PreviewDeleteInternal(
@@ -593,18 +480,13 @@ public sealed class RhinoGeometryModificationService
         RhinoObjectFilterResult selection,
         bool ignoredFilters)
     {
-        if (!_repository.Exists(filePath))
-        {
-            return OperationResponse<GeometryModificationPreviewResponse>.Fail($"错误：未找到文件 {filePath}");
-        }
-
         var warnings = CreateWarnings(Array.Empty<ObjectEditWarning>(), ignoredFilters, selection.Objects.Count);
         if (selection.Objects.Count == 0)
         {
             warnings.Add(new ObjectEditWarning
             {
                 Code = "NO_MATCHED_OBJECTS",
-                Message = "没有匹配对象，预览为空。"
+                Message = "No objects matched the selection."
             });
         }
 
@@ -630,7 +512,7 @@ public sealed class RhinoGeometryModificationService
             OperationCount = 1,
             Warnings = warnings,
             ObjectResults = results
-        }, "DeleteObjects 预览生成完成。");
+        }, "DeleteObjects preview generated.");
     }
 
     private OperationResponse<GeometryModificationResponse> ApplyDeleteInternal(
@@ -638,75 +520,43 @@ public sealed class RhinoGeometryModificationService
         RhinoObjectFilterResult selection,
         bool ignoredFilters)
     {
-        if (!_repository.Exists(filePath))
-        {
-            return OperationResponse<GeometryModificationResponse>.Fail($"错误：未找到文件 {filePath}");
-        }
-
         if (selection.Objects.Count == 0)
         {
-            return OperationResponse<GeometryModificationResponse>.Fail("错误：没有匹配对象，未执行任何删除。");
+            return OperationResponse<GeometryModificationResponse>.Fail("No objects matched the selection.");
         }
 
-        try
+        return _documentAccessor.ExecuteWithUndo(filePath, "MCP: DeleteObjects", document =>
         {
-            using var model = _repository.Read(filePath);
             var warnings = CreateWarnings(Array.Empty<ObjectEditWarning>(), ignoredFilters, selection.Objects.Count);
-            OperationResponse<FileMutationPreflightResponse> safeguard = _fileMutationSafeguard.BeforeOverwrite(filePath, selection.Objects.Count);
-            if (!safeguard.Success)
-            {
-                return OperationResponse<GeometryModificationResponse>.Fail(safeguard.Message);
-            }
-
-            if (safeguard.Data is not null)
-            {
-                warnings.AddRange(safeguard.Data.Warnings.Select(message => new ObjectEditWarning
-                {
-                    Code = "FILE_MUTATION_PREFLIGHT",
-                    Message = message
-                }));
-            }
-
             var results = new List<ObjectEditOperationResult>();
-            bool writeSucceeded = false;
 
-            try
+            foreach (RhinoObjectInfo objectInfo in selection.Objects)
             {
-                foreach (RhinoObjectInfo objectInfo in selection.Objects)
-                {
-                    OperationResponse<ObjectEditOperationResult> mutateResult = _mutator.Delete(model, objectInfo);
-                    results.Add(ToOperationResult(objectInfo, mutateResult));
-                }
-
-                writeSucceeded = results.All(result => result.Success) && _repository.Write(model, filePath);
-                if (!writeSucceeded)
-                {
-                    return OperationResponse<GeometryModificationResponse>.Fail("DeleteObjects 写回失败。请检查文件是否可写。");
-                }
+                OperationResponse<ObjectEditOperationResult> mutateResult = _mutator.Delete(objectInfo);
+                results.Add(ToOperationResult(objectInfo, mutateResult));
             }
-            finally
+
+            if (results.Any(result => result.Success))
             {
-                _fileMutationSafeguard.AfterOverwrite(filePath, writeSucceeded);
+                document.Views.Redraw();
             }
 
             AddResultTruncationWarning(results.Count, warnings);
 
-            return OperationResponse<GeometryModificationResponse>.Ok(new GeometryModificationResponse
-            {
-                FilePath = filePath,
-                CriteriaSummary = selection.CriteriaSummary,
-                MatchedObjectCount = selection.MatchedCount,
-                UpdatedObjectCount = results.Count(result => result.Success),
-                FailedObjectCount = results.Count(result => !result.Success),
-                OperationCount = 1,
-                Warnings = warnings,
-                ObjectResults = results.Take(PreviewLimit).ToList()
-            }, "DeleteObjects 执行完成。");
-        }
-        catch (Exception ex)
-        {
-            return OperationResponse<GeometryModificationResponse>.Fail($"DeleteObjects 执行失败: {ex.Message}");
-        }
+            return OperationResponse<(bool Mutated, GeometryModificationResponse Result)>.Ok(
+                (results.Any(result => result.Success), new GeometryModificationResponse
+                {
+                    FilePath = filePath,
+                    CriteriaSummary = selection.CriteriaSummary,
+                    MatchedObjectCount = selection.MatchedCount,
+                    UpdatedObjectCount = results.Count(result => result.Success),
+                    FailedObjectCount = results.Count(result => !result.Success),
+                    OperationCount = 1,
+                    Warnings = warnings,
+                    ObjectResults = results.Take(PreviewLimit).ToList()
+                }),
+                "DeleteObjects completed.");
+        });
     }
 
     private static bool HasAnySelectionCriteria(
@@ -739,7 +589,7 @@ public sealed class RhinoGeometryModificationService
             warnings.Add(new ObjectEditWarning
             {
                 Code = "FILTERS_IGNORED",
-                Message = "已提供 ConfirmedObjectIds，筛查条件已被忽略。"
+                Message = "ConfirmedObjectIds were provided, so filter criteria were ignored."
             });
         }
 
@@ -754,7 +604,7 @@ public sealed class RhinoGeometryModificationService
             warnings.Add(new ObjectEditWarning
             {
                 Code = "LARGE_BATCH",
-                Message = "批量条目超过 10000，请确认调用规模。"
+                Message = "Batch size exceeds 10000 items."
             });
         }
 
@@ -768,7 +618,7 @@ public sealed class RhinoGeometryModificationService
             warnings.Add(new ObjectEditWarning
             {
                 Code = "PREVIEW_TRUNCATED",
-                Message = $"预览仅展示前 {PreviewLimit} 个对象。"
+                Message = $"Preview only shows the first {PreviewLimit} objects."
             });
         }
     }
@@ -780,7 +630,7 @@ public sealed class RhinoGeometryModificationService
             warnings.Add(new ObjectEditWarning
             {
                 Code = "RESULT_TRUNCATED",
-                Message = $"执行结果仅展示前 {PreviewLimit} 个对象。"
+                Message = $"Result list only shows the first {PreviewLimit} objects."
             });
         }
     }
@@ -831,60 +681,5 @@ public sealed class RhinoGeometryModificationService
     {
         List<Guid> distinctIds = objectIds.Distinct().ToList();
         return $"{operationName}; Targets={distinctIds.Count}";
-    }
-
-    private static File3dmObject? FindModelObject(File3dm model, Guid objectId)
-    {
-        foreach (File3dmObject modelObject in model.Objects)
-        {
-            if (modelObject.Attributes.ObjectId == objectId)
-            {
-                return modelObject;
-            }
-        }
-
-        return null;
-    }
-
-    private static OperationResponse ValidateControlPointIndex(File3dm model, ControlPointEditSpec spec)
-    {
-        File3dmObject? modelObject = FindModelObject(model, spec.ObjectId);
-        if (modelObject?.Geometry is null)
-        {
-            return OperationResponse.Fail($"错误：对象不存在或几何为空 [{spec.ObjectId}]。");
-        }
-
-        switch (spec.TargetMode)
-        {
-            case Domain.Enums.ControlPointTargetMode.CurveIndex:
-                if (modelObject.Geometry is not Rhino.Geometry.NurbsCurve curve)
-                {
-                    return OperationResponse.Fail($"错误：对象 [{spec.ObjectId}] 不是 NurbsCurve。");
-                }
-
-                if (spec.PointIndex is null || spec.PointIndex < 0 || spec.PointIndex >= curve.Points.Count)
-                {
-                    return OperationResponse.Fail(
-                        $"错误：PointIndex 越界。ObjectId={spec.ObjectId}, PointIndex={spec.PointIndex}");
-                }
-                break;
-
-            case Domain.Enums.ControlPointTargetMode.SurfaceUV:
-                if (modelObject.Geometry is not Rhino.Geometry.NurbsSurface surface)
-                {
-                    return OperationResponse.Fail($"错误：对象 [{spec.ObjectId}] 不是 NurbsSurface。");
-                }
-
-                if (spec.UIndex is null || spec.VIndex is null
-                    || spec.UIndex < 0 || spec.VIndex < 0
-                    || spec.UIndex >= surface.Points.CountU || spec.VIndex >= surface.Points.CountV)
-                {
-                    return OperationResponse.Fail(
-                        $"错误：UIndex / VIndex 越界。ObjectId={spec.ObjectId}, UIndex={spec.UIndex}, VIndex={spec.VIndex}");
-                }
-                break;
-        }
-
-        return OperationResponse.Ok();
     }
 }

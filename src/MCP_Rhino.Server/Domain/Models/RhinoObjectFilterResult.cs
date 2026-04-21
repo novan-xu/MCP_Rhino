@@ -6,5 +6,6 @@ public sealed class RhinoObjectFilterResult
     public int TotalObjectCount { get; set; }
     public int MatchedCount { get; set; }
     public string CriteriaSummary { get; set; } = string.Empty;
+    public IReadOnlyList<Contracts.Responses.ObjectEditWarning> Warnings { get; set; } = Array.Empty<Contracts.Responses.ObjectEditWarning>();
     public IReadOnlyList<RhinoObjectInfo> Objects { get; set; } = Array.Empty<RhinoObjectInfo>();
 }

@@ -7,5 +7,6 @@ public sealed class ObjectUserTextReadResponse
     public int FoundObjectCount { get; set; }
     public int MissingObjectCount { get; set; }
     public int TotalEntryCount { get; set; }
+    public IReadOnlyList<ObjectEditWarning> Warnings { get; set; } = Array.Empty<ObjectEditWarning>();
     public IReadOnlyList<ObjectUserTextRecordResponse> Records { get; set; } = Array.Empty<ObjectUserTextRecordResponse>();
 }

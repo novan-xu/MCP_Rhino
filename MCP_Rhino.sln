@@ -1,8 +1,12 @@
-Microsoft Visual Studio Solution File, Format Version 12.00
+﻿Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.5.2.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MCP_Rhino.Server", "src\MCP_Rhino.Server\MCP_Rhino.Server.csproj", "{07B09421-6302-4C14-0899-85728FD0C8CF}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{8D05803C-2276-4D30-96E7-050375714526}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MCP_Rhino.Bridge", "src\MCP_Rhino.Bridge\MCP_Rhino.Bridge.csproj", "{6AC9FC41-2DAC-4F41-A95E-6ADCBF2159A2}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -14,11 +18,18 @@ Global
 		{07B09421-6302-4C14-0899-85728FD0C8CF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{07B09421-6302-4C14-0899-85728FD0C8CF}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{07B09421-6302-4C14-0899-85728FD0C8CF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6AC9FC41-2DAC-4F41-A95E-6ADCBF2159A2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6AC9FC41-2DAC-4F41-A95E-6ADCBF2159A2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6AC9FC41-2DAC-4F41-A95E-6ADCBF2159A2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6AC9FC41-2DAC-4F41-A95E-6ADCBF2159A2}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {EA7C421B-B139-4A75-B4B1-F76BD8178CF7}
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{6AC9FC41-2DAC-4F41-A95E-6ADCBF2159A2} = {8D05803C-2276-4D30-96E7-050375714526}
 	EndGlobalSection
 EndGlobal

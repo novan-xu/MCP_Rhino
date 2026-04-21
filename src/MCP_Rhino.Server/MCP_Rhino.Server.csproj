@@ -17,7 +17,24 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Reference Include="RhinoCommon" Aliases="rhinocommon">
+      <HintPath>C:\Program Files\Rhino 8\System\netcore\RhinoCommon.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Include="..\..\Project_Test\**\*.cs" LinkBase="Project_Test" />
   </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Infrastructure\Plugin\plugin.manifest">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <Target Name="CopyRhinoPluginAssembly" AfterTargets="Build">
+    <Copy SourceFiles="$(TargetDir)$(AssemblyName).dll" DestinationFiles="$(TargetDir)$(AssemblyName).rhp" />
+  </Target>
 
 </Project>
