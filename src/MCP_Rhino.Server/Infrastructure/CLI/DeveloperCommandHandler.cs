@@ -14,6 +14,7 @@ public sealed partial class DeveloperCommandHandler
     private readonly RhinoObjectEditingService _editingService;
     private readonly RhinoObjectUserTextService _userTextService;
     private readonly RhinoDocumentUserStringService _documentUserStringService;
+    private readonly RhinoLayerManagementService _layerManagementService;
     private readonly LayerObjectFilterSkill _layerSkill;
     private readonly ObjectTypeFilterSkill _typeSkill;
     private readonly UserAttributeObjectFilterSkill _userAttributeSkill;
@@ -27,6 +28,7 @@ public sealed partial class DeveloperCommandHandler
         RhinoObjectEditingService editingService,
         RhinoObjectUserTextService userTextService,
         RhinoDocumentUserStringService documentUserStringService,
+        RhinoLayerManagementService layerManagementService,
         LayerObjectFilterSkill layerSkill,
         ObjectTypeFilterSkill typeSkill,
         UserAttributeObjectFilterSkill userAttributeSkill,
@@ -39,6 +41,7 @@ public sealed partial class DeveloperCommandHandler
         _editingService = editingService;
         _userTextService = userTextService;
         _documentUserStringService = documentUserStringService;
+        _layerManagementService = layerManagementService;
         _layerSkill = layerSkill;
         _typeSkill = typeSkill;
         _userAttributeSkill = userAttributeSkill;
@@ -73,6 +76,7 @@ public sealed partial class DeveloperCommandHandler
             "delete-document-user-strings" => HandleDeleteDocumentUserStrings(args),
             "geometry-smoke-test" => HandleGeometrySmokeTest(args),
             "online-mutation-refactor-smoke-test" => HandleOnlineMutationRefactorSmokeTest(args),
+            "layer-management-smoke-test" => HandleLayerManagementSmokeTest(args),
             "layer-behavior-probe" => HandleLayerBehaviorProbe(args),
             _ => false
         };

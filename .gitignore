@@ -55,6 +55,7 @@ project.nuget.cache
 _validation/file-safeguard-build/
 _validation/geometry-smoke-test/
 _validation/online-mutation-refactor/
+_validation/layer-management-tools/
 *.3dmbak
 _tmp*.csx
 .cline/

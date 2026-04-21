@@ -1,0 +1,28 @@
+using System.ComponentModel;
+using MCP_Rhino.Server.Application.Services;
+using MCP_Rhino.Server.Contracts.Requests;
+using MCP_Rhino.Server.Contracts.Responses;
+using ModelContextProtocol.Server;
+
+namespace MCP_Rhino.Server.Tools.Layers;
+
+[McpServerToolType]
+public sealed class GetLayersTool
+{
+    private readonly RhinoLayerManagementService _service;
+
+    public GetLayersTool(RhinoLayerManagementService service)
+    {
+        _service = service;
+    }
+
+    [McpServerTool]
+    [Description("Read all layers from a Rhino .3dm file, including object counts and layer properties.")]
+    public OperationResponse<LayerReadResponse> GetLayers(string filePath)
+    {
+        return _service.Get(new GetLayersRequest
+        {
+            FilePath = filePath
+        });
+    }
+}

@@ -53,6 +53,7 @@ public static class DependencyInjection
         services.AddSingleton<RhinoGeometryModificationService>();
         services.AddSingleton<RhinoObjectUserTextService>();
         services.AddSingleton<RhinoDocumentUserStringService>();
+        services.AddSingleton<RhinoLayerManagementService>();
         services.AddSingleton<DeveloperCommandHandler>();
         return services;
     }
