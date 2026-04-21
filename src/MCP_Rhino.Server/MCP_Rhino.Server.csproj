@@ -16,4 +16,8 @@
     <PackageReference Include="Rhino3dm" Version="8.17.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\..\Project_Test\**\*.cs" LinkBase="Project_Test" />
+  </ItemGroup>
+
 </Project>
