@@ -1,3 +1,4 @@
+using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using MCP_Rhino.Server.Infrastructure.CLI;
@@ -45,4 +46,19 @@ static void BootstrapRhinoRuntime()
     }
 
     Environment.SetEnvironmentVariable("PATH", string.Join(Path.PathSeparator, segments));
+
+    // RhinoCommon is intentionally not copied to the CLI output directory (Private=false in csproj,
+    // required for plugin (.rhp) loading). Bridge managed-assembly resolution to Rhino's install
+    // directory so CLI runs (dotnet run) can still JIT methods that reference RhinoCommon types.
+    AppDomain.CurrentDomain.AssemblyResolve += (_, args) =>
+    {
+        string assemblyName = new AssemblyName(args.Name).Name ?? string.Empty;
+        if (!string.Equals(assemblyName, "RhinoCommon", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        string candidate = Path.Combine(RhinoNetcoreDirectory, "RhinoCommon.dll");
+        return File.Exists(candidate) ? Assembly.LoadFrom(candidate) : null;
+    };
 }

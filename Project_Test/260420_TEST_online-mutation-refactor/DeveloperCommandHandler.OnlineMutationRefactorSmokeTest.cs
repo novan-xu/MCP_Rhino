@@ -28,11 +28,7 @@ public sealed partial class DeveloperCommandHandler
                 return true;
             }
 
-            string validationDirectory = Path.Combine(
-                Directory.GetCurrentDirectory(),
-                "_validation",
-                "online-mutation-refactor");
-            Directory.CreateDirectory(validationDirectory);
+            string validationDirectory = ResolveValidationDirectory("online-mutation-refactor");
 
             string workingFilePath = Path.Combine(validationDirectory, "MCP_METtest.online-mutation-refactor.3dm");
             File.Copy(sourceFilePath, workingFilePath, overwrite: true);

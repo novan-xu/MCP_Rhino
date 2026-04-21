@@ -338,4 +338,33 @@ public sealed partial class DeveloperCommandHandler
             ? parsed
             : FilterMatchMode.All;
     }
+
+    // Resolves a writable validation directory for smoke / probe output.
+    // When the handler is invoked from Rhino plugin host, Directory.GetCurrentDirectory()
+    // returns Rhino's install folder (read-only). Walk up from the loaded-assembly location
+    // to locate the repo (.git) root; if none is found, fall back to the OS temp dir.
+    internal static string ResolveValidationDirectory(string slug)
+    {
+        string? repoRoot = TryFindRepoRoot(AppContext.BaseDirectory);
+        string baseRoot = repoRoot ?? Path.Combine(Path.GetTempPath(), "MCP_Rhino");
+        string validationDirectory = Path.Combine(baseRoot, "_validation", slug);
+        Directory.CreateDirectory(validationDirectory);
+        return validationDirectory;
+    }
+
+    private static string? TryFindRepoRoot(string startPath)
+    {
+        string? current = startPath;
+        for (int i = 0; i < 10 && current is not null; i++)
+        {
+            if (Directory.Exists(Path.Combine(current, ".git")))
+            {
+                return current;
+            }
+
+            current = Directory.GetParent(current)?.FullName;
+        }
+
+        return null;
+    }
 }

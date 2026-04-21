@@ -187,21 +187,7 @@ public sealed partial class DeveloperCommandHandler
     {
         try
         {
-            string baseDirectory = AppContext.BaseDirectory;
-            string root = baseDirectory;
-            for (int i = 0; i < 8; i++)
-            {
-                if (Directory.Exists(Path.Combine(root, ".git")))
-                {
-                    break;
-                }
-                DirectoryInfo? parent = Directory.GetParent(root);
-                if (parent is null) break;
-                root = parent.FullName;
-            }
-
-            string reportDir = Path.Combine(root, "_validation", "layer-behavior-check");
-            Directory.CreateDirectory(reportDir);
+            string reportDir = ResolveValidationDirectory("layer-behavior-check");
             string reportPath = Path.Combine(reportDir, $"probe-report-{DateTime.UtcNow:yyyyMMdd-HHmmss}.txt");
             File.WriteAllText(reportPath, output);
             Console.WriteLine($"Probe report written to: {reportPath}");
