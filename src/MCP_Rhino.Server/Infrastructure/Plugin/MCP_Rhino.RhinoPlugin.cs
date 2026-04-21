@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using MCP_Rhino.Server.Infrastructure.CLI;
+using MCP_Rhino.Server.Infrastructure.Runtime;
 using MCP_Rhino.Server.Server;
 using LoadReturnCode = rhinocommon::Rhino.PlugIns.LoadReturnCode;
 using PlugIn = rhinocommon::Rhino.PlugIns.PlugIn;
@@ -29,6 +30,7 @@ public sealed class McpRhinoPlugin : PlugIn
     {
         try
         {
+            RhinoRuntimeBootstrap.Initialize();
             _pipeServer = new McpNamedPipeServer(PipeName, CreateConnectionHost);
             _pipeServer.Start();
             RhinoApp.WriteLine($"MCP_Rhino plugin loaded. Named pipe ready: \\\\.\\pipe\\{PipeName}");
