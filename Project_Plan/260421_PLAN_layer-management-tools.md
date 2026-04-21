@@ -52,8 +52,8 @@ MCP_Rhino 目前的图层能力只有两类读工具 (`FindLayerCandidates`、`F
    - **Create**:`doc.Layers.AddPath(string layerPath)` 或 `AddPath(layerPath, Color)` —— 自动补父链,契合"用户传 `Floor::Level 3` 就自动建好 `Floor`"的语义;后续字段(Visible/Locked/PlotColor/PlotWeight/Linetype/RenderMaterial)由 `Modify` 路径覆盖,Service 内部串一次 `AddPath → FindByFullPath → Modify` 完成。
    - **自动创建父层的披露**:`AddPath` 在父链缺失时**静默**用 RhinoCommon 默认属性(ByParent 颜色、可见、未锁定、默认线型/材质)建好父层。用户可能以为整条链都按它给的叶子层属性建出来。Service 在调用 `AddPath` 前先快照现有图层 FullPath 集合,调用后 diff 出真正被自动创建的父层路径,并在对应 `LayerMutationResultResponse.Message` 里附加 `"(auto-created parent layers: [Floor])"`。若父层全部已存在,Message 不变。这不引入新 warning code,信息贴着被创建的叶子层走,客户端处理更直接。
    - **Modify**:`doc.Layers.Modify(Layer newSettings, int layerIndex, bool quiet)`。流程:先把 request entries 解析成当前文档快照下的目标层引用,再 `Layers[index]` 拿到当前 Layer 的**副本**(`.Duplicate()` 或 new Layer 拷贝字段)→ 按 Request 覆盖字段 / clear flag → 回写。`quiet=true` 抑制 Rhino 对话框。
-   - **Delete**:`doc.Layers.Delete(int layerIndex, bool quiet=true)`(软删除 —— layer 上的对象迁移到父层;Rhino 本身会把 `CurrentLayerIndex` 重置到一个合法值,但会失败在用户当前正使用该层时)。
-   - **Purge**:`doc.Layers.Purge(int layerIndex, bool quiet=true)`(连同对象一并删除)。返回 `bool`;成功时 Service 通过 preview 阶段预先统计的对象数填入 Message。
+   - **Delete**:由 Project_Test/260421_TEST_layer-behavior-check/ probe 实测,`doc.Layers.Delete(int, quiet=true)` **对持有对象的层直接返回 false,不迁移对象、不软删**。要让"对象上浮到父层"成立,Service 必须手工:(a) 遍历 `doc.Objects` 找出 `Attributes.LayerIndex == target.Index` 的所有对象,逐个 `ObjectAttributes.Duplicate` → `LayerIndex = parentIndex` → `doc.Objects.ModifyAttributes(objId, attrs, quiet: true)`;(b) 处理子层:要么递归 Delete(深度优先,最深先做,复用 #6 的排序策略),要么把子层的 `ParentLayerId` 改到当前层的父层,实现 reparent-up;一期选**递归 Delete 的语义**(子层不保留),PreviewDeleteLayers 会把子层 FullPath + 各自 ObjectCount 全部列出让客户端有完整影响面;(c) 全部清空后 `doc.Layers.Delete(index, quiet=true)` 应返回 true。任一步失败 → per-item fail,已做的 attribute modify 随同当前 Undo record 一并回退。
+   - **Purge**:`doc.Layers.Purge(int layerIndex, bool quiet=true)`,probe 实测:**自动级联到子层 + 所有对象**(父 + 子都 `IsDeleted=True`、两层的 objects 从 `doc.Objects` 物理移除),返回 `true`。Service 不需要手工递归,只要在 Apply 前统计 direct + descendant 对象数用于 Message 回显即可(`"Purged layer [X], removed Y objects across Z sub-layers"`)。
    - **父级变更**:`Modify` 时把 `Layer.ParentLayerId` 改到目标父层的 `Id`;根层传 `Guid.Empty`。
    - **线型绑定**:`LinetypeName` → live 经 `doc.Linetypes.Find(name, ignoreCase: false)` 解析 `LinetypeIndex`;offline 经 `model.AllLinetypes.FirstOrDefault(l => string.Equals(l.Name, name, StringComparison.Ordinal))`。两侧**均为大小写敏感**,避免"client 传 `continuous` 在 offline 命中、live 不命中"的 behaviour drift。找不到 per-item fail `"Linetype not found: {name}"`。
    - **材质绑定**:`RenderMaterialName` → live 经 `doc.Materials.Find(name, ignoreCase: false)` 解析 `RenderMaterialIndex`;offline 经 `model.Materials.FirstOrDefault(m => string.Equals(m.Name, name, StringComparison.Ordinal))`。同样大小写敏感。找不到 per-item fail。注意 Rhino 8 的 RDK 渲染材质未暴露 —— 本期仅支持文档级 `Materials` 表。
@@ -151,7 +151,7 @@ MCP Client 配置不变(仍通过 `MCP_Rhino.Bridge.exe` 连 `\\.\pipe\mcp_rhino
 - `GetLayers(filePath)` —— 返回全部图层详情 + 对象数 + 打印/线型/材质属性;offline 可用。
 - `CreateLayers(filePath, entries=[{fullPath, color?, visible?, locked?, plotColor?, plotWeight?, linetypeName?, renderMaterialName?}])` —— 批量建层,自动补父链。
 - `ModifyLayers(filePath, entries=[{fullPath, newName?, newParentFullPath?, color?, visible?, locked?, plotColor?, plotWeight?, linetypeName?, renderMaterialName?, clearPlotColor?, clearPlotWeight?, clearLinetype?, clearRenderMaterial?}])` —— 以 `fullPath` 定位,按字段覆盖;`clear*` 用于恢复继承而非传 `null`。
-- `DeleteLayers(filePath, fullPaths=[...])` —— 软删,对象上浮到父层。
+- `DeleteLayers(filePath, fullPaths=[...])` —— 软删:Service 手工把该层及其子层上的对象 `ModifyAttributes` 到被删层的父层,再调用 RhinoCommon `Delete`。一次 Tool 调用整批对象迁移 + 层删除合并到同一个 Undo record。
 - `PurgeLayers(filePath, fullPaths=[...])` —— 硬删,连带清光该层所有对象。
 - `PreviewModifyLayers(filePath, entries=[...])` —— 返回 rename/reparent 后的 ResolvedNewFullPath、逐字段 diff、受影响子层清单。
 - `PreviewDeleteLayers(filePath, fullPaths=[...])` —— 返回直接对象数、后代对象数、将被迁移的对象总数、子层清单、是否当前层。
@@ -172,7 +172,7 @@ MCP Client 配置不变(仍通过 `MCP_Rhino.Bridge.exe` 连 `\\.\pipe\mcp_rhino
 3. **Live 手工 smoke(Rhino 内)**:
    - 载入 `.rhp`,打开已保存的 `.3dm`,在 Rhino 命令行跑 `_McpDevSmoke`(由 `McpDevSmokeCommand` 转发到 `layer-management-smoke-test`,或接受参数切到该分支)。
    - 跑完后:Edit → Undo 能把 Create / Modify / Delete / Purge 各一步回退;viewport 面板里新建 layer 实时可见;关闭文档无落盘。
-4. **对 Undo 栈的空条目检查**:`ModifyLayers` 传入已是目标颜色的 entries(无实际改动),确认 Rhino Undo History 面板不产生空条目(由 `ExecuteWithUndo` 的"无实变更由 UndoManager 自动丢弃"机制保证)。
+4. **对 Undo 栈的空条目检查**(best-effort):`ModifyLayers` 传入已是目标颜色的 entries(无实际改动),观察 Rhino Undo History 面板。**当前 probe 未能验证此行为** —— 用 `Untitled.3dm` 跑时 `BeginUndoRecord` 返回 serial=0(新建未保存文档 Undo recording 不稳定),无法判断 UndoManager 对空记录的策略。实现阶段在已保存的 .3dm 上重测一次;`ExecuteWithUndo` 对 `undoRecord==0` 已经做了短路保护,即使底层不按预期丢弃空记录,最多是多一个空条目,不影响功能正确性。
 5. **边界用例**:
    - Create 重名 → per-item `Success=false`,其他项仍成功。
    - Create `linetypeName="NotExist"` → 单项 fail,消息含 `"Linetype not found"`。
