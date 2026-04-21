@@ -73,6 +73,7 @@ public sealed partial class DeveloperCommandHandler
             "delete-document-user-strings" => HandleDeleteDocumentUserStrings(args),
             "geometry-smoke-test" => HandleGeometrySmokeTest(args),
             "online-mutation-refactor-smoke-test" => HandleOnlineMutationRefactorSmokeTest(args),
+            "layer-behavior-probe" => HandleLayerBehaviorProbe(args),
             _ => false
         };
     }
