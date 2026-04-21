@@ -19,7 +19,7 @@
   <ItemGroup>
     <Reference Include="RhinoCommon" Aliases="rhinocommon">
       <HintPath>C:\Program Files\Rhino 8\System\netcore\RhinoCommon.dll</HintPath>
-      <Private>true</Private>
+      <Private>false</Private>
     </Reference>
   </ItemGroup>
 
