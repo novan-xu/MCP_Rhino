@@ -476,6 +476,24 @@ public sealed class RhinoLayerManagementService
                     }
 
                     CurrentSubtreeImpact impact = BuildCurrentSubtreeImpact(document, target.TargetLayerId);
+
+                    // In Rhino 8.28 RhinoCommon, document.Layers.Purge(index, quiet:true)
+                    // removes the layer subtree but re-homes the objects on those layers
+                    // instead of deleting them (contrary to what the docs suggest). The live
+                    // smoke test's Probe stage caught this. To match user intent — "purge
+                    // means the layer AND its objects disappear" — we explicitly delete the
+                    // subtree's objects first, then purge the (now-empty) layers.
+                    HashSet<Guid> subtreeIds = target.SubtreeLayerIds.ToHashSet();
+                    List<Guid> purgeObjectIds = CollectCurrentObjectIds(document, subtreeIds);
+                    int deletedObjects = 0;
+                    foreach (Guid objectId in purgeObjectIds)
+                    {
+                        if (document.Objects.Delete(objectId, quiet: true))
+                        {
+                            deletedObjects++;
+                        }
+                    }
+
                     if (!document.Layers.Purge(layerIndex, true))
                     {
                         results.Add(FailResult(target.RequestedFullPath, $"Failed to purge layer subtree: {target.RequestedFullPath}"));
@@ -485,7 +503,7 @@ public sealed class RhinoLayerManagementService
                     results.Add(SuccessResult(
                         target.RequestedFullPath,
                         target.RequestedFullPath,
-                        $"Purged layer [{target.RequestedFullPath}], removed {impact.TotalObjectCount} objects across {impact.DescendantLayerCount} sub-layers"));
+                        $"Purged layer [{target.RequestedFullPath}], removed {deletedObjects} objects across {impact.DescendantLayerCount} sub-layers"));
                     mutated = true;
                 }
                 catch (Exception ex)
