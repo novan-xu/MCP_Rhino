@@ -58,6 +58,7 @@ _validation/online-mutation-refactor/
 _validation/layer-management-tools/
 _validation/live-document-smoke/
 *.3dmbak
+*.rhl
 _tmp*.csx
 .cline/
 

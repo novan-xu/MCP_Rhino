@@ -22,21 +22,21 @@
 - Tool 负责参数接收、调用 Application/Service、格式化输出。
 - Tool 中禁止堆积大段 Rhino 文件读写逻辑。
 - 命名统一使用 `*Tool` 后缀。
-- **执行模式约束**：mutation 类 Tool 与 preview-of-mutation 类 Tool 只能依赖 Live 适配接口（见 §Infrastructure `Rhino/Live/`）；read / preview-of-read 类 Tool 以 Offline 适配接口（`Rhino/Offline/`）为主数据源。若需生成 stale warning，可额外只读查询 Live 状态，但不得把 Rhino 可用性作为成功返回的前置条件。详见「执行模式规则」章节。
+- **执行模式约束**：mutation 类 Tool 与 preview-of-mutation 类 Tool 只能依赖 Live 适配接口（见 §Infrastructure `Rhino/Live/`）；read / preview-of-read 类 Tool 默认优先依赖 Live 适配接口以获取当前真值。若需支持未打开文件、CLI 或批处理场景，可额外提供显式 Offline 入口（`Rhino/Offline/`）；不得在同一个 Tool 内把 live 失败静默回退成 offline 结果。详见「执行模式规则」章节。
 
 ### 4. Skills/
 - 放置固定流程的复合能力。
 - Skill 可以组合多个 service / use case / tool。
 - Skill 不直接承担底层文件 API 细节。
 - 命名统一使用 `*Skill` 后缀。
-- **执行模式约束**：mutation 流程与 preview-of-mutation 流程的 Skill 只能依赖 Live 适配接口；read / preview-of-read 流程以 Offline 适配接口为主，若需 stale warning 可做 best-effort 的 Live 状态查询，但不得因此失去无 Rhino 可运行性。
+- **执行模式约束**：mutation 流程与 preview-of-mutation 流程的 Skill 只能依赖 Live 适配接口；read / preview-of-read 流程默认优先依赖 Live 适配接口。若需要无 Rhino 可运行性，应通过显式 Offline 分支或显式 Offline Tool 组合实现，而不是在 Skill 内静默降级数据源。
 
 ### 5. Agents/
 - 放置目标驱动、可做决策/调度的执行者。
 - Agent 优先调用 Skill 或 Application Service。
 - Agent 不直接写 Rhino3dm / RhinoCommon 细节。
 - 命名统一使用 `*Agent` 后缀。
-- **执行模式约束**：当 Agent 触发 mutation 或 preview-of-mutation 步骤时，必须走 Live 适配接口；read / preview-of-read 步骤以 Offline 适配接口为主，允许附加 best-effort 的 Live 状态查询用于告警，但不得阻断 read 结果。
+- **执行模式约束**：当 Agent 触发 mutation 或 preview-of-mutation 步骤时，必须走 Live 适配接口；read / preview-of-read 步骤默认优先走 Live 适配接口。若要读取未打开文件或执行批处理离线审计，应显式选择 Offline 路径，不得让 Agent 在一次调用里混用 live/offline 真值。
 
 ### 6. Application/
 - 放置用例、服务、流程编排、接口抽象。
@@ -55,8 +55,8 @@
 - 这里回答"具体如何和外部技术打交道"。
 
 - **Rhino 适配子目录按执行模式拆分**：
-  - `Rhino/Offline/`：承载 `File3dm` 离线读实现，服务 read / filter / get / inspect / preview-of-read 类流程；必要时可协同查询 Live 状态生成 stale warning，但磁盘读取仍是唯一数据源。
-  - `Rhino/Live/`：承载 `RhinoDoc` / RhinoCommon 在线实现，服务所有 mutation 与 preview-of-mutation 流程；所有 `RhinoDoc.ActiveDoc` / `Rhino.RhinoApp` / `BeginUndoRecord` 等调用集中在这里。
+  - `Rhino/Offline/`：承载 `File3dm` 离线读实现，服务显式 Offline 的 read / filter / get / inspect / preview-of-read 流程；必要时可协同查询 Live 状态生成 stale warning，但磁盘读取仍是唯一数据源。
+  - `Rhino/Live/`：承载 `RhinoDoc` / RhinoCommon 在线实现，服务所有 mutation、preview-of-mutation，以及默认 live-first 的 read / preview-of-read 流程；所有 `RhinoDoc.ActiveDoc` / `Rhino.RhinoApp` / `BeginUndoRecord` 等调用集中在这里。
 - **`Plugin/` 子目录**：放置 Rhino `.rhp` 宿主入口（`MCP_Rhino.RhinoPlugin.cs`、`McpNamedPipeServer.cs` 等）。在 `OnLoad` 里启动 **Named Pipe MCP server**（管道 `\\.\pipe\mcp_rhino`），承载 MCP 协议帧；Client 端经独立的 `MCP_Rhino.Bridge` 项目提供的 stdio-to-pipe 桥接 exe 连入。MCP server 的默认部署形态即由此承载。
 - `CLI/` 放置面向开发者 / 终端的命令行适配实现（例如 `DeveloperCommandHandler`），作为外部入口到 Application / Agent 层的薄适配层；`Program.cs` 只负责解析并委托给这里。
 
@@ -85,16 +85,21 @@
 
 Rhino 侧的能力按"是否修改文档状态"划分执行模式，互相不混用。
 
-### 只读路径（Offline 允许）
+### 只读路径（Live First，Offline Allowed）
 
 - 覆盖动作：Read / Filter / Get / Find / Inspect，以及 preview-of-read 类能力。
-- 允许实现：经 `Infrastructure/Rhino/Offline/` 直接读 `.3dm` 文件（`Rhino.FileIO.File3dm`），无需运行中的 Rhino 实例。
-- 适用场景：对未打开的文件做审计、筛查、属性导出、元数据抓取。
+- 默认实现：优先经 `Infrastructure/Rhino/Live/` 读取运行中的 `RhinoDoc.ActiveDoc`，拿当前文档真值。
+- 适用场景：对 Rhino 当前会话中的对象做审计、筛查、属性导出、几何分析，尤其是文档可能存在未保存改动时。
 - 约束：
+  - Live read 变体必须由 Rhino Plugin 宿主加载；目标文档必须为 `RhinoDoc.ActiveDoc`、已 Save 到磁盘（`doc.Path` 非空）、且 `doc.Path` 与请求中的 `FilePath` 匹配，否则分别返回 `NO_ACTIVE_DOCUMENT` / `ACTIVE_DOC_UNSAVED` / `FILE_NOT_ACTIVE`。
+  - RhinoCommon 的 `RhinoDoc` / `Rhino.Geometry` 只读访问同样受 UI 主线程约束；所有 live read 必须经 `ILiveRhinoDocumentAccessor` 封送到主线程同步执行。主线程长时间阻塞（> 10s）时返回 `RHINO_MAIN_THREAD_BUSY`。
+  - read / preview-of-read 路径不得开启 Undo record，也不得修改任何文档状态。
+  - 若能力需要支持未打开文件、CLI 或批处理场景，可额外提供显式 Offline 变体，经 `Infrastructure/Rhino/Offline/` 直接读 `.3dm` 文件（`Rhino.FileIO.File3dm`），无需运行中的 Rhino 实例。
   - 离线路径**不得**调用任何写入 API（`model.Objects.Add` / `Delete` / `Replace` / `SetUserString` 等）。
-  - 若检测到目标文件正以 ActiveDoc 形态在 Rhino 中打开且存在未保存改动，离线读实现应在响应中写入 `OFFLINE_READ_STALE` 软警告；不阻断调用。该检测属于 best-effort 行为，可通过只读的 Live 状态查询完成；CLI 模式或无 Rhino 可用时静默跳过，不得让 read 调用失败。
+  - 若显式 Offline 变体检测到目标文件正以 ActiveDoc 形态在 Rhino 中打开且存在未保存改动，应在响应中写入 `OFFLINE_READ_STALE` 软警告；不阻断调用。该检测属于 best-effort 行为，可通过只读的 Live 状态查询完成；CLI 模式或无 Rhino 可用时静默跳过，不得让 offline read 调用失败。
+  - 不允许在同一个 read API 内部把 live 失败静默回退到 offline；调用方必须显式选择数据源，避免"当前真值"与"磁盘真值"混淆。
 
-### 在线路径（Live 强制）
+### 写入路径（Live 强制）
 
 - 覆盖动作：Create / Transform / Replace / Delete / EditControlPoints / ApplyObjectEdits / Apply/DeleteObjectUserText / Set/DeleteDocumentUserStrings、preview-of-mutation，以及未来所有改动文档状态或依赖在线文档一致性的新能力。
 - 强制实现：经 `Infrastructure/Rhino/Live/` 路由到运行中的 Rhino 实例（`RhinoDoc.ActiveDoc`），通过 RhinoCommon 执行。
@@ -111,7 +116,7 @@ Rhino 侧的能力按"是否修改文档状态"划分执行模式，互相不混
 
 - Preview 本身不改文档，但在"Preview 某个 mutation"的语义下，Preview 看到的文档必须与随后 Apply 作用的文档一致。
 - 因此 Preview-of-mutation 也走 Live 路径：只读 `RhinoDoc`、不写、不开 Undo record；不允许走 Offline `File3dm` 回退，避免 Preview 与 Apply 对齐到不同的文档状态。
-- Preview-of-read（例如 `PreviewObjectUserTextWrites` 这类"在 Apply 前看一眼会写成什么"的工具）维持离线读语义。
+- Preview-of-read 默认跟随对应 read 能力的执行模式，即 live-first；若产品需要未打开文件的预览能力，可额外提供显式 Offline 变体，并沿用 offline read 的 stale warning 规则。
 
 ### 去归档化
 

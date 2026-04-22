@@ -1,4 +1,4 @@
-# 260421_PLAN_layer-management-tools
+﻿# 260421_PLAN_layer-management-tools
 
 ## Context
 
@@ -169,7 +169,7 @@ MCP Client 配置不变(仍通过 `MCP_Rhino.Bridge.exe` 连 `\\.\pipe\mcp_rhino
 ## 验证
 
 1. **build**:`dotnet build src/MCP_Rhino.Server/MCP_Rhino.Server.csproj --nologo` 无警告通过;`dotnet build src/MCP_Rhino.Bridge/...` 同步通过。
-2. **CLI fallback smoke**:`dotnet run --project src/MCP_Rhino.Server -- layer-management-smoke-test test-files/MCP_METtest.3dm`
+2. **CLI fallback smoke**:`dotnet run --project src/MCP_Rhino.Server -- layer-management-smoke-test test-files/MCP_rhino_test.3dm`
    - `GetLayers` 返回 offline 读取结果,字段含 PlotColor/PlotWeight/LinetypeName/RenderMaterialName;`Warnings.Count == 0`(无 live 宿主可查 stale)。
    - `CreateLayers` / `ModifyLayers` / `DeleteLayers` / `PurgeLayers` / `PreviewModifyLayers` / `PreviewDeleteLayers` / `PreviewPurgeLayers` 全部返回 `LIVE_RHINO_REQUIRED`。
    - 工作副本对象数和图层数无变化。
@@ -196,3 +196,4 @@ MCP Client 配置不变(仍通过 `MCP_Rhino.Bridge.exe` 连 `\\.\pipe\mcp_rhino
 - 引用图层 / Worksession 图层:暴露 `AddReferenceLayer` 与只读标记。
 - `LayerTable.CurrentLayerIndex` setter:提供 `SetCurrentLayer` 工具,写入 / 建几何默认落到某层。
 - RDK 渲染材质绑定:若将来 MCP 需要操作 RDK 材质表而非文档 `Materials` 表,追加对应字段与 Service 分支。
+
