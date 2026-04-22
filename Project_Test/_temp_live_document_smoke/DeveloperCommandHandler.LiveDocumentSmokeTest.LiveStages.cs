@@ -46,12 +46,12 @@ public sealed partial class DeveloperCommandHandler
 
         try
         {
-            RunLiveLayerStage(sourceFilePath, state, report);
-            RunLiveGeometryCreateStage(sourceFilePath, state, report);
-            RunLiveGeometryModifyStage(sourceFilePath, state, report);
-            RunLiveObjectEditsStage(sourceFilePath, state, report);
-            RunLiveObjectUserTextStage(sourceFilePath, state, report);
-            RunLiveDocumentUserStringStage(sourceFilePath, state, report);
+            SafeRunStage("Layer", report, () => RunLiveLayerStage(sourceFilePath, state, report));
+            SafeRunStage("GeometryCreate", report, () => RunLiveGeometryCreateStage(sourceFilePath, state, report));
+            SafeRunStage("GeometryModify", report, () => RunLiveGeometryModifyStage(sourceFilePath, state, report));
+            SafeRunStage("ObjectEdits", report, () => RunLiveObjectEditsStage(sourceFilePath, state, report));
+            SafeRunStage("ObjectUserText", report, () => RunLiveObjectUserTextStage(sourceFilePath, state, report));
+            SafeRunStage("DocumentUserString", report, () => RunLiveDocumentUserStringStage(sourceFilePath, state, report));
         }
         finally
         {
@@ -61,6 +61,34 @@ public sealed partial class DeveloperCommandHandler
             report.FinalObjectCount = finalObjects;
             report.FinalLayerCount = finalLayers;
             report.FinalUndoSerial = finalUndoSerial;
+        }
+    }
+
+    // Wraps a stage invocation so an unhandled exception inside it gets recorded
+    // as a FAIL checkpoint instead of aborting the remaining stages.
+    private static void SafeRunStage(string stageName, LiveSmokeReport report, Action stage)
+    {
+        try
+        {
+            stage();
+        }
+        catch (Exception ex)
+        {
+            report.Run(
+                stage: stageName,
+                feature: "StageOrchestrationFailure",
+                codeLocations: new[]
+                {
+                    "Project_Test/_temp_live_document_smoke/DeveloperCommandHandler.LiveDocumentSmokeTest.LiveStages.cs"
+                },
+                input: "(internal)",
+                expected: "Stage must complete without unhandled exceptions.",
+                suspects: new[]
+                {
+                    "Unhandled exception escaped a stage method — see Failure reason.",
+                    "Stage-level precondition logic (should live inside report.Run bodies)."
+                },
+                body: _ => throw new InvalidOperationException(ex.ToString()));
         }
     }
 
@@ -304,7 +332,14 @@ public sealed partial class DeveloperCommandHandler
                 RequireLiveSuccess(resp, cp);
                 RequireUndoDeltaPositive(cp);
                 RecordCreatedIds(state, resp.Data!);
-                cp.Evidence = $"CreatedCount={resp.Data!.CreatedCount}.";
+                cp.ObservedDataSummary = $"CreatedCount={resp.Data!.CreatedCount}, CreatedObjects.Count={resp.Data.CreatedObjects.Count}";
+                cp.Evidence = $"CreatedCount={resp.Data.CreatedCount}, ids.recorded={resp.Data.CreatedObjects.Count}.";
+                if (resp.Data.CreatedCount > 0 && resp.Data.CreatedObjects.Count == 0)
+                {
+                    throw new InvalidOperationException(
+                        "Live create returned CreatedCount>0 but CreatedObjects is empty — downstream stages will have no targets. " +
+                        "Inspect RhinoGeometryCreationService / LiveRhinoGeometryBuilder: the CreatedObjects list is not being populated on the Live path.");
+                }
             });
 
         var createLinesTool = new CreateLinesTool(_geometryCreationSkill);
@@ -331,7 +366,14 @@ public sealed partial class DeveloperCommandHandler
                 RequireLiveSuccess(resp, cp);
                 RequireUndoDeltaPositive(cp);
                 RecordCreatedIds(state, resp.Data!);
-                cp.Evidence = $"CreatedCount={resp.Data!.CreatedCount}.";
+                cp.ObservedDataSummary = $"CreatedCount={resp.Data!.CreatedCount}, CreatedObjects.Count={resp.Data.CreatedObjects.Count}";
+                cp.Evidence = $"CreatedCount={resp.Data.CreatedCount}, ids.recorded={resp.Data.CreatedObjects.Count}.";
+                if (resp.Data.CreatedCount > 0 && resp.Data.CreatedObjects.Count == 0)
+                {
+                    throw new InvalidOperationException(
+                        "Live create returned CreatedCount>0 but CreatedObjects is empty — downstream stages will have no targets. " +
+                        "Inspect RhinoGeometryCreationService / LiveRhinoGeometryBuilder: the CreatedObjects list is not being populated on the Live path.");
+                }
             });
 
         var createArcsTool = new CreateArcsTool(_geometryCreationSkill);
@@ -363,7 +405,14 @@ public sealed partial class DeveloperCommandHandler
                 RequireLiveSuccess(resp, cp);
                 RequireUndoDeltaPositive(cp);
                 RecordCreatedIds(state, resp.Data!);
-                cp.Evidence = $"CreatedCount={resp.Data!.CreatedCount}.";
+                cp.ObservedDataSummary = $"CreatedCount={resp.Data!.CreatedCount}, CreatedObjects.Count={resp.Data.CreatedObjects.Count}";
+                cp.Evidence = $"CreatedCount={resp.Data.CreatedCount}, ids.recorded={resp.Data.CreatedObjects.Count}.";
+                if (resp.Data.CreatedCount > 0 && resp.Data.CreatedObjects.Count == 0)
+                {
+                    throw new InvalidOperationException(
+                        "Live create returned CreatedCount>0 but CreatedObjects is empty — downstream stages will have no targets. " +
+                        "Inspect RhinoGeometryCreationService / LiveRhinoGeometryBuilder: the CreatedObjects list is not being populated on the Live path.");
+                }
             });
 
         report.Run(
@@ -396,7 +445,14 @@ public sealed partial class DeveloperCommandHandler
                 RequireLiveSuccess(resp, cp);
                 RequireUndoDeltaPositive(cp);
                 RecordCreatedIds(state, resp.Data!);
-                cp.Evidence = $"CreatedCount={resp.Data!.CreatedCount}.";
+                cp.ObservedDataSummary = $"CreatedCount={resp.Data!.CreatedCount}, CreatedObjects.Count={resp.Data.CreatedObjects.Count}";
+                cp.Evidence = $"CreatedCount={resp.Data.CreatedCount}, ids.recorded={resp.Data.CreatedObjects.Count}.";
+                if (resp.Data.CreatedCount > 0 && resp.Data.CreatedObjects.Count == 0)
+                {
+                    throw new InvalidOperationException(
+                        "Live create returned CreatedCount>0 but CreatedObjects is empty — downstream stages will have no targets. " +
+                        "Inspect RhinoGeometryCreationService / LiveRhinoGeometryBuilder: the CreatedObjects list is not being populated on the Live path.");
+                }
             });
 
         var createSurfacesTool = new CreateSurfacesTool(_geometryCreationSkill);
@@ -429,7 +485,14 @@ public sealed partial class DeveloperCommandHandler
                 RequireLiveSuccess(resp, cp);
                 RequireUndoDeltaPositive(cp);
                 RecordCreatedIds(state, resp.Data!);
-                cp.Evidence = $"CreatedCount={resp.Data!.CreatedCount}.";
+                cp.ObservedDataSummary = $"CreatedCount={resp.Data!.CreatedCount}, CreatedObjects.Count={resp.Data.CreatedObjects.Count}";
+                cp.Evidence = $"CreatedCount={resp.Data.CreatedCount}, ids.recorded={resp.Data.CreatedObjects.Count}.";
+                if (resp.Data.CreatedCount > 0 && resp.Data.CreatedObjects.Count == 0)
+                {
+                    throw new InvalidOperationException(
+                        "Live create returned CreatedCount>0 but CreatedObjects is empty — downstream stages will have no targets. " +
+                        "Inspect RhinoGeometryCreationService / LiveRhinoGeometryBuilder: the CreatedObjects list is not being populated on the Live path.");
+                }
             });
 
         report.Run(
@@ -460,7 +523,14 @@ public sealed partial class DeveloperCommandHandler
                 RequireLiveSuccess(resp, cp);
                 RequireUndoDeltaPositive(cp);
                 RecordCreatedIds(state, resp.Data!);
-                cp.Evidence = $"CreatedCount={resp.Data!.CreatedCount}.";
+                cp.ObservedDataSummary = $"CreatedCount={resp.Data!.CreatedCount}, CreatedObjects.Count={resp.Data.CreatedObjects.Count}";
+                cp.Evidence = $"CreatedCount={resp.Data.CreatedCount}, ids.recorded={resp.Data.CreatedObjects.Count}.";
+                if (resp.Data.CreatedCount > 0 && resp.Data.CreatedObjects.Count == 0)
+                {
+                    throw new InvalidOperationException(
+                        "Live create returned CreatedCount>0 but CreatedObjects is empty — downstream stages will have no targets. " +
+                        "Inspect RhinoGeometryCreationService / LiveRhinoGeometryBuilder: the CreatedObjects list is not being populated on the Live path.");
+                }
             });
     }
 
@@ -479,23 +549,21 @@ public sealed partial class DeveloperCommandHandler
         var previewTransformTool = new PreviewTransformObjectsTool(_geometryModificationSkill);
         var transformTool = new TransformObjectsTool(_geometryModificationSkill);
 
-        Guid? translateTarget = state.CreatedPointIds.FirstOrDefault();
-        SkipIf(translateTarget is null || translateTarget == Guid.Empty, "No point was created — cannot test transforms.");
-
         report.Run(
             stage: "GeometryModify",
             feature: "PreviewTransformObjects Translate",
             codeLocations: locations,
-            input: $"translate vx=1, targetId={translateTarget}",
+            input: "translate vx=1, target=first created point",
             expected: "Preview success; no mutation.",
             suspects: new[] { "GeometryModificationSkill.Preview(PreviewTransformObjectsRequest)" },
             body: cp =>
             {
+                Guid target = RequireCreatedTarget(state.CreatedPointIds, 0, "No point was created — cannot test transform preview.");
                 uint before = CaptureUndoSerial();
                 var resp = previewTransformTool.PreviewTransformObjects(
                     sourceFilePath,
                     new GeometryTransformSpec { Kind = GeometryTransformKind.Translate, VectorX = 1 },
-                    confirmedObjectIds: new List<Guid> { translateTarget!.Value });
+                    confirmedObjectIds: new List<Guid> { target });
                 cp.UndoDelta = (int)(CaptureUndoSerial() - before);
                 cp.RecordResponse(resp);
                 RequireLiveSuccess(resp, cp);
@@ -506,16 +574,17 @@ public sealed partial class DeveloperCommandHandler
             stage: "GeometryModify",
             feature: "TransformObjects Translate apply",
             codeLocations: locations,
-            input: $"translate vx=1, targetId={translateTarget}",
+            input: "translate vx=1, target=first created point",
             expected: "Update success; UndoDelta>0.",
             suspects: new[] { "LiveRhinoGeometryMutator.Transform Translate" },
             body: cp =>
             {
+                Guid target = RequireCreatedTarget(state.CreatedPointIds, 0, "No point was created — cannot test translate apply.");
                 uint before = CaptureUndoSerial();
                 var resp = transformTool.TransformObjects(
                     sourceFilePath,
                     new GeometryTransformSpec { Kind = GeometryTransformKind.Translate, VectorX = 1 },
-                    confirmedObjectIds: new List<Guid> { translateTarget!.Value });
+                    confirmedObjectIds: new List<Guid> { target });
                 cp.UndoDelta = (int)(CaptureUndoSerial() - before);
                 cp.RecordResponse(resp);
                 RequireLiveSuccess(resp, cp);
@@ -523,18 +592,16 @@ public sealed partial class DeveloperCommandHandler
                 cp.Evidence = $"UpdatedObjectCount={resp.Data!.UpdatedObjectCount}.";
             });
 
-        Guid? rotateTarget = state.CreatedLineIds.FirstOrDefault();
-        SkipIf(rotateTarget is null || rotateTarget == Guid.Empty, "No line was created — cannot test rotate.");
-
         report.Run(
             stage: "GeometryModify",
             feature: "TransformObjects Rotate apply",
             codeLocations: locations,
-            input: $"rotate Pi/4 about Z-axis, targetId={rotateTarget}",
+            input: "rotate Pi/4 about Z-axis, target=first created line",
             expected: "Update success; UndoDelta>0.",
             suspects: new[] { "LiveRhinoGeometryMutator.Transform Rotate" },
             body: cp =>
             {
+                Guid target = RequireCreatedTarget(state.CreatedLineIds, 0, "No line was created — cannot test rotate.");
                 uint before = CaptureUndoSerial();
                 var resp = transformTool.TransformObjects(
                     sourceFilePath,
@@ -545,7 +612,7 @@ public sealed partial class DeveloperCommandHandler
                         CenterX = 0, CenterY = 0, CenterZ = 0,
                         AngleRadians = Math.PI / 4
                     },
-                    confirmedObjectIds: new List<Guid> { rotateTarget!.Value });
+                    confirmedObjectIds: new List<Guid> { target });
                 cp.UndoDelta = (int)(CaptureUndoSerial() - before);
                 cp.RecordResponse(resp);
                 RequireLiveSuccess(resp, cp);
@@ -553,18 +620,16 @@ public sealed partial class DeveloperCommandHandler
                 cp.Evidence = $"UpdatedObjectCount={resp.Data!.UpdatedObjectCount}.";
             });
 
-        Guid? scaleTarget = state.CreatedLineIds.Skip(1).FirstOrDefault();
-        SkipIf(scaleTarget is null || scaleTarget == Guid.Empty, "No second line was created — cannot test scale.");
-
         report.Run(
             stage: "GeometryModify",
             feature: "TransformObjects UniformScale apply",
             codeLocations: locations,
-            input: $"scale 2x about origin, targetId={scaleTarget}",
+            input: "scale 2x about origin, target=second created line",
             expected: "Update success; UndoDelta>0.",
             suspects: new[] { "LiveRhinoGeometryMutator.Transform UniformScale" },
             body: cp =>
             {
+                Guid target = RequireCreatedTarget(state.CreatedLineIds, 1, "No second line was created — cannot test scale.");
                 uint before = CaptureUndoSerial();
                 var resp = transformTool.TransformObjects(
                     sourceFilePath,
@@ -574,16 +639,13 @@ public sealed partial class DeveloperCommandHandler
                         CenterX = 0, CenterY = 0, CenterZ = 0,
                         ScaleFactor = 2
                     },
-                    confirmedObjectIds: new List<Guid> { scaleTarget!.Value });
+                    confirmedObjectIds: new List<Guid> { target });
                 cp.UndoDelta = (int)(CaptureUndoSerial() - before);
                 cp.RecordResponse(resp);
                 RequireLiveSuccess(resp, cp);
                 RequireUndoDeltaPositive(cp);
                 cp.Evidence = $"UpdatedObjectCount={resp.Data!.UpdatedObjectCount}.";
             });
-
-        Guid? replaceTarget = state.CreatedPointIds.Skip(1).FirstOrDefault();
-        SkipIf(replaceTarget is null || replaceTarget == Guid.Empty, "No second point was created — cannot test replace.");
 
         var previewReplaceTool = new PreviewReplaceGeometryTool(_geometryModificationSkill);
         var replaceTool = new ReplaceGeometryTool(_geometryModificationSkill);
@@ -592,11 +654,12 @@ public sealed partial class DeveloperCommandHandler
             stage: "GeometryModify",
             feature: "PreviewReplaceGeometry: point → line",
             codeLocations: locations,
-            input: $"targetId={replaceTarget}, new=Line",
+            input: "target=second created point, new=Line",
             expected: "Preview success, no mutation.",
             suspects: new[] { "GeometryModificationSkill.Preview(PreviewReplaceGeometryRequest)" },
             body: cp =>
             {
+                Guid target = RequireCreatedTarget(state.CreatedPointIds, 1, "No second point was created — cannot test replace preview.");
                 uint before = CaptureUndoSerial();
                 var resp = previewReplaceTool.PreviewReplaceGeometry(
                     sourceFilePath,
@@ -604,7 +667,7 @@ public sealed partial class DeveloperCommandHandler
                     {
                         new()
                         {
-                            ObjectId = replaceTarget!.Value,
+                            ObjectId = target,
                             Geometry = new GeometryCreationSpec
                             {
                                 Primitive = GeometryPrimitiveKind.Line,
@@ -623,11 +686,12 @@ public sealed partial class DeveloperCommandHandler
             stage: "GeometryModify",
             feature: "ReplaceGeometry apply: point → line",
             codeLocations: locations,
-            input: $"targetId={replaceTarget}, new=Line",
+            input: "target=second created point, new=Line",
             expected: "Update success; UndoDelta>0.",
             suspects: new[] { "LiveRhinoGeometryMutator.Replace" },
             body: cp =>
             {
+                Guid target = RequireCreatedTarget(state.CreatedPointIds, 1, "No second point was created — cannot test replace apply.");
                 uint before = CaptureUndoSerial();
                 var resp = replaceTool.ReplaceGeometry(
                     sourceFilePath,
@@ -635,7 +699,7 @@ public sealed partial class DeveloperCommandHandler
                     {
                         new()
                         {
-                            ObjectId = replaceTarget!.Value,
+                            ObjectId = target,
                             Geometry = new GeometryCreationSpec
                             {
                                 Primitive = GeometryPrimitiveKind.Line,
@@ -651,9 +715,6 @@ public sealed partial class DeveloperCommandHandler
                 cp.Evidence = $"UpdatedObjectCount={resp.Data!.UpdatedObjectCount}.";
             });
 
-        Guid? deleteTarget = state.CreatedPointIds.Skip(2).FirstOrDefault();
-        SkipIf(deleteTarget is null || deleteTarget == Guid.Empty, "No third point was created — cannot test delete.");
-
         var previewDeleteTool = new PreviewDeleteObjectsTool(_geometryModificationSkill);
         var deleteTool = new DeleteObjectsTool(_geometryModificationSkill);
 
@@ -661,15 +722,16 @@ public sealed partial class DeveloperCommandHandler
             stage: "GeometryModify",
             feature: "PreviewDeleteObjects",
             codeLocations: locations,
-            input: $"targetId={deleteTarget}",
+            input: "target=third created point",
             expected: "Preview success, no mutation.",
             suspects: new[] { "GeometryModificationSkill.Preview(PreviewDeleteObjectsRequest)" },
             body: cp =>
             {
+                Guid target = RequireCreatedTarget(state.CreatedPointIds, 2, "No third point was created — cannot test delete preview.");
                 uint before = CaptureUndoSerial();
                 var resp = previewDeleteTool.PreviewDeleteObjects(
                     sourceFilePath,
-                    confirmedObjectIds: new List<Guid> { deleteTarget!.Value });
+                    confirmedObjectIds: new List<Guid> { target });
                 cp.UndoDelta = (int)(CaptureUndoSerial() - before);
                 cp.RecordResponse(resp);
                 RequireLiveSuccess(resp, cp);
@@ -680,15 +742,16 @@ public sealed partial class DeveloperCommandHandler
             stage: "GeometryModify",
             feature: "DeleteObjects apply",
             codeLocations: locations,
-            input: $"targetId={deleteTarget}",
+            input: "target=third created point",
             expected: "Update success; UndoDelta>0.",
             suspects: new[] { "LiveRhinoGeometryMutator.Delete" },
             body: cp =>
             {
+                Guid target = RequireCreatedTarget(state.CreatedPointIds, 2, "No third point was created — cannot test delete apply.");
                 uint before = CaptureUndoSerial();
                 var resp = deleteTool.DeleteObjects(
                     sourceFilePath,
-                    confirmedObjectIds: new List<Guid> { deleteTarget!.Value });
+                    confirmedObjectIds: new List<Guid> { target });
                 cp.UndoDelta = (int)(CaptureUndoSerial() - before);
                 cp.RecordResponse(resp);
                 RequireLiveSuccess(resp, cp);
@@ -709,19 +772,18 @@ public sealed partial class DeveloperCommandHandler
             "src/MCP_Rhino.Server/Infrastructure/Rhino/Live/LiveRhinoObjectEditOperationApplier.cs"
         };
 
-        SkipIf(state.CreatedLineIds.Count == 0, "No lines created — cannot probe object edits.");
-
-        Guid editTarget = state.CreatedLineIds.First();
+        string tempLayer = $"{state.SmokeRoot}::TempMove";
 
         report.Run(
             stage: "ObjectEdits",
             feature: "SetUserText via agent.Apply",
             codeLocations: locations,
-            input: $"objectId={editTarget}, key=smoke_key, value=smoke_value",
+            input: "target=first created line, key=smoke_key, value=smoke_value",
             expected: "UpdatedObjectCount>=1; UndoDelta>0.",
             suspects: new[] { "LiveRhinoObjectEditOperationApplier SetUserText branch" },
             body: cp =>
             {
+                RequireAnyCreated(state.CreatedLineIds, "No lines were created — cannot probe SetUserText.");
                 uint before = CaptureUndoSerial();
                 var resp = _editingAgent.Apply(new ApplyObjectEditsRequest
                 {
@@ -739,7 +801,6 @@ public sealed partial class DeveloperCommandHandler
                 cp.Evidence = $"UpdatedObjectCount={resp.Data!.UpdatedObjectCount}.";
             });
 
-        string tempLayer = $"{state.SmokeRoot}::TempMove";
         var createLayersTool = new CreateLayersTool(_layerManagementService);
         report.Run(
             stage: "ObjectEdits",
@@ -762,11 +823,12 @@ public sealed partial class DeveloperCommandHandler
             stage: "ObjectEdits",
             feature: "SetLayer via agent.Apply",
             codeLocations: locations,
-            input: $"objectId={editTarget}, target={tempLayer}",
+            input: $"filter by smoke_key=smoke_value, target layer={tempLayer}",
             expected: "UpdatedObjectCount>=1; UndoDelta>0.",
             suspects: new[] { "LiveRhinoObjectEditOperationApplier SetLayer branch" },
             body: cp =>
             {
+                RequireAnyCreated(state.CreatedLineIds, "No lines were created — cannot probe SetLayer.");
                 uint before = CaptureUndoSerial();
                 var resp = _editingAgent.Apply(new ApplyObjectEditsRequest
                 {
@@ -856,9 +918,6 @@ public sealed partial class DeveloperCommandHandler
             "src/MCP_Rhino.Server/Infrastructure/Rhino/Live/LiveRhinoObjectEditOperationApplier.cs"
         };
 
-        SkipIf(state.CreatedPointIds.Count == 0, "No points created — cannot test object user text.");
-        Guid target = state.CreatedPointIds.First();
-
         var previewTool = new PreviewObjectUserTextWritesTool(_userTextService);
         var applyTool = new ApplyObjectUserTextWritesTool(_userTextService);
         var getTool = new GetObjectUserStringsTool(_userTextService);
@@ -868,11 +927,12 @@ public sealed partial class DeveloperCommandHandler
             stage: "ObjectUserText",
             feature: "PreviewObjectUserTextWrites",
             codeLocations: locations,
-            input: $"objectId={target}, key=ut_smoke, value=v1",
+            input: "target=first created point, key=ut_smoke, value=v1",
             expected: "Preview success; no mutation.",
             suspects: new[] { "RhinoObjectUserTextService.Preview" },
             body: cp =>
             {
+                Guid target = RequireCreatedTarget(state.CreatedPointIds, 0, "No point was created — cannot preview user text.");
                 uint before = CaptureUndoSerial();
                 var resp = previewTool.PreviewObjectUserTextWrites(
                     sourceFilePath,
@@ -890,11 +950,12 @@ public sealed partial class DeveloperCommandHandler
             stage: "ObjectUserText",
             feature: "ApplyObjectUserTextWrites",
             codeLocations: locations,
-            input: $"objectId={target}, key=ut_smoke, value=v1",
+            input: "target=first created point, key=ut_smoke, value=v1",
             expected: "UpdatedObjectCount>=1; UndoDelta>0.",
             suspects: new[] { "RhinoObjectUserTextService.Apply live path" },
             body: cp =>
             {
+                Guid target = RequireCreatedTarget(state.CreatedPointIds, 0, "No point was created — cannot apply user text.");
                 uint before = CaptureUndoSerial();
                 var resp = applyTool.ApplyObjectUserTextWrites(
                     sourceFilePath,
@@ -913,11 +974,12 @@ public sealed partial class DeveloperCommandHandler
             stage: "ObjectUserText",
             feature: "GetObjectUserStrings",
             codeLocations: locations,
-            input: $"objectIds=[{target}]",
+            input: "target=first created point",
             expected: "Success; entry ut_smoke=v1 visible.",
             suspects: new[] { "RhinoObjectUserTextService.Read live path" },
             body: cp =>
             {
+                Guid target = RequireCreatedTarget(state.CreatedPointIds, 0, "No point was created — cannot read user text.");
                 uint before = CaptureUndoSerial();
                 var resp = getTool.GetObjectUserStrings(sourceFilePath, new List<Guid> { target });
                 cp.UndoDelta = (int)(CaptureUndoSerial() - before);
@@ -936,11 +998,12 @@ public sealed partial class DeveloperCommandHandler
             stage: "ObjectUserText",
             feature: "DeleteObjectUserText",
             codeLocations: locations,
-            input: $"objectId={target}, key=ut_smoke",
+            input: "target=first created point, key=ut_smoke",
             expected: "UpdatedObjectCount>=1; UndoDelta>0.",
             suspects: new[] { "RhinoObjectUserTextService.Delete live path" },
             body: cp =>
             {
+                Guid target = RequireCreatedTarget(state.CreatedPointIds, 0, "No point was created — cannot delete user text.");
                 uint before = CaptureUndoSerial();
                 var resp = deleteTool.DeleteObjectUserText(
                     sourceFilePath,
@@ -1083,9 +1146,30 @@ public sealed partial class DeveloperCommandHandler
         }
     }
 
-    private static void SkipIf(bool condition, string reason)
+    // Pulls the Nth created object ID from the given list or SKIPs the checkpoint
+    // if the upstream creation stage did not produce enough objects. Call this from
+    // inside a report.Run body — the LiveSmokeSkipException it throws is caught by
+    // report.Run and recorded as SKIP for that single checkpoint.
+    private static Guid RequireCreatedTarget(List<Guid> ids, int index, string reason)
     {
-        if (condition)
+        if (ids.Count <= index)
+        {
+            throw new LiveSmokeSkipException($"{reason} (created count={ids.Count}, wanted index {index}).");
+        }
+        Guid value = ids[index];
+        if (value == Guid.Empty)
+        {
+            throw new LiveSmokeSkipException($"{reason} (recorded id at index {index} is Guid.Empty — the create response did not carry an ObjectId).");
+        }
+        return value;
+    }
+
+    // Ensures at least one ID is present in the list, otherwise marks the
+    // checkpoint SKIP. Use when the checkpoint acts on any available target
+    // (e.g. SetUserText matched via layer filter).
+    private static void RequireAnyCreated(List<Guid> ids, string reason)
+    {
+        if (ids.Count == 0)
         {
             throw new LiveSmokeSkipException(reason);
         }

@@ -533,12 +533,18 @@ public sealed partial class DeveloperCommandHandler
             }
         }
 
-        return (doc.Objects.Count, layers, doc.CurrentUndoRecordSerialNumber);
+        return (doc.Objects.Count, layers, doc.NextUndoRecordSerialNumber);
     }
 
+    // NextUndoRecordSerialNumber advances on every BeginUndoRecord call (even empty
+    // ones that the UndoManager later discards). We use it as a proxy for "did the
+    // Live adapter enter the ExecuteWithUndo path at all?" — it is more reliable
+    // than CurrentUndoRecordSerialNumber which only advances for records Rhino
+    // actually keeps. For the smoke test we want to detect whether the Live path
+    // ran, not whether the resulting record was retained.
     private static uint CaptureUndoSerial()
     {
-        return RhinoDoc.ActiveDoc?.CurrentUndoRecordSerialNumber ?? 0u;
+        return RhinoDoc.ActiveDoc?.NextUndoRecordSerialNumber ?? 0u;
     }
 
     private static string FindFirstNonSmokeLayerFullPath()
