@@ -61,6 +61,7 @@ _validation/live-document-smoke/
 *.rhl
 _tmp*.csx
 .cline/
+.mcp.json
 
 # =========================
 # OS-generated files

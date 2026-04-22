@@ -6,7 +6,8 @@
       "WebFetch(domain:developer.rhino3d.com)",
       "Bash(awk '{print $NF}')",
       "Bash(dotnet run *)",
-      "Bash(echo \"---EXIT:$?---\")"
+      "Bash(echo \"---EXIT:$?---\")",
+      "mcp__mcp-rhino__apply_object_user_text_writes"
     ]
   }
 }

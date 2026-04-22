@@ -1,8 +1,9 @@
 extern alias rhinocommon;
 
+using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Runtime.Loader;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using MCP_Rhino.Server.Infrastructure.CLI;
 using MCP_Rhino.Server.Infrastructure.Runtime;
 using MCP_Rhino.Server.Server;
@@ -19,7 +20,8 @@ public sealed class McpRhinoPlugin : PlugIn
 
     public static McpRhinoPlugin? Instance { get; private set; }
 
-    private McpNamedPipeServer? _pipeServer;
+    private AssemblyLoadContext? _isolatedContext;
+    private object? _serverHandle;
 
     public McpRhinoPlugin()
     {
@@ -30,9 +32,29 @@ public sealed class McpRhinoPlugin : PlugIn
     {
         try
         {
+            RhinoApp.WriteLine("[MCP_Rhino diag] OnLoad v2 (isolated-context) starting.");
+
             RhinoRuntimeBootstrap.Initialize();
-            _pipeServer = new McpNamedPipeServer(PipeName, CreateConnectionHost);
-            _pipeServer.Start();
+
+            string pluginDir = Path.GetDirectoryName(typeof(McpRhinoPlugin).Assembly.Location)
+                ?? throw new InvalidOperationException("Unable to determine plugin assembly directory.");
+            string pluginDllPath = Path.Combine(pluginDir, "MCP_Rhino.Server.dll");
+            RhinoApp.WriteLine($"[MCP_Rhino diag] Plugin dir: {pluginDir}");
+            RhinoApp.WriteLine($"[MCP_Rhino diag] Plugin DLL exists: {File.Exists(pluginDllPath)}");
+
+            _isolatedContext = new PluginLoadContext(pluginDllPath);
+            Assembly isolatedAssembly = _isolatedContext.LoadFromAssemblyPath(pluginDllPath);
+            RhinoApp.WriteLine($"[MCP_Rhino diag] Loaded isolated assembly: {isolatedAssembly.FullName}");
+            RhinoApp.WriteLine($"[MCP_Rhino diag] Isolated ALC: {AssemblyLoadContext.GetLoadContext(isolatedAssembly)?.Name}");
+
+            Type bootstrapType = isolatedAssembly.GetType(
+                "MCP_Rhino.Server.Infrastructure.Plugin.ServerBootstrap",
+                throwOnError: true)!;
+
+            _serverHandle = Activator.CreateInstance(bootstrapType)
+                ?? throw new InvalidOperationException("Failed to create ServerBootstrap instance.");
+            bootstrapType.GetMethod("Start")!.Invoke(_serverHandle, new object[] { PipeName });
+
             RhinoApp.WriteLine($"MCP_Rhino plugin loaded. Named pipe ready: \\\\.\\pipe\\{PipeName}");
             return LoadReturnCode.Success;
         }
@@ -46,8 +68,15 @@ public sealed class McpRhinoPlugin : PlugIn
 
     protected override void OnShutdown()
     {
-        _pipeServer?.Dispose();
-        _pipeServer = null;
+        if (_serverHandle is IDisposable disposable)
+        {
+            disposable.Dispose();
+        }
+        _serverHandle = null;
+
+        _isolatedContext?.Unload();
+        _isolatedContext = null;
+
         RhinoApp.WriteLine("MCP_Rhino plugin unloaded.");
         base.OnShutdown();
     }
@@ -94,19 +123,6 @@ public sealed class McpRhinoPlugin : PlugIn
         }
     }
 
-    private static IHost CreateConnectionHost(Stream input, Stream output)
-    {
-        HostApplicationBuilder builder = Host.CreateApplicationBuilder();
-        ConfigurePluginServices(builder.Services);
-
-        builder.Services
-            .AddMcpServer()
-            .AddRhinoTools()
-            .WithStreamServerTransport(input, output);
-
-        return builder.Build();
-    }
-
     private static IServiceCollection CreatePluginServices()
     {
         var services = new ServiceCollection();
@@ -114,7 +130,7 @@ public sealed class McpRhinoPlugin : PlugIn
         return services;
     }
 
-    private static void ConfigurePluginServices(IServiceCollection services)
+    internal static void ConfigurePluginServices(IServiceCollection services)
     {
         services
             .AddOfflineRhinoAdapters()
