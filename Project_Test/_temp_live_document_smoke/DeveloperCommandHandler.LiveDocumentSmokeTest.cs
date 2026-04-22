@@ -533,7 +533,19 @@ public sealed partial class DeveloperCommandHandler
             }
         }
 
-        return (doc.Objects.Count, layers, doc.NextUndoRecordSerialNumber);
+        // doc.Objects.Count includes tombstoned objects (Delete marks but does not
+        // remove). Count only !IsDeleted so the report's Initial/Final counts
+        // match user-visible state. See note in BeginCheckpoint for the history.
+        int objects = 0;
+        foreach (rhinocommon::Rhino.DocObjects.RhinoObject obj in doc.Objects)
+        {
+            if (!obj.IsDeleted)
+            {
+                objects++;
+            }
+        }
+
+        return (objects, layers, doc.NextUndoRecordSerialNumber);
     }
 
     // NextUndoRecordSerialNumber advances on every BeginUndoRecord call (even empty

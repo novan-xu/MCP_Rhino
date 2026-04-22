@@ -870,7 +870,7 @@ public sealed partial class DeveloperCommandHandler
             feature: "DeleteObjects apply",
             codeLocations: locations,
             input: "target=third created point",
-            expected: "Update success; UndoDelta>0.",
+            expected: "Update success; live ObjectsDelta=-1 (one !IsDeleted object removed).",
             suspects: new[] { "LiveRhinoGeometryMutator.Delete" },
             body: cp =>
             {
@@ -882,7 +882,8 @@ public sealed partial class DeveloperCommandHandler
                 EndCheckpoint(cp, before);
                 cp.RecordResponse(resp);
                 RequireLiveSuccess(resp, cp);
-                cp.Evidence = $"UpdatedObjectCount={resp.Data!.UpdatedObjectCount}.";
+                RequireObjectsDelta(cp, -1);
+                cp.Evidence = $"UpdatedObjectCount={resp.Data!.UpdatedObjectCount}, live ObjectsDelta={cp.ObjectsDelta}.";
             });
     }
 
@@ -1299,7 +1300,23 @@ public sealed partial class DeveloperCommandHandler
                 layers++;
             }
         }
-        return new LiveDocSnapshot(doc.Objects.Count, layers, doc.NextUndoRecordSerialNumber);
+
+        // IMPORTANT: RhinoCommon's ObjectTable.Count returns the total including
+        // tombstoned (IsDeleted=true) objects. document.Objects.Delete(id) marks
+        // objects deleted but keeps them in the table so Undo can restore them,
+        // which means Count does NOT decrease. Counting only !IsDeleted gives
+        // the "visible" object count that matches user intuition. An earlier
+        // live run had ObjectsDelta=0 on DeleteObjects apply and +10 leak at
+        // cleanup because of this — both were measurement artefacts, not bugs.
+        int objects = 0;
+        foreach (rhinocommon::Rhino.DocObjects.RhinoObject obj in doc.Objects)
+        {
+            if (!obj.IsDeleted)
+            {
+                objects++;
+            }
+        }
+        return new LiveDocSnapshot(objects, layers, doc.NextUndoRecordSerialNumber);
     }
 
     private static void EndCheckpoint(LiveSmokeCheckpoint cp, LiveDocSnapshot before)
