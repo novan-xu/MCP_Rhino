@@ -775,16 +775,19 @@ public sealed partial class DeveloperCommandHandler
         var previewReplaceTool = new PreviewReplaceGeometryTool(_geometryModificationSkill);
         var replaceTool = new ReplaceGeometryTool(_geometryModificationSkill);
 
+        // Note: ReplaceGeometry enforces primitive-type compatibility — you can't
+        // replace a Point with a Line. Use line-target + line-new-geometry so we
+        // actually exercise the mutation path instead of hitting the type check.
         report.Run(
             stage: "GeometryModify",
-            feature: "PreviewReplaceGeometry: point → line",
+            feature: "PreviewReplaceGeometry: line → line",
             codeLocations: locations,
-            input: "target=second created point, new=Line",
+            input: "target=first created line, new=Line((0,0,0)→(5,12,0))",
             expected: "Preview success, no mutation.",
             suspects: new[] { "GeometryModificationSkill.Preview(PreviewReplaceGeometryRequest)" },
             body: cp =>
             {
-                Guid target = RequireCreatedTarget(state.CreatedPointIds, 1, "No second point was created — cannot test replace preview.");
+                Guid target = RequireCreatedTarget(state.CreatedLineIds, 0, "No line was created — cannot test replace preview.");
                 var before = BeginCheckpoint();
                 var resp = previewReplaceTool.PreviewReplaceGeometry(
                     sourceFilePath,
@@ -797,7 +800,7 @@ public sealed partial class DeveloperCommandHandler
                             {
                                 Primitive = GeometryPrimitiveKind.Line,
                                 StartX = 0, StartY = 0, StartZ = 0,
-                                EndX = 3, EndY = 4, EndZ = 0
+                                EndX = 5, EndY = 12, EndZ = 0
                             }
                         }
                     });
@@ -809,14 +812,14 @@ public sealed partial class DeveloperCommandHandler
 
         report.Run(
             stage: "GeometryModify",
-            feature: "ReplaceGeometry apply: point → line",
+            feature: "ReplaceGeometry apply: line → line",
             codeLocations: locations,
-            input: "target=second created point, new=Line",
-            expected: "Update success; UndoDelta>0.",
+            input: "target=first created line, new=Line((0,0,0)→(5,12,0))",
+            expected: "Update success; ObjectsDelta=0 (replace preserves count).",
             suspects: new[] { "LiveRhinoGeometryMutator.Replace" },
             body: cp =>
             {
-                Guid target = RequireCreatedTarget(state.CreatedPointIds, 1, "No second point was created — cannot test replace apply.");
+                Guid target = RequireCreatedTarget(state.CreatedLineIds, 0, "No line was created — cannot test replace apply.");
                 var before = BeginCheckpoint();
                 var resp = replaceTool.ReplaceGeometry(
                     sourceFilePath,
@@ -829,7 +832,7 @@ public sealed partial class DeveloperCommandHandler
                             {
                                 Primitive = GeometryPrimitiveKind.Line,
                                 StartX = 0, StartY = 0, StartZ = 0,
-                                EndX = 3, EndY = 4, EndZ = 0
+                                EndX = 5, EndY = 12, EndZ = 0
                             }
                         }
                     });
