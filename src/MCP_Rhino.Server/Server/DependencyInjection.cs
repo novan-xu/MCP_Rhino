@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using MCP_Rhino.Server.Application.Interfaces;
 using MCP_Rhino.Server.Application.Services;
+using MCP_Rhino.Server.Application.Services.Analysis;
 using MCP_Rhino.Server.Application.Services.Filters;
 using MCP_Rhino.Server.Infrastructure.CLI;
 using MCP_Rhino.Server.Infrastructure.Rhino;
@@ -31,6 +32,9 @@ public static class DependencyInjection
         services.AddSingleton<ILiveGeometryValidator, LiveRhinoGeometryValidator>();
         services.AddSingleton<IObjectEditOperationApplier, LiveRhinoObjectEditOperationApplier>();
         services.AddSingleton<IGeometryMutator, LiveRhinoGeometryMutator>();
+        services.AddSingleton<ILiveGeometryMetricsCalculator, LiveRhinoGeometryMetricsCalculator>();
+        services.AddSingleton<ILiveGeometryCurvatureCalculator, LiveRhinoGeometryCurvatureCalculator>();
+        services.AddSingleton<ILiveGeometryIntersectionCalculator, LiveRhinoGeometryIntersectionCalculator>();
         return services;
     }
 
@@ -42,6 +46,9 @@ public static class DependencyInjection
         services.AddSingleton<ILiveGeometryValidator, LiveRhinoGeometryValidator>();
         services.AddSingleton<IObjectEditOperationApplier, LiveRhinoObjectEditOperationApplier>();
         services.AddSingleton<IGeometryMutator, LiveRhinoGeometryMutator>();
+        services.AddSingleton<ILiveGeometryMetricsCalculator, LiveRhinoGeometryMetricsCalculator>();
+        services.AddSingleton<ILiveGeometryCurvatureCalculator, LiveRhinoGeometryCurvatureCalculator>();
+        services.AddSingleton<ILiveGeometryIntersectionCalculator, LiveRhinoGeometryIntersectionCalculator>();
         return services;
     }
 
@@ -54,6 +61,9 @@ public static class DependencyInjection
         services.AddSingleton<RhinoObjectUserTextService>();
         services.AddSingleton<RhinoDocumentUserStringService>();
         services.AddSingleton<RhinoLayerManagementService>();
+        services.AddSingleton<RhinoGeometryMetricsService>();
+        services.AddSingleton<RhinoGeometryCurvatureService>();
+        services.AddSingleton<RhinoGeometryIntersectionService>();
         services.AddSingleton<DeveloperCommandHandler>();
         return services;
     }

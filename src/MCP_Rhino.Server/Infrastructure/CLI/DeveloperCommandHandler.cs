@@ -1,6 +1,8 @@
 using MCP_Rhino.Server.Agents.Editing;
 using MCP_Rhino.Server.Agents.Inspection;
+using MCP_Rhino.Server.Application.Interfaces;
 using MCP_Rhino.Server.Application.Services;
+using MCP_Rhino.Server.Application.Services.Analysis;
 using MCP_Rhino.Server.Contracts.Requests;
 using MCP_Rhino.Server.Domain.Enums;
 using MCP_Rhino.Server.Skills.Inspection;
@@ -22,6 +24,10 @@ public sealed partial class DeveloperCommandHandler
     private readonly RhinoObjectEditingAgent _editingAgent;
     private readonly GeometryCreationSkill _geometryCreationSkill;
     private readonly GeometryModificationSkill _geometryModificationSkill;
+    private readonly ILiveRhinoDocumentAccessor _liveRhinoDocumentAccessor;
+    private readonly RhinoGeometryMetricsService _geometryMetricsService;
+    private readonly RhinoGeometryCurvatureService _geometryCurvatureService;
+    private readonly RhinoGeometryIntersectionService _geometryIntersectionService;
     private readonly Dictionary<string, Func<string[], bool>> _extensionHandlers = new(StringComparer.OrdinalIgnoreCase);
 
     // Optional hook for partial-class smoke-test files that live under Project_Test/ to
@@ -42,7 +48,11 @@ public sealed partial class DeveloperCommandHandler
         RhinoObjectFilterAgent filterAgent,
         RhinoObjectEditingAgent editingAgent,
         GeometryCreationSkill geometryCreationSkill,
-        GeometryModificationSkill geometryModificationSkill)
+        GeometryModificationSkill geometryModificationSkill,
+        ILiveRhinoDocumentAccessor liveRhinoDocumentAccessor,
+        RhinoGeometryMetricsService geometryMetricsService,
+        RhinoGeometryCurvatureService geometryCurvatureService,
+        RhinoGeometryIntersectionService geometryIntersectionService)
     {
         _filterService = filterService;
         _editingService = editingService;
@@ -56,6 +66,10 @@ public sealed partial class DeveloperCommandHandler
         _editingAgent = editingAgent;
         _geometryCreationSkill = geometryCreationSkill;
         _geometryModificationSkill = geometryModificationSkill;
+        _liveRhinoDocumentAccessor = liveRhinoDocumentAccessor;
+        _geometryMetricsService = geometryMetricsService;
+        _geometryCurvatureService = geometryCurvatureService;
+        _geometryIntersectionService = geometryIntersectionService;
         RegisterExtensionHandlers();
     }
 

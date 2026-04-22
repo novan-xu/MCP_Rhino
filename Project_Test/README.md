@@ -73,12 +73,16 @@ partial void RegisterExtensionHandlers()
 - TEST 文件夹名用 `<capability-name>`，CLI 命令名用 `<feature>-smoke-test`，两者语义对应，但不是同一个占位符。
 - 同一能力只允许一个 partial 文件实现 `RegisterExtensionHandlers()`。
 - `TryHandle` 会先查 `_extensionHandlers`，只有未命中时才走主 switch。
-- `_McpDevSmoke` 只是开发者入口；每期可把它硬编码切到当前能力的 smoke slug。
+- Rhino 内 live smoke 也必须使用每期独立的 Rhino 命令名，不再共用 `_McpDevSmoke` 这类统一入口。
 
 示例：
 
 ```powershell
 dotnet run --project src/MCP_Rhino.Server -- geometry-analysis-smoke-test test-files/MCP_rhino_test.3dm
+```
+
+```text
+_McpGeometryAnalysisSmoke
 ```
 
 ---

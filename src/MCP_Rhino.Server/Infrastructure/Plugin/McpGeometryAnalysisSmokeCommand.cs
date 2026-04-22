@@ -8,9 +8,9 @@ using RunMode = rhinocommon::Rhino.Commands.RunMode;
 
 namespace MCP_Rhino.Server.Infrastructure.Plugin;
 
-public sealed class McpDevSmokeCommand : RhinoCommand
+public sealed class McpGeometryAnalysisSmokeCommand : RhinoCommand
 {
-    public override string EnglishName => "McpDevSmoke";
+    public override string EnglishName => "McpGeometryAnalysisSmoke";
 
     protected override Result RunCommand(RhinoDoc doc, RunMode mode)
     {
@@ -22,12 +22,12 @@ public sealed class McpDevSmokeCommand : RhinoCommand
 
         if (doc is null || string.IsNullOrWhiteSpace(doc.Path))
         {
-            RhinoApp.WriteLine("McpDevSmoke requires a saved active document.");
+            RhinoApp.WriteLine("McpGeometryAnalysisSmoke requires a saved active document.");
             return Result.Failure;
         }
 
-        RhinoApp.WriteLine("Running layer-management-smoke-test on the active saved document.");
-        bool success = McpRhinoPlugin.Instance.RunDeveloperCommand("layer-management-smoke-test", doc.Path);
+        RhinoApp.WriteLine("Running geometry-analysis-smoke-test on the active saved document.");
+        bool success = McpRhinoPlugin.Instance.RunDeveloperCommand("geometry-analysis-smoke-test", doc.Path);
         return success ? Result.Success : Result.Failure;
     }
 }

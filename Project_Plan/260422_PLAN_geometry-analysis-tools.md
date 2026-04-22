@@ -173,7 +173,7 @@ MCP_Rhino 当前已有 Layer / 几何创建 / 几何修改 / UserText / Document
 
 **修改**：
 - `src/MCP_Rhino.Server/Server/DependencyInjection.cs`
-- `src/MCP_Rhino.Server/Infrastructure/Plugin/McpDevSmokeCommand.cs`
+- `src/MCP_Rhino.Server/Infrastructure/Plugin/McpGeometryAnalysisSmokeCommand.cs`
 
 **复用（不改）**：
 - `ILiveRhinoDocumentAccessor`
@@ -213,8 +213,8 @@ MCP Tool 调用示例：
 - `dotnet build src/MCP_Rhino.Server/MCP_Rhino.Server.csproj --nologo` 通过。
 - `dotnet run --project src/MCP_Rhino.Server -- geometry-analysis-smoke-test test-files/MCP_rhino_test.3dm`
   在非 Rhino Plugin 环境下返回明确的 live-only 提示或 `LIVE_RHINO_REQUIRED`，不再假装提供 CLI fallback。
-- 在 Rhino 中打开并保存 `test-files/MCP_rhino_test.3dm` 后，运行 **`_McpDevSmoke`**：
-  - `McpDevSmokeCommand` 的硬编码 slug 改为 `"geometry-analysis-smoke-test"`。
+- 在 Rhino 中打开并保存 `test-files/MCP_rhino_test.3dm` 后，运行 **`_McpGeometryAnalysisSmoke`**：
+  - `McpGeometryAnalysisSmokeCommand` 直接调用 `"geometry-analysis-smoke-test"`。
   - 10 个 `*InLive` Tool 返回 `Success=true`。
   - `doc.Objects.Count`、`doc.Layers.ActiveCount`、`doc.Strings.Count`、object user text key count 前后无变化。
   - Rhino Undo History 无新条目。
@@ -256,4 +256,5 @@ MCP Tool 调用示例：
   - `Project_Exet/260422_EXET_geometry-analysis-tools.md`
   - `Project_Test/260422_TEST_geometry-analysis-tools/`
 - 测试输入统一直接使用 `test-files/MCP_rhino_test.3dm`，不再引入工作副本约定。
+- Rhino live smoke 入口改为本期独立命令 `_McpGeometryAnalysisSmoke`，不再复用共享 `_McpDevSmoke`。
 

@@ -92,5 +92,5 @@
   这一个 partial 文件承担注册。该文件实现 `partial void RegisterExtensionHandlers()`，并写入
   `_extensionHandlers["<feature>-smoke-test"] = Handle<Feature>SmokeTest;`。
 - **pluginMode 分派在入口内部完成**：是否需要按 `McpRhinoPlugin.Instance is null` 分派，由 `Handle<Feature>SmokeTest` 内部自行决定；不允许为同一能力再申请第二条 live 专属 slug。
-- **`_McpDevSmoke` 属开发者入口、非生产契约**：`src/MCP_Rhino.Server/Infrastructure/Plugin/McpDevSmokeCommand.cs` 内部硬编码调用某一条 smoke slug 作为 Rhino 命令 `_McpDevSmoke` 的目标。每次新能力 Execute 时，直接替换该硬编码字符串即可，不累加分支、不引入参数化。
+- **Rhino live smoke 命令也必须能力独占**：每次新能力的 live smoke 都应新增一个专属 `RhinoCommand`，例如 `McpGeometryAnalysisSmokeCommand` 对应 `_McpGeometryAnalysisSmoke`，并在命令内部直接调用该能力自己的 smoke slug。不再使用共享的 `_McpDevSmoke` 入口，以便多个功能组能在 Rhino 内并行复核。
 - **slug 归属**：一条 slug 一旦出现在某份 Plan / TEST / EXET 中即视为该能力独占，后续能力不得改写其语义；若回收复用，必须在新的 Plan / EXET 中显式声明。
