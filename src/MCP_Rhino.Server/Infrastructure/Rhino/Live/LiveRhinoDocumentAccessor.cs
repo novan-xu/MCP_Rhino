@@ -25,6 +25,21 @@ public sealed class LiveRhinoDocumentAccessor : ILiveRhinoDocumentAccessor
         });
     }
 
+    /// <summary>
+    /// Runs <paramref name="work"/> against the live RhinoDoc wrapped in a
+    /// BeginUndoRecord/EndUndoRecord pair so a single MCP mutation produces one
+    /// undo step.
+    /// </summary>
+    /// <remarks>
+    /// Caveat for test/telemetry callers — BeginUndoRecord may return 0 when
+    /// this method runs inside an outer undo scope (e.g. nested under a Rhino
+    /// command's RunCommand). In that case Rhino attaches the mutations to the
+    /// outer command's undo record and NextUndoRecordSerialNumber does not
+    /// advance for this call. The document changes still happen; only the
+    /// undo-serial telemetry is misleading. Do NOT treat a
+    /// NextUndoRecordSerialNumber delta as proof that a mutation ran — use
+    /// document.Modified or before/after object/layer count deltas instead.
+    /// </remarks>
     public OperationResponse<T> ExecuteWithUndo<T>(
         string filePath,
         string undoDescription,
@@ -34,6 +49,9 @@ public sealed class LiveRhinoDocumentAccessor : ILiveRhinoDocumentAccessor
         {
             // RhinoCommon 8 only exposes Begin/EndUndoRecord; there is no CancelUndoRecord on RhinoDoc.
             // An empty Undo record (no document changes between Begin and End) is discarded by Rhino's UndoManager.
+            // BeginUndoRecord may return 0 when already inside an outer undo scope (nested under a Rhino
+            // command) — in that case CloseUndoRecord below is a no-op and the mutations attach to the
+            // outer command's record. See the <remarks> on this method for the testing caveat.
             uint undoRecord = document.BeginUndoRecord(undoDescription);
             bool closed = false;
 

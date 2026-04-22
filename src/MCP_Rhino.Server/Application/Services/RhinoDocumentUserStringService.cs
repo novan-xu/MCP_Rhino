@@ -25,6 +25,42 @@ public sealed class RhinoDocumentUserStringService
         _documentAccessor = documentAccessor;
     }
 
+    // Live variant: reads directly from RhinoDoc.ActiveDoc.Strings so LLM agents
+    // can observe in-memory edits that have not yet been saved to disk. Fails
+    // with LIVE_RHINO_REQUIRED when the file is not open in a running Rhino.
+    public OperationResponse<DocumentUserStringReadResponse> ReadInLive(DocumentUserStringReadRequest request)
+    {
+        return _documentAccessor.Execute(request.FilePath, document =>
+        {
+            StringTable strings = document.Strings;
+            int count = strings.Count;
+
+            var entries = new List<DocumentUserStringEntryResponse>(count);
+            for (int i = 0; i < count; i++)
+            {
+                string key = strings.GetKey(i) ?? string.Empty;
+                string value = strings.GetValue(i) ?? string.Empty;
+                entries.Add(new DocumentUserStringEntryResponse
+                {
+                    Section = null,
+                    Key = key,
+                    Value = value
+                });
+            }
+
+            var response = new DocumentUserStringReadResponse
+            {
+                FilePath = request.FilePath,
+                TotalCount = count,
+                Warnings = Array.Empty<ObjectEditWarning>(),
+                Entries = entries
+            };
+
+            return OperationResponse<DocumentUserStringReadResponse>.Ok(
+                response, "Document user strings read from live document.");
+        });
+    }
+
     public OperationResponse<DocumentUserStringReadResponse> Read(DocumentUserStringReadRequest request)
     {
         if (!_repository.Exists(request.FilePath))

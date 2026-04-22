@@ -69,6 +69,46 @@ public sealed class RhinoLayerManagementService
         }
     }
 
+    // Live variant: reads layers from RhinoDoc so in-memory creates/renames/deletes
+    // that have not been saved to disk are visible. Reuses BuildLiveLayerSnapshots
+    // (already exercised by PreviewModify/Delete/Purge) so the output shape matches
+    // what the offline Get returns.
+    public OperationResponse<LayerReadResponse> GetInLive(GetLayersRequest request)
+    {
+        return _documentAccessor.Execute(request.FilePath, document =>
+        {
+            List<LayerSnapshot> snapshots = BuildLiveLayerSnapshots(document);
+            List<RhinoLayerDetail> entries = snapshots
+                .Select(snapshot => new RhinoLayerDetail
+                {
+                    LayerIndex = snapshot.Index,
+                    LayerName = snapshot.LayerName,
+                    FullPath = snapshot.FullPath,
+                    ParentFullPath = snapshot.ParentFullPath,
+                    ObjectCount = snapshot.ObjectCount,
+                    Color = snapshot.Color,
+                    Visible = snapshot.Visible,
+                    Locked = snapshot.Locked,
+                    IsCurrentLayer = snapshot.IsCurrentLayer,
+                    PlotColor = snapshot.PlotColor,
+                    PlotWeight = snapshot.PlotWeight,
+                    LinetypeName = snapshot.LinetypeName,
+                    RenderMaterialName = snapshot.RenderMaterialName
+                })
+                .ToList();
+
+            var response = new LayerReadResponse
+            {
+                FilePath = request.FilePath,
+                TotalCount = entries.Count,
+                Warnings = Array.Empty<ObjectEditWarning>(),
+                Entries = entries
+            };
+
+            return OperationResponse<LayerReadResponse>.Ok(response, "Layers read from live document.");
+        });
+    }
+
     public OperationResponse<LayerMutationResponse> Create(CreateLayersRequest request)
     {
         if (request.Entries.Count == 0)

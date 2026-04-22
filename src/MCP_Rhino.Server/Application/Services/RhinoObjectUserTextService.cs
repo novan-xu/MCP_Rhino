@@ -29,6 +29,118 @@ public sealed class RhinoObjectUserTextService
         _formatter = formatter;
     }
 
+    // Live variant: validates and previews against the currently-open RhinoDoc
+    // so the "current value" shown in each preview line reflects unsaved edits.
+    // Fails with LIVE_RHINO_REQUIRED when the file is not open in a running Rhino.
+    public OperationResponse<ObjectEditPreviewResponse> PreviewInLive(ObjectUserTextBatchWriteRequest request)
+    {
+        return _documentAccessor.Execute(request.FilePath, document =>
+        {
+            OperationResponse<Dictionary<Guid, List<ObjectScopedUserTextEntryRequest>>> validation = ValidateEntries(document, request.Entries);
+            if (!validation.Success || validation.Data is null)
+            {
+                return OperationResponse<ObjectEditPreviewResponse>.Fail(validation.Message);
+            }
+
+            Dictionary<Guid, List<ObjectScopedUserTextEntryRequest>> entriesByObjectId = validation.Data;
+            List<ObjectEditOperationResult> previewResults = entriesByObjectId
+                .Take(PreviewLimit)
+                .Select(entryGroup => BuildLivePreviewResult(document, entryGroup.Key, entryGroup.Value))
+                .ToList();
+
+            var warnings = new List<ObjectEditWarning>();
+            if (entriesByObjectId.Count > PreviewLimit)
+            {
+                warnings.Add(new ObjectEditWarning
+                {
+                    Code = "PREVIEW_TRUNCATED",
+                    Message = $"Preview only shows the first {PreviewLimit} objects."
+                });
+            }
+
+            var response = new ObjectEditPreviewResponse
+            {
+                FilePath = request.FilePath,
+                CriteriaSummary = SummarizeEntries(request.Entries, entriesByObjectId.Count),
+                MatchedObjectCount = entriesByObjectId.Count,
+                PreviewObjectCount = previewResults.Count,
+                OperationCount = request.Entries.Count,
+                Warnings = warnings,
+                ObjectResults = previewResults
+            };
+
+            return OperationResponse<ObjectEditPreviewResponse>.Ok(response, "Object user text preview generated from live document.");
+        });
+    }
+
+    // Live variant of Read: resolves each object from RhinoDoc.Objects instead of
+    // File3dm on disk. See ReadInLive docstring above for context.
+    public OperationResponse<ObjectUserTextReadResponse> ReadInLive(ObjectUserTextReadRequest request)
+    {
+        if (request.ObjectIds.Count == 0)
+        {
+            return OperationResponse<ObjectUserTextReadResponse>.Fail("At least one ObjectId is required.");
+        }
+
+        return _documentAccessor.Execute(request.FilePath, document =>
+        {
+            var distinctObjectIds = request.ObjectIds
+                .Where(objectId => objectId != Guid.Empty)
+                .Distinct()
+                .ToList();
+
+            if (distinctObjectIds.Count == 0)
+            {
+                return OperationResponse<ObjectUserTextReadResponse>.Fail("All requested ObjectIds were empty GUID values.");
+            }
+
+            var records = new List<ObjectUserTextRecordResponse>(distinctObjectIds.Count);
+            int totalEntries = 0;
+            foreach (Guid objectId in distinctObjectIds)
+            {
+                RhinoObject? rhinoObject = document.Objects.FindId(objectId);
+                if (rhinoObject is null)
+                {
+                    records.Add(new ObjectUserTextRecordResponse
+                    {
+                        ObjectId = objectId,
+                        LayerFullPath = "Unknown",
+                        ObjectName = string.Empty,
+                        Found = false,
+                        Message = "Object was not found in the live document.",
+                        Entries = Array.Empty<ObjectUserTextEntryResponse>()
+                    });
+                    continue;
+                }
+
+                var entries = ReadLiveObjectUserStrings(rhinoObject);
+                totalEntries += entries.Count;
+                records.Add(new ObjectUserTextRecordResponse
+                {
+                    ObjectId = objectId,
+                    LayerFullPath = ResolveLayerFullPath(document, rhinoObject.Attributes.LayerIndex),
+                    ObjectName = rhinoObject.Attributes.Name ?? string.Empty,
+                    Found = true,
+                    Message = $"Read {entries.Count} user string entries.",
+                    Entries = entries
+                });
+            }
+
+            var response = new ObjectUserTextReadResponse
+            {
+                FilePath = request.FilePath,
+                RequestedObjectCount = distinctObjectIds.Count,
+                FoundObjectCount = records.Count(record => record.Found),
+                MissingObjectCount = records.Count(record => !record.Found),
+                TotalEntryCount = totalEntries,
+                Warnings = Array.Empty<ObjectEditWarning>(),
+                Records = records
+            };
+
+            return OperationResponse<ObjectUserTextReadResponse>.Ok(response, "Object user strings read from live document.");
+        });
+    }
+
     public OperationResponse<ObjectEditPreviewResponse> Preview(ObjectUserTextBatchWriteRequest request)
     {
         if (!_repository.Exists(request.FilePath))
@@ -389,6 +501,65 @@ public sealed class RhinoObjectUserTextService
 
         return OperationResponse<Dictionary<Guid, List<ObjectScopedUserTextEntryRequest>>>.Ok(
             entries.GroupBy(entry => entry.ObjectId).ToDictionary(group => group.Key, group => group.ToList()));
+    }
+
+    private static ObjectEditOperationResult BuildLivePreviewResult(
+        RhinoDoc document,
+        Guid objectId,
+        IReadOnlyList<ObjectScopedUserTextEntryRequest> entries)
+    {
+        RhinoObject? rhinoObject = document.Objects.FindId(objectId);
+        if (rhinoObject is null)
+        {
+            return new ObjectEditOperationResult
+            {
+                ObjectId = objectId,
+                LayerFullPath = "Unknown",
+                Success = false,
+                Messages = new[] { "Object was not found in the live document." }
+            };
+        }
+
+        return new ObjectEditOperationResult
+        {
+            ObjectId = objectId,
+            LayerFullPath = ResolveLayerFullPath(document, rhinoObject.Attributes.LayerIndex),
+            Success = true,
+            Messages = entries.Select(entry => DescribeLiveEntry(rhinoObject, entry)).ToList()
+        };
+    }
+
+    private static string DescribeLiveEntry(RhinoObject rhinoObject, ObjectScopedUserTextEntryRequest entry)
+    {
+        string? currentValue = rhinoObject.Attributes.GetUserString(entry.Key);
+        string fromValue = currentValue is null ? "<missing>" : currentValue;
+        return $"SetUserText: {entry.Key} [{fromValue}] -> [{entry.Value}]";
+    }
+
+    private static List<ObjectUserTextEntryResponse> ReadLiveObjectUserStrings(RhinoObject rhinoObject)
+    {
+        var entries = new List<ObjectUserTextEntryResponse>();
+        var userStrings = rhinoObject.Attributes.GetUserStrings();
+        if (userStrings is null)
+        {
+            return entries;
+        }
+
+        foreach (string? key in userStrings.AllKeys)
+        {
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                continue;
+            }
+
+            entries.Add(new ObjectUserTextEntryResponse
+            {
+                Key = key,
+                Value = userStrings[key] ?? string.Empty
+            });
+        }
+
+        return entries;
     }
 
     private static ObjectEditOperationResult BuildPreviewResult(

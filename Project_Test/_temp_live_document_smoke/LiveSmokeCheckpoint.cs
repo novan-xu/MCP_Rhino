@@ -27,7 +27,13 @@ internal sealed class LiveSmokeCheckpoint
     public bool? ObservedSuccess { get; set; }
     public string? ObservedMessage { get; set; }
     public string? ObservedDataSummary { get; set; }
+    // UndoDelta is informational only — inside a Rhino command the outer command
+    // already opens an undo record, so nested BeginUndoRecord calls typically
+    // return 0 and NextUndoRecordSerialNumber does not advance. Do NOT assert on
+    // this value as proof of mutation; use ObjectsDelta/LayersDelta instead.
     public int UndoDelta { get; set; }
+    public int ObjectsDelta { get; set; }
+    public int LayersDelta { get; set; }
     public string? Evidence { get; set; }
     public string? FailureReason { get; set; }
 

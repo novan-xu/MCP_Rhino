@@ -131,8 +131,8 @@ internal sealed class LiveSmokeReport
     {
         sb.AppendLine("## Summary Table");
         sb.AppendLine();
-        sb.AppendLine("| # | Stage | Feature | Status | Undo Δ | Observed Success | Observed Message |");
-        sb.AppendLine("|---|---|---|---|---|---|---|");
+        sb.AppendLine("| # | Stage | Feature | Status | Objects Δ | Layers Δ | Undo Δ | Observed Success | Observed Message |");
+        sb.AppendLine("|---|---|---|---|---|---|---|---|---|");
         for (int i = 0; i < Checkpoints.Count; i++)
         {
             LiveSmokeCheckpoint cp = Checkpoints[i];
@@ -145,7 +145,7 @@ internal sealed class LiveSmokeReport
             };
             string message = cp.ObservedMessage is null ? string.Empty : EscapeCell(cp.ObservedMessage);
             string observedSuccess = cp.ObservedSuccess is null ? "-" : cp.ObservedSuccess.Value.ToString();
-            sb.AppendLine($"| {i + 1} | {EscapeCell(cp.Stage)} | {EscapeCell(cp.Feature)} | {statusCell} | {cp.UndoDelta} | {observedSuccess} | {message} |");
+            sb.AppendLine($"| {i + 1} | {EscapeCell(cp.Stage)} | {EscapeCell(cp.Feature)} | {statusCell} | {cp.ObjectsDelta} | {cp.LayersDelta} | {cp.UndoDelta} | {observedSuccess} | {message} |");
         }
         sb.AppendLine();
     }
@@ -186,7 +186,9 @@ internal sealed class LiveSmokeReport
             sb.AppendLine($"- Success: {FormatNullable(cp.ObservedSuccess)}");
             sb.AppendLine($"- Message: {FormatOrEmpty(cp.ObservedMessage)}");
             sb.AppendLine($"- Data: {FormatOrEmpty(cp.ObservedDataSummary)}");
-            sb.AppendLine($"- Undo delta: {cp.UndoDelta}");
+            sb.AppendLine($"- Objects delta: {cp.ObjectsDelta}");
+            sb.AppendLine($"- Layers delta: {cp.LayersDelta}");
+            sb.AppendLine($"- Undo delta (informational only — may be 0 under Rhino command wrapper): {cp.UndoDelta}");
             sb.AppendLine();
 
             if (cp.Suspects.Count > 0)
