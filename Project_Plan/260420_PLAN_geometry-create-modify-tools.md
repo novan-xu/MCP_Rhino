@@ -1,4 +1,4 @@
-# 背景
+﻿# 背景
 
 当前 MCP_Rhino 已经具备筛查、属性编辑（user text / 图层 / 显示颜色）、文档级 user string 读写、文件修改保护与归档快照等能力，但仍缺少**几何本身**的创建与修改入口。具体缺口：
 
@@ -25,7 +25,7 @@ Rhino3dm v8.17.0 已经暴露所需底层 API：
 - 新增 **几何修改** 工具：Transform（Translate / Rotate / UniformScale）、ReplaceGeometry、DeleteObjects、EditControlPoints。
 - `TransformObjects` / `DeleteObjects` 支持两种选择源：**显式 `ConfirmedObjectIds`** 或 **现有筛查条件**（layer / objectType / user attribute）。
 - `ReplaceGeometry` / `EditControlPoints` 采用 **按 entry 定点目标** 模式；每个 entry 必须显式提供 `ObjectId`，不复用筛查条件。
-- 仅对 `TransformObjects` / `DeleteObjects` 适用：当 `ConfirmedObjectIds` 与筛查条件同时提供时，以 `ConfirmedObjectIds` 为准，并在响应 `Warnings` 中写入“筛查条件已被忽略”提示。`ReplaceGeometry` / `EditControlPoints` 因每条 entry 自带 `ObjectId`，不涉及此规则。
+- 仅对 `TransformObjects` / `DeleteObjects` 适用：当 `ConfirmedObjectIds` 与筛查条件同时提供时，以 `ConfirmedObjectIds` 为准，并在响应 `Warnings` 中写入“筛查条件已被忽略”提示。`ReplaceGeometry` / `EditControlPoints` 因每条 entry 自带 `ObjectId`，不涉及此指南。
 - 所有修改工具（`TransformObjects` / `DeleteObjects` / `ReplaceGeometry` / `EditControlPoints`）均提供配套 `Preview*` 工具，返回受影响对象列表与校验 warning，不落盘；Create 系工具不设 Preview。
 - `EditControlPoints` 首期仅支持 `NurbsCurve` / `NurbsSurface`，不对 `LineCurve` / `ArcCurve` / `PlaneSurface` 做隐式 NURBS 转换。
 - 复用现有 `IFileMutationSafeguard`、归档快照、结果格式化管线，不新增写保护机制。
@@ -112,7 +112,7 @@ Rhino3dm v8.17.0 已经暴露所需底层 API：
      - 显式 `ConfirmedObjectIds: List<Guid>`：精准，推荐用于脚本化操作。
      - 筛查字段（复用 `ObjectSelectionSkill`）：用于“所有墙体层的曲线都平移 (0,0,100)”等语义选择。
    - `ReplaceGeometry` / `EditControlPoints` 不走筛查选择；每个 entry 必须自带 `ObjectId`。
-   - **仅对 `TransformObjects` / `DeleteObjects`**：两种选择源同时提供时以 `ConfirmedObjectIds` 为准，并写入 warning；`ReplaceGeometry` / `EditControlPoints` 因每条 entry 自带 `ObjectId`，不触发此规则。
+   - **仅对 `TransformObjects` / `DeleteObjects`**：两种选择源同时提供时以 `ConfirmedObjectIds` 为准，并写入 warning；`ReplaceGeometry` / `EditControlPoints` 因每条 entry 自带 `ObjectId`，不触发此指南。
    - 对于显式 `ConfirmedObjectIds` 或 entry 级 `ObjectId`，若存在无法解析的 `ObjectId`，视为硬错误，阻断写入。
 
 4. **修改沿用 delete + re-add**
@@ -125,7 +125,7 @@ Rhino3dm v8.17.0 已经暴露所需底层 API：
    - `TransformObjectsRequest` / `DeleteObjectsRequest` 因此增加 `confirmedLayerFullPaths?` 与 `userAttributeMatchMode?` 字段（与 `FilterObjectsRequest` 对齐），以覆盖图层歧义确认的往返流程。
 
 4b. **Replace 类型兼容策略**
-   - `ReplaceGeometry` 的兼容规则基于现有 `RhinoObjectType` 大类，而不是新 Spec 的具体 primitive 名：
+   - `ReplaceGeometry` 的兼容指南基于现有 `RhinoObjectType` 大类，而不是新 Spec 的具体 primitive 名：
      - `RhinoObjectType.Point`：仅允许替换为 `GeometryPrimitiveKind.Point`
      - `RhinoObjectType.Curve`：允许替换为 `GeometryPrimitiveKind.Line` 或 `GeometryPrimitiveKind.Arc`
      - `RhinoObjectType.Surface`：仅允许替换为 `GeometryPrimitiveKind.Surface`

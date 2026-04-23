@@ -16,7 +16,7 @@ namespace MCP_Rhino.Server.Infrastructure.CLI;
 
 public sealed partial class DeveloperCommandHandler
 {
-    partial void RegisterExtensionHandlers()
+    partial void RegisterGeometryAnalysisHandlers()
     {
         _extensionHandlers["geometry-analysis-smoke-test"] = HandleGeometryAnalysisSmokeTest;
     }

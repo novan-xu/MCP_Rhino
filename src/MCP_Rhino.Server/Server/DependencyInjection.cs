@@ -35,6 +35,8 @@ public static class DependencyInjection
         services.AddSingleton<ILiveGeometryMetricsCalculator, LiveRhinoGeometryMetricsCalculator>();
         services.AddSingleton<ILiveGeometryCurvatureCalculator, LiveRhinoGeometryCurvatureCalculator>();
         services.AddSingleton<ILiveGeometryIntersectionCalculator, LiveRhinoGeometryIntersectionCalculator>();
+        services.AddSingleton<ILiveFileExporter, LiveRhinoFileExporter>();
+        services.AddSingleton<ILiveExternalReferenceManager, LiveRhinoExternalReferenceManager>();
         return services;
     }
 
@@ -49,6 +51,8 @@ public static class DependencyInjection
         services.AddSingleton<ILiveGeometryMetricsCalculator, LiveRhinoGeometryMetricsCalculator>();
         services.AddSingleton<ILiveGeometryCurvatureCalculator, LiveRhinoGeometryCurvatureCalculator>();
         services.AddSingleton<ILiveGeometryIntersectionCalculator, LiveRhinoGeometryIntersectionCalculator>();
+        services.AddSingleton<ILiveFileExporter, LiveRhinoFileExporter>();
+        services.AddSingleton<ILiveExternalReferenceManager, LiveRhinoExternalReferenceManager>();
         return services;
     }
 
@@ -64,6 +68,8 @@ public static class DependencyInjection
         services.AddSingleton<RhinoGeometryMetricsService>();
         services.AddSingleton<RhinoGeometryCurvatureService>();
         services.AddSingleton<RhinoGeometryIntersectionService>();
+        services.AddSingleton<RhinoFileExportService>();
+        services.AddSingleton<RhinoExternalReferenceService>();
         services.AddSingleton<DeveloperCommandHandler>();
         return services;
     }

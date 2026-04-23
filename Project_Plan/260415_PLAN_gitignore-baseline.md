@@ -1,4 +1,4 @@
-# GitIgnore Baseline
+﻿# GitIgnore Baseline
 
 ## Background
 
@@ -25,7 +25,7 @@ The repository is a `.NET 8` solution, so the ignore rules cover standard C# out
 - Visual Studio user files
 - NuGet temporary restore artifacts
 
-### 2. Add Project-Specific Local Artifact Rules
+### 2. Add Project-Specific Local Artifact Guides
 
 The repository also contains local/generated artifacts that are not part of the source model and should stay untracked:
 

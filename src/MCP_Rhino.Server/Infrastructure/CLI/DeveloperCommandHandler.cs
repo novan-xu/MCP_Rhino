@@ -28,13 +28,21 @@ public sealed partial class DeveloperCommandHandler
     private readonly RhinoGeometryMetricsService _geometryMetricsService;
     private readonly RhinoGeometryCurvatureService _geometryCurvatureService;
     private readonly RhinoGeometryIntersectionService _geometryIntersectionService;
+    private readonly RhinoFileExportService _fileExportService;
+    private readonly RhinoExternalReferenceService _externalReferenceService;
     private readonly Dictionary<string, Func<string[], bool>> _extensionHandlers = new(StringComparer.OrdinalIgnoreCase);
 
-    // Optional hook for partial-class smoke-test files that live under Project_Test/ to
-    // register their own CLI commands without the main switch below knowing about them.
-    // If no partial implementation exists (e.g. the test folder has been removed), this
-    // call compiles to a no-op and _extensionHandlers stays empty.
+    // Optional hooks for Project_Test partials to register capability-specific smoke
+    // commands without modifying the main switch below.
     partial void RegisterExtensionHandlers();
+    partial void RegisterGeometryAnalysisHandlers();
+    partial void RegisterFileImportExportHandlers();
+
+    partial void RegisterExtensionHandlers()
+    {
+        RegisterGeometryAnalysisHandlers();
+        RegisterFileImportExportHandlers();
+    }
 
     public DeveloperCommandHandler(
         RhinoObjectFilterService filterService,
@@ -52,7 +60,9 @@ public sealed partial class DeveloperCommandHandler
         ILiveRhinoDocumentAccessor liveRhinoDocumentAccessor,
         RhinoGeometryMetricsService geometryMetricsService,
         RhinoGeometryCurvatureService geometryCurvatureService,
-        RhinoGeometryIntersectionService geometryIntersectionService)
+        RhinoGeometryIntersectionService geometryIntersectionService,
+        RhinoFileExportService fileExportService,
+        RhinoExternalReferenceService externalReferenceService)
     {
         _filterService = filterService;
         _editingService = editingService;
@@ -70,6 +80,8 @@ public sealed partial class DeveloperCommandHandler
         _geometryMetricsService = geometryMetricsService;
         _geometryCurvatureService = geometryCurvatureService;
         _geometryIntersectionService = geometryIntersectionService;
+        _fileExportService = fileExportService;
+        _externalReferenceService = externalReferenceService;
         RegisterExtensionHandlers();
     }
 

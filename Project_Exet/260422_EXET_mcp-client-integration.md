@@ -37,7 +37,7 @@
    - 视为 PLAN §关键设计 §5 "样例原地重录"范围内的细节，不需要回改 PLAN。
 
 2. **显式不注册新 Live Smoke CLI slug（延续 PLAN §关键设计 §4）**
-   - `Project_Rules/MCP_Rhino Plan Log.md` §Live Smoke CLI 入口约定要求每期新 slug；本期零代码变更，没有新 code path 可 smoke。
+   - `Project_Guides/MCP_Rhino Plan Log.md` §Live Smoke CLI 入口约定要求每期新 slug；本期零代码变更，没有新 code path 可 smoke。
    - 端到端验证必须通过真实 MCP Client + Rhino GUI 手工走一遍，写 C# 自动化反而制造假阳性。
    - 每期能力自己的 `_Mcp<Feature>Smoke` 覆盖各自 live path；集成链路没退化靠"能力侧 smoke 全绿"间接证明。
    - 本偏差在 PLAN 里已预先声明并在此重复记录。
@@ -154,4 +154,4 @@ PLAN §验收标准 "扩展性断言" 条：本期产物声明"后续任意新�
 
 本期 `mcp-client-integration` 已完成全部文档与配置样例产物沉淀：PLAN / EXET / TEST 三件套齐全，仓库根首次建立 README；两个 csproj Release 构建通过，`.rhp` 与 `Bridge.exe` 产物就位；两份 JSON 样例静态解析干净。端到端集成链路在代码层面是连通的（PLAN §背景已列证据），剩余工作仅为用户在真实 Rhino 8 会话里按 README 跑一遍 7 条验收清单。
 
-本期不引入新 Live Smoke CLI slug，是对 `Project_Rules/MCP_Rhino Plan Log.md` §Live Smoke CLI 入口约定的显式偏差，已在 PLAN 与本 EXET 重复记录；偏差理由是"集成层零代码变更无 smoke 对象"。
+本期不引入新 Live Smoke CLI slug，是对 `Project_Guides/MCP_Rhino Plan Log.md` §Live Smoke CLI 入口约定的显式偏差，已在 PLAN 与本 EXET 重复记录；偏差理由是"集成层零代码变更无 smoke 对象"。

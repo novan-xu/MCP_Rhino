@@ -1,10 +1,10 @@
-# MCP_Rhino Architecture Rules
+﻿# MCP_Rhino Architecture Guides
 
 ## 目标
 
-本规则用于约束 MCP_Rhino 项目后续新增代码与功能的归属，避免再次退化为单文件、大杂烩结构。
+本指南用于约束 MCP_Rhino 项目后续新增代码与功能的归属，避免再次退化为单文件、大杂烩结构。
 
-## 目录归属规则
+## 目录归属指南
 
 ### 1. Program.cs
 - 只负责应用启动、Host 构建、调用注册扩展。
@@ -22,7 +22,7 @@
 - Tool 负责参数接收、调用 Application/Service、格式化输出。
 - Tool 中禁止堆积大段 Rhino 文件读写逻辑。
 - 命名统一使用 `*Tool` 后缀。
-- **执行模式约束**：mutation 类 Tool 与 preview-of-mutation 类 Tool 只能依赖 Live 适配接口（见 §Infrastructure `Rhino/Live/`）；read / preview-of-read 类 Tool 默认优先依赖 Live 适配接口以获取当前真值。若需支持未打开文件、CLI 或批处理场景，可额外提供显式 Offline 入口（`Rhino/Offline/`）；不得在同一个 Tool 内把 live 失败静默回退成 offline 结果。详见「执行模式规则」章节。
+- **执行模式约束**：mutation 类 Tool 与 preview-of-mutation 类 Tool 只能依赖 Live 适配接口（见 §Infrastructure `Rhino/Live/`）；read / preview-of-read 类 Tool 默认优先依赖 Live 适配接口以获取当前真值。若需支持未打开文件、CLI 或批处理场景，可额外提供显式 Offline 入口（`Rhino/Offline/`）；不得在同一个 Tool 内把 live 失败静默回退成 offline 结果。详见「执行模式指南」章节。
 
 ### 4. Skills/
 - 放置固定流程的复合能力。
@@ -45,9 +45,9 @@
 - 命名建议使用 `*Service`、`*UseCase`、`I*`。
 
 ### 7. Domain/
-- 放置核心业务模型、值对象、规则、枚举。
+- 放置核心业务模型、值对象、指南、枚举。
 - Domain 不依赖 MCP、Rhino3dm、文件系统实现。
-- 这里回答“业务概念和规则是什么”。
+- 这里回答“业务概念和指南是什么”。
 
 ### 8. Infrastructure/
 - 放置 Rhino 适配（`File3dm` 默认仅离线读，`RhinoDoc` 在线读写）、文件系统、配置、日志、命令行入口适配等具体实现。
@@ -62,7 +62,7 @@
 
 ### 9. Contracts/
 - 放置 Request / Response / Agent 消息 DTO。
-- Contracts 只负责数据交换结构，不承载复杂业务规则。
+- Contracts 只负责数据交换结构，不承载复杂业务指南。
 - 命名统一使用 `*Request`、`*Response`、`*Message`。
 
 ### 10. Prompts/
@@ -76,12 +76,12 @@
 - 固定工作流、组合多个能力 → `Skills/`
 - 目标驱动、需要选择步骤或调度 → `Agents/`
 - 功能流程编排、服务组织 → `Application/`
-- 业务模型、值对象、规则 → `Domain/`
+- 业务模型、值对象、指南 → `Domain/`
 - Rhino 适配（`File3dm` 离线 / `RhinoDoc` 在线）/ IO / Logging / Config 实现 → `Infrastructure/`
 - 请求/响应/消息结构 → `Contracts/`
 - LLM 指令模板 → `Prompts/`
 
-## 执行模式规则（在线 vs 离线）
+## 执行模式指南（在线 vs 离线）
 
 Rhino 侧的能力按"是否修改文档状态"划分执行模式，互相不混用。
 
@@ -116,7 +116,7 @@ Rhino 侧的能力按"是否修改文档状态"划分执行模式，互相不混
 
 - Preview 本身不改文档，但在"Preview 某个 mutation"的语义下，Preview 看到的文档必须与随后 Apply 作用的文档一致。
 - 因此 Preview-of-mutation 也走 Live 路径：只读 `RhinoDoc`、不写、不开 Undo record；不允许走 Offline `File3dm` 回退，避免 Preview 与 Apply 对齐到不同的文档状态。
-- Preview-of-read 默认跟随对应 read 能力的执行模式，即 live-first；若产品需要未打开文件的预览能力，可额外提供显式 Offline 变体，并沿用 offline read 的 stale warning 规则。
+- Preview-of-read 默认跟随对应 read 能力的执行模式，即 live-first；若产品需要未打开文件的预览能力，可额外提供显式 Offline 变体，并沿用 offline read 的 stale warning 指南。
 
 ### 去归档化
 
@@ -127,7 +127,7 @@ Rhino 侧的能力按"是否修改文档状态"划分执行模式，互相不混
 
 - 若后续出现"必须在无 Rhino 环境中做 mutation"的合理诉求（例如批处理服务器），需以显式开关（如 `--force-offline`）形式重新引入，并在本章节补充约束；该路径必须与默认 live mutation 实现严格隔离，默认禁用。
 
-## 命名规则
+## 命名指南
 
 - 避免使用 `Helper`、`Manager`、`Util` 这类宽泛命名。
 - 优先使用明确职责命名：
@@ -137,7 +137,7 @@ Rhino 侧的能力按"是否修改文档状态"划分执行模式，互相不混
   - `RhinoInspectionAgent`
   - `LayerAuditSkill`
 
-## 演进规则
+## 演进指南
 
 - 主 Server 项目（`MCP_Rhino.Server`，产出 `.rhp`）保持单项目分层的 DDD 目录结构；当业务复杂度显著上升时再考虑拆 `Application.Core` / `Infrastructure` 等子项目。
 - **例外：`MCP_Rhino.Bridge` 为独立 csproj**，承载 stdio-to-named-pipe 桥接能力（详见 §8 Plugin/ 子目录）。它只依赖 BCL 的 `System.IO.Pipes`，不引 RhinoCommon / Rhino3dm，不承担业务逻辑；不适合放进 `Infrastructure/` 下，因为它是 MCP Client 直接 spawn 的最小 exe，对部署可移动性有独立诉求。后续若有其他类似"对外 thin shim"项目，可建立 `src/` 下的兄弟 csproj，但禁止反向依赖主 Server 项目的业务层。
