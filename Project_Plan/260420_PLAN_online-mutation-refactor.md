@@ -1,4 +1,4 @@
-# 背景
+﻿# 背景
 
 当前 MCP_Rhino 已经具备从筛查、属性编辑、几何创建到几何修改的完整 MCP 工具矩阵，但所有 mutation 类操作（`Create* / Transform / Replace / Delete / EditControlPoints / ApplyObjectEdits / Apply/DeleteObjectUserText / Set/DeleteDocumentUserStrings`）都走同一个离线落盘骨架：
 
@@ -38,7 +38,7 @@ Live Rhino 能力在当前代码库是空白地——无任何 `RhinoDoc.ActiveD
 - **保持 MCP API 表面不变**：对仍保留对外暴露的写入 Tool 与 preview-of-mutation Tool，方法名、参数、响应字段一个不删、一个不改；行为变化仅在：需要 Rhino 运行中、`FilePath` 需匹配 ActiveDoc、Save 回归 Rhino 用户流程。
 - **引入 Rhino Plugin 宿主 + Bridge 传输层**：MCP server 默认以 `.rhp` 形态在 Rhino 进程内启动；plugin 在 `OnLoad` 中拉起 Named Pipe server，外部 MCP Client 通过独立的 `MCP_Rhino.Bridge.exe` 做 stdio-to-pipe 桥接。`Program.cs` 保留为开发期 CLI 入口（只读 / smoke），不承担 MCP host 角色。
 - **去归档化**：`IFileMutationSafeguard`、`IArchiveSnapshotService`、`IArchiveRetentionService`、`IFileOpenStateInspector` 以及配套 Tool / Response warning 全链路移除；回滚交还 Rhino Undo。
-- **严格遵守** `.clinerules/MCP_Rhino Architecture.md` 新增的「执行模式规则」章节：写入与 preview-of-mutation 只进 `Infrastructure/Rhino/Live/`，offline 读与 preview-of-read 只进 `Infrastructure/Rhino/Offline/`。
+- **严格遵守** `.clinerules/MCP_Rhino Architecture.md` 新增的「执行模式指南」章节：写入与 preview-of-mutation 只进 `Infrastructure/Rhino/Live/`，offline 读与 preview-of-read 只进 `Infrastructure/Rhino/Offline/`。
 - **非目标（本次不做）**：RhinoCommon-only 的高级建模能力（Loft / Sweep / Revolve / Brep 布尔等）、Grasshopper 集成、无头 Rhino CI 集成测试；这些列入后续扩展。
 
 # 架构归属
@@ -97,7 +97,7 @@ Live Rhino 能力在当前代码库是空白地——无任何 `RhinoDoc.ActiveD
   - `Skills/Editing/ObjectSelectionSkill` **显式拆分为两个 Skill**：
     - `OfflineObjectSelectionSkill`（保留原文件并改名）：承载 5 个 Filter* / `FindLayerCandidates` Tool 的筛查解析，依赖 offline `IRhinoDocumentRepository.Read → File3dm`。
     - `LiveObjectSelectionSkill`（新增）：承载 `PreviewObjectEdits` / Apply 侧的目标解析，依赖 `ILiveRhinoDocumentAccessor → RhinoDoc`。
-    - 两者共享同一份 `FilterObjectsRequest` 契约与筛查规则（层级 / 类型 / UserAttribute），仅数据源不同；公用校验逻辑抽取到 `Application/UseCases/ObjectFilterEvaluator`（纯函数）。
+    - 两者共享同一份 `FilterObjectsRequest` 契约与筛查指南（层级 / 类型 / UserAttribute），仅数据源不同；公用校验逻辑抽取到 `Application/UseCases/ObjectFilterEvaluator`（纯函数）。
     - 依赖 `ObjectSelectionSkill` 的下游调用方按执行模式一对一切换：`RhinoGeometryModificationService.ResolveSelection` / `RhinoObjectEditingService` 注入 Live 版；`FilterObjectsTool` 链路注入 Offline 版。
   - `Skills/File/`：移除 `ArchiveRetentionSkill` / `ArchiveSnapshotSkill` / `FileMutationPreflightSkill` / `FileOpenStateCheckSkill`。
 - **Contracts/**
@@ -141,11 +141,11 @@ Live Rhino 能力在当前代码库是空白地——无任何 `RhinoDoc.ActiveD
      3. 标准化比较 `ActiveDoc.Path` 与请求的 `FilePath`（大小写不敏感 + 相对 / 绝对路径归一化）；不匹配 → 返回 `FILE_NOT_ACTIVE`，提示用户先在 Rhino 中打开对应文件。
      4. 匹配成功 → 后续操作绑定 `ActiveDoc`。
    - 不支持多文档并发 mutation（一期）；非 ActiveDoc 的其他打开文档被忽略，未来通过 `documentId` 字段扩展。
-   - 若后续放开对未保存文档的支持，应引入显式契约（例如允许 `FilePath` 为空字符串代表 ActiveDoc；或在 Request 增加 `allowUnsavedDocument: bool` 标志），并同步更新校验规则。
+   - 若后续放开对未保存文档的支持，应引入显式契约（例如允许 `FilePath` 为空字符串代表 ActiveDoc；或在 Request 增加 `allowUnsavedDocument: bool` 标志），并同步更新校验指南。
 
 3. **Undo 边界 = 一次写入 Tool 调用**
    - 每个写入 Tool（13 个 `Create* / Transform / Replace / Delete / EditControlPoints / ApplyObjectEdits / Apply/DeleteObjectUserText / Set/DeleteDocumentUserStrings`）：`recordId = doc.BeginUndoRecord($"MCP: {ToolName}")` → 执行变更 → `doc.EndUndoRecord(recordId)`。
-   - 失败或无实际变更时改用 `doc.CancelUndoRecord(recordId)`（RhinoCommon API，直接挂在 `RhinoDoc` 上）替代 `EndUndoRecord`，避免在 Rhino Undo 栈塞入空条目；判定规则：Validate 通过但 `mutator.*` 全部返回"未改动"，或 Apply 过程抛异常回退。
+   - 失败或无实际变更时改用 `doc.CancelUndoRecord(recordId)`（RhinoCommon API，直接挂在 `RhinoDoc` 上）替代 `EndUndoRecord`，避免在 Rhino Undo 栈塞入空条目；判定指南：Validate 通过但 `mutator.*` 全部返回"未改动"，或 Apply 过程抛异常回退。
    - 失败时仍必须显式 Close/Cancel（try-finally），避免 Undo 栈半开；异常场景下写入响应 `Warnings`，不调用额外的 rollback（Rhino 自身的 Undo 足够覆盖成功部分）。
    - Create 类 Tool（同一调用产生多个对象）合并为一个 Undo 条目；Preview-of-mutation 工具完全不触发 `BeginUndoRecord`。
 

@@ -1,4 +1,4 @@
-# MCP_Rhino
+﻿# MCP_Rhino
 
 让 LLM（Claude / 其它兼容 MCP 的大模型）通过 [Model Context Protocol](https://modelcontextprotocol.io/) 直接操作**正在运行的 Rhino 8** 里的当前文档——读取几何、筛图层、建/改/删对象、做几何分析——所有写入动作都自动进入 Rhino 的 Undo 栈，按 `Ctrl+Z` 即可回退。
 
@@ -110,10 +110,10 @@ RhinoDoc.ActiveDoc   ← 你在 Rhino 视口里看到结果
 
 每次写入被 `BeginUndoRecord` / `EndUndoRecord` 包裹，所以"一次 MCP tool 调用 = 一条 Undo 条目"。
 
-## 架构与规则
+## 架构与指南
 
-- [Project_Rules/MCP_Rhino Architecture.md](Project_Rules/MCP_Rhino%20Architecture.md) —— 目录归属、在线/离线执行模式、命名规则。
-- [Project_Rules/MCP_Rhino Plan Log.md](Project_Rules/MCP_Rhino%20Plan%20Log.md) —— 每次能力演进必须产出 Plan / Exet / Test 三件套的命名与结构。
+- [Project_Guides/MCP_Rhino Architecture.md](Project_Guides/MCP_Rhino%20Architecture.md) —— 目录归属、在线/离线执行模式、命名指南。
+- [Project_Guides/MCP_Rhino Plan Log.md](Project_Guides/MCP_Rhino%20Plan%20Log.md) —— 每次能力演进必须产出 Plan / Exet / Test 三件套的命名与结构。
 
 ## 出问题时去哪看
 

@@ -22,7 +22,7 @@ Project_Test/
 - `Project_Exet/260422_EXET_geometry-analysis-tools.md`
 - `Project_Test/260422_TEST_geometry-analysis-tools/`
 
-命名规则：
+命名指南：
 
 - 目录前缀 `<YYMMDD>` 与对应 Plan / EXET 完全一致。
 - 目录后段 `<capability-name>` 与对应 Plan / EXET 的 `<capability-name>` 完全一致。

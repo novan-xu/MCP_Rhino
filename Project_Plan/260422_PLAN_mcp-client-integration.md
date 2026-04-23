@@ -33,7 +33,7 @@ MCP_Rhino 代码层的端到端链路已经闭环：
 - `Project_Test/260422_TEST_mcp-client-integration/`：README + 配置样例 + 可选探针脚本。
 - `README.md`（仓库根）：对外门面文档，与 TEST 目录的 README 在"使用步骤"一节保持口径一致。
 
-本期**不引入**新的 Live Smoke CLI slug，显式偏离 `Project_Rules/MCP_Rhino Plan Log.md` §Live Smoke CLI 入口约定；偏差理由见 §关键设计 §4。
+本期**不引入**新的 Live Smoke CLI slug，显式偏离 `Project_Guides/MCP_Rhino Plan Log.md` §Live Smoke CLI 入口约定；偏差理由见 §关键设计 §4。
 
 ## 关键设计
 
@@ -58,7 +58,7 @@ MCP_Rhino 代码层的端到端链路已经闭环：
 
 ### 4. 不新增 Live Smoke Slug 的理由
 
-`Project_Rules/MCP_Rhino Plan Log.md` §Live Smoke CLI 入口约定要求"每次能力演进的 live smoke 必须以唯一 CLI slug 注册"。本期显式偏差：**不注册新 slug**。
+`Project_Guides/MCP_Rhino Plan Log.md` §Live Smoke CLI 入口约定要求"每次能力演进的 live smoke 必须以唯一 CLI slug 注册"。本期显式偏差：**不注册新 slug**。
 
 理由：
 

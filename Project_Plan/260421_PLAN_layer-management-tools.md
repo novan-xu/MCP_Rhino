@@ -75,7 +75,7 @@ MCP_Rhino 目前的图层能力只有两类读工具 (`FindLayerCandidates`、`F
      - Modify 批内 rename / reparent 之后 `ResolvedNewFullPath` 与现有层或同批其他目标的 `ResolvedNewFullPath` 冲突;
      - Modify 批内出现循环依赖(例如同批把 `A` 变成 `B` 的子层,又把 `B` 变成 `A` 的子层);
      - **Modify 批内同时 rename / reparent 祖先层与其后代层**(两项操作共同会让后代项的 `ResolvedNewFullPath` 依赖执行顺序或与同批其他目标冲突);
-     - Create 自动补父链同时又显式 Create 同一父路径且属性不一致。(注:当前实现按 depth 升序执行,显式 shallow 项永远先于深层项 `AddPath`,因此该冲突在常规输入下天然规避;此规则作为防御性契约保留,便于排序策略未来调整时仍能命中。)
+     - Create 自动补父链同时又显式 Create 同一父路径且属性不一致。(注:当前实现按 depth 升序执行,显式 shallow 项永远先于深层项 `AddPath`,因此该冲突在常规输入下天然规避;此指南作为防御性契约保留,便于排序策略未来调整时仍能命中。)
    - **Delete / Purge 允许同批出现同一子树下多层**(如 `["Old", "Old::A", "Old::B"]`);service 内部按"深度优先 / 最深层先执行"排序,子层先被处理完再处理父层,避免"父层消失导致子层寻址失效"。该行为在 Tool 文档中明确说明。
    - **跨动作类别无需单独校验**:`ModifyLayers` / `DeleteLayers` / `PurgeLayers` 是三个独立 Tool,一个 Request 只承载一种动作,不存在跨类别混装入口。客户端若在一次会话里先 rename 再 delete,那是两次 Tool 调用、两个 Undo record,服务端只对每次调用内部做一致性校验。
    - 批量项 per-item `try/catch`,失败单项不阻断其他项 —— 与 document user string 写入一致。
