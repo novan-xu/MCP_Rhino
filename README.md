@@ -93,7 +93,7 @@ MCP_Rhino pipe client connected: \\.\pipe\mcp_rhino
 ## 架构数据路径
 
 ```
-MCP Client (Claude Desktop / Claude Code / …)
+MCP Client (Codex / Claude Code / …)
         │    stdio (MCP JSON-RPC)
         ▼
 MCP_Rhino.Bridge.exe
