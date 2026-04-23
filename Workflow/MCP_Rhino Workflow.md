@@ -100,10 +100,12 @@ All construction must follow all Markdown guide files under `Project_Guides/`.
 Use `log/` as the basis for identifying repeated task patterns.
 
 - Detection requires cross-session `log/`; single-session data is insufficient for stable identification.
-- A repeated pattern is detected when there are at least 3 records and the overlap of used `tools` is 70% or higher.
+- A skill creation trigger is met when either of the following is true:
+  - there are at least 3 records, the overlap of used `tools` is 70% or higher, and the number of required `tools` is greater than 10
+  - a single task requires more than 15 `tools`
 - Unaccepted candidates are not persisted to any file.
 
-If a repeated pattern is detected, suggest a skill candidate at the end of the response, including:
+If a skill creation trigger is met, suggest a skill candidate at the end of the response, including:
 
 - repeated combination
 - frequency or recent occurrence
