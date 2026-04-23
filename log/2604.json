@@ -1,0 +1,1 @@
+{"ts":"2026-04-23T14:38","task":"darken colors of all non-default layers in MCP_rhino_test.3dm by ~20%","tools":["GetLayersInLiveTool","PreviewModifyLayersTool","ModifyLayersTool"]}
