@@ -40,7 +40,7 @@ MCP_Rhino plugin loaded. Named pipe ready: \\.\pipe\mcp_rhino
 
 ### Step 3 —— 打开并保存一个 .3dm
 
-Rhino 里 `_Open` 目标文件并 `_Save` 过（必须已落盘，否则所有工具会返回 `ACTIVE_DOC_UNSAVED`）。仓库里有一个 fixture 可用：[test-files/MCP_rhino_test.3dm](test-files/MCP_rhino_test.3dm)。
+Rhino 里 `_Open` 目标文件并 `_Save` 过（必须已落盘，否则所有工具会返回 `ACTIVE_DOC_UNSAVED`）。仓库里有一个 fixture 可用：[Runtime_Test/MCP_rhino_test.3dm](Runtime_Test/MCP_rhino_test.3dm)。
 
 ### Step 4 —— 接入 MCP Client
 
@@ -80,7 +80,7 @@ MCP_Rhino pipe client connected: \\.\pipe\mcp_rhino
 
 第一句建议显式告诉 LLM 当前文档路径，避免它猜出错误 `filePath`：
 
-> 当前 Rhino 文档的绝对路径是 `C:\Projects\MCP_Rhino\test-files\MCP_rhino_test.3dm`，接下来所有 tool 调用都用这个 filePath。帮我列出当前文档的图层与对象数。
+> 当前 Rhino 文档的绝对路径是 `C:\Projects\MCP_Rhino\Runtime_Test\MCP_rhino_test.3dm`，接下来所有 tool 调用都用这个 filePath。帮我列出当前文档的图层与对象数。
 
 之后就可以发各种自然语言指令，例如：
 

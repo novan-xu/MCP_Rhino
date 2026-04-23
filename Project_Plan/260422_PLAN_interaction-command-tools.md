@@ -344,7 +344,7 @@ MCP Tool 调用示例：
 
 构建 / smoke：
 - `dotnet build src/MCP_Rhino.Server/MCP_Rhino.Server.csproj --nologo` 无 Warning 通过。
-- CLI fallback：`dotnet run --project src/MCP_Rhino.Server -- interaction-picker-smoke-test test-files/MCP_rhino_test.3dm`：
+- CLI fallback：`dotnet run --project src/MCP_Rhino.Server -- interaction-picker-smoke-test Runtime_Test/MCP_rhino_test.3dm`：
   - 所有 7 个 Picker Tool 返回 `LIVE_RHINO_REQUIRED`。
   - 所有 2 个 Command Tool 返回 `LIVE_RHINO_REQUIRED`。
   - 工作副本对象数 / 图层数 / user text 无变化。

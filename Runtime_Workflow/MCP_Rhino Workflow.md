@@ -1,4 +1,4 @@
-# MCP_Rhino Workflow
+﻿# MCP_Rhino Workflow
 
 ## Purpose
 
@@ -7,10 +7,10 @@ Define the runtime protocol for handling user tasks with existing `tool / skill 
 ## Scope
 
 - `Project_Guides/`: how to build or modify capabilities
-- `Workflow/`: how to use and route existing capabilities
-- `log/`: cross-session tool usage history for pattern detection
+- `Runtime_Workflow/`: how to use and route existing capabilities
+- `Runtime_Log/`: cross-session tool usage history for pattern detection
 
-When adding a new rule file, decide by intent: *how to build* goes to `Project_Guides/`, *how to use* goes to `Workflow/`.
+When adding a new rule file, decide by intent: *how to build* goes to `Project_Guides/`, *how to use* goes to `Runtime_Workflow/`.
 
 ## Routing Rules
 
@@ -97,9 +97,9 @@ All construction must follow all Markdown guide files under `Project_Guides/`.
 
 ## Skill Candidate Suggestion
 
-Use `log/` as the basis for identifying repeated task patterns.
+Use `Runtime_Log/` as the basis for identifying repeated task patterns.
 
-- Detection requires cross-session `log/`; single-session data is insufficient for stable identification.
+- Detection requires cross-session `Runtime_Log/`; single-session data is insufficient for stable identification.
 - A skill creation trigger is met when either of the following is true:
   - there are at least 3 records, the overlap of used `tools` is 70% or higher, and the number of required `tools` is greater than 10
   - a single task requires more than 15 `tools`
@@ -115,7 +115,7 @@ Do not start planning unless the user explicitly asks to begin.
 
 ## Activity Log Minimum
 
-- root path: `log/`
+- root path: `Runtime_Log/`
 - file name: `YYMM.json`
 - format: JSONL
 - fields: `ts`, `task`, `tools`

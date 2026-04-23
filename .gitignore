@@ -1,4 +1,4 @@
-# =========================
+﻿# =========================
 # .NET / C# build outputs
 # =========================
 **/bin/
@@ -73,6 +73,5 @@ Desktop.ini
 # =========================
 # Keep repository assets under version control
 # =========================
-!docs/
 !Project_Plan/
-!test-files/
+!Runtime_Test/

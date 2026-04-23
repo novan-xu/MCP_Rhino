@@ -1,4 +1,4 @@
-# MCP_Rhino Agents Entry
+﻿# MCP_Rhino Agents Entry
 
 This file is the entry point for agents working in this repository.
 
@@ -10,7 +10,7 @@ This repository organizes work around three layers:
 
 - existing runtime capabilities: `tool / skill / agent`
 - capability construction rules: `Project_Guides/`
-- runtime task routing rules: `Workflow/`
+- runtime task routing rules: `Runtime_Workflow/`
 
 Your first job is to decide whether the user is asking to:
 
@@ -29,7 +29,7 @@ Treat the request as a runtime task when the user wants the model to use existin
 
 If the request is a runtime task, immediately follow:
 
-- `Workflow/MCP_Rhino Workflow.md`
+- `Runtime_Workflow/MCP_Rhino Workflow.md`
 
 ### B. Capability Construction Task
 
@@ -59,7 +59,7 @@ Do not enter construction mode automatically just because the task is hard.
 
 ### When in Runtime Mode
 
-Follow `Workflow/MCP_Rhino Workflow.md` and:
+Follow `Runtime_Workflow/MCP_Rhino Workflow.md` and:
 
 - assess before execution
 - choose `Tool`, `Skill`, or `Agent`
@@ -86,7 +86,7 @@ Follow `Project_Guides/` and:
 Use documents in this order:
 
 1. `AGENTS.md`
-2. `Workflow/MCP_Rhino Workflow.md` for runtime use of existing capabilities
+2. `Runtime_Workflow/MCP_Rhino Workflow.md` for runtime use of existing capabilities
 3. `Project_Guides/MCP_Rhino Architecture.md` for construction architecture rules
 4. `Project_Guides/MCP_Rhino Plan Log.md` for construction artifact rules
 

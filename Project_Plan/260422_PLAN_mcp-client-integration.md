@@ -1,4 +1,4 @@
-# 260422_PLAN_mcp-client-integration
+﻿# 260422_PLAN_mcp-client-integration
 
 ## 背景
 
@@ -171,7 +171,7 @@ MCP_Rhino pipe client connected: \\.\pipe\mcp_rhino
 - 加载 .rhp 后 Rhino 命令行出现 `Named pipe ready: \\.\pipe\mcp_rhino`。
 - Bridge 进程启动后 Rhino 命令行出现 `MCP_Rhino pipe client connected`。
 - MCP Client `tools/list` 返回条目数 ≥ 仓库当前 `Tools/**` 下 `[McpServerToolType]` 标注类的总数。
-- `GetObjectMetricsInLive` 对 `test-files/MCP_rhino_test.3dm` 的对象返回非 null 度量值。
+- `GetObjectMetricsInLive` 对 `Runtime_Test/MCP_rhino_test.3dm` 的对象返回非 null 度量值。
 - `CreateLines` 执行后 `doc.Objects.Count` +N、视口可见新几何、`Ctrl+Z` 后计数与视口均回退。
 
 **扩展性断言（回归验证项）**

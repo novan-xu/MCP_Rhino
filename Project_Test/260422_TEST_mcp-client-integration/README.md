@@ -1,4 +1,4 @@
-# TEST: mcp-client-integration
+﻿# TEST: mcp-client-integration
 
 本目录是 `Project_Plan/260422_PLAN_mcp-client-integration.md` 的集成验收产物。负责把"怎样让一个 MCP Client 真的操作到 Rhino active `RhinoDoc`"沉淀成可复制、可复现的步骤。
 
@@ -43,7 +43,7 @@ MCP_Rhino plugin loaded. Named pipe ready: \\.\pipe\mcp_rhino
 
 ## Step 3 — 准备目标文档
 
-在 Rhino 里 `_Open` 一个 `.3dm`（例如 `test-files/MCP_rhino_test.3dm`）并 `_Save` 过。未存盘的文档会让所有 `*InLive` Tool 返回 `ACTIVE_DOC_UNSAVED`。
+在 Rhino 里 `_Open` 一个 `.3dm`（例如 `Runtime_Test/MCP_rhino_test.3dm`）并 `_Save` 过。未存盘的文档会让所有 `*InLive` Tool 返回 `ACTIVE_DOC_UNSAVED`。
 
 ## Step 4a — 零客户端冒烟（推荐先跑）
 
@@ -67,7 +67,7 @@ MCP_Rhino pipe client connected: \\.\pipe\mcp_rhino
 
 之后就在客户端的对话框里用自然语言发指令即可。**LLM 需要显式知道 `RhinoDoc.ActiveDoc.Path`**——建议第一句就明示，例如：
 
-> "当前 Rhino 文档的绝对路径是 `C:\Projects\MCP_Rhino\test-files\MCP_rhino_test.3dm`，接下来所有 tool 调用都用这个 filePath。帮我列出当前文档的图层与对象数。"
+> "当前 Rhino 文档的绝对路径是 `C:\Projects\MCP_Rhino\Runtime_Test\MCP_rhino_test.3dm`，接下来所有 tool 调用都用这个 filePath。帮我列出当前文档的图层与对象数。"
 
 ## 端到端手动验收清单
 

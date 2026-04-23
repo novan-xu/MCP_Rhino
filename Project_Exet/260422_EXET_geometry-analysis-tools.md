@@ -1,4 +1,4 @@
-# 260422_EXET_geometry-analysis-tools
+﻿# 260422_EXET_geometry-analysis-tools
 
 ## 对应计划
 
@@ -93,13 +93,13 @@ dotnet build src/MCP_Rhino.Server/MCP_Rhino.Server.csproj --nologo
 命令：
 
 ```powershell
-dotnet run --project src/MCP_Rhino.Server -- geometry-analysis-smoke-test test-files/MCP_rhino_test.3dm
+dotnet run --project src/MCP_Rhino.Server -- geometry-analysis-smoke-test Runtime_Test/MCP_rhino_test.3dm
 ```
 
 结果：
 
 - 退出码：`0`
-- 使用 fixture：`test-files/MCP_rhino_test.3dm`
+- 使用 fixture：`Runtime_Test/MCP_rhino_test.3dm`
 - 检查点全部通过：
   - `GetObjectMetricsInLive rejected in CLI fallback`
   - `MeasureDistancesInLive rejected in CLI fallback`
@@ -117,7 +117,7 @@ dotnet run --project src/MCP_Rhino.Server -- geometry-analysis-smoke-test test-f
 已接入但本次未执行：
 
 ```text
-在 Rhino 中打开并保存 test-files/MCP_rhino_test.3dm
+在 Rhino 中打开并保存 Runtime_Test/MCP_rhino_test.3dm
 运行命令：_McpGeometryAnalysisSmoke
 ```
 

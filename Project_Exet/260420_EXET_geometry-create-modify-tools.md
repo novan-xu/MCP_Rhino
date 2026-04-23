@@ -117,18 +117,18 @@ dotnet build src\MCP_Rhino.Server\MCP_Rhino.Server.csproj --no-restore
 执行命令：
 
 ```powershell
-dotnet run --project src\MCP_Rhino.Server\MCP_Rhino.Server.csproj --no-build -- geometry-smoke-test test-files\MCP_rhino_test.3dm
+dotnet run --project src\MCP_Rhino.Server\MCP_Rhino.Server.csproj --no-build -- geometry-smoke-test Runtime_Test\MCP_rhino_test.3dm
 ```
 
 测试方式：
 
-- 不直接改写原始 `test-files/MCP_rhino_test.3dm`
+- 不直接改写原始 `Runtime_Test/MCP_rhino_test.3dm`
 - 先复制到 `_validation/geometry-smoke-test/MCP_METtest.geometry-smoke.3dm`
 - 再通过 Tool -> Skill -> Service -> Infrastructure 的真实链路执行写入与回读断言
 
 本轮测试使用的模型信息：
 
-- 源文件：`test-files/MCP_rhino_test.3dm`
+- 源文件：`Runtime_Test/MCP_rhino_test.3dm`
 - 工作副本：`_validation/geometry-smoke-test/MCP_METtest.geometry-smoke.3dm`
 - 命中的有效图层：`01_MET-IEF-Curtain Wall`
 - 初始对象数：`1014`
@@ -210,7 +210,7 @@ dotnet build src/MCP_Rhino.Server/MCP_Rhino.Server.csproj --nologo
 扩展 smoke test：
 
 ```powershell
-dotnet run --project src/MCP_Rhino.Server/MCP_Rhino.Server.csproj --no-build -- geometry-smoke-test test-files/MCP_rhino_test.3dm
+dotnet run --project src/MCP_Rhino.Server/MCP_Rhino.Server.csproj --no-build -- geometry-smoke-test Runtime_Test/MCP_rhino_test.3dm
 ```
 
 输出包含 24 个 checkpoint（原 12 个 + 扩展 12 个），全部通过；进程退出码 `0`。扩展 checkpoint 列表：
@@ -237,7 +237,7 @@ dotnet run ... -- geometry-smoke-test nonexistent-file.3dm
 
 文件结束状态：
 
-- 源文件：`test-files/MCP_rhino_test.3dm`（未改动）
+- 源文件：`Runtime_Test/MCP_rhino_test.3dm`（未改动）
 - 工作副本：`_validation/geometry-smoke-test/MCP_METtest.geometry-smoke.3dm`（Initial=1014 / Final=1017，净增 3 个对象，与原 smoke test 一致；扩展的 CenterRadius 弧与 Plane 曲面在测试中原地 create+delete，不影响净计数）
 
 ### 本轮结论

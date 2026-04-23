@@ -1,4 +1,4 @@
-# Task & Skill Orchestration Workflow
+﻿# Task & Skill Orchestration Workflow
 
 > 定义“用户布置任务 -> 模型路由 / 执行 / 上报缺口 / 进入构建”的统一协议。
 
@@ -9,15 +9,15 @@
 ## 基础定位
 
 - **Skill 是 server 端工作流能力**。`Skills/` 下的 C# skill 需经 `*SkillTool` 或同类 MCP Tool 包装后，才对模型可见；模型实际看到的是 MCP tools list。
-- **`AGENTS.md` 是薄入口**。规则主体放在 `Project_Guides/` 与 `Workflow/`。若本文件正式采用，可升格为 `Workflow/MCP_Rhino Workflow.md`。
+- **`AGENTS.md` 是薄入口**。规则主体放在 `Project_Guides/` 与 `Runtime_Workflow/`。若本文件正式采用，可升格为 `Runtime_Workflow/MCP_Rhino Workflow.md`。
 
 ## 目录职责
 
 | 目录 | 用途 |
 | --- | --- |
 | `Project_Guides/` | 指导如何构建或修改能力 |
-| `Workflow/` | 指导如何使用现有能力、如何路由任务 |
-| `log/` | 跨会话 tool 调用历史，供高频模式识别使用 |
+| `Runtime_Workflow/` | 指导如何使用现有能力、如何路由任务 |
+| `Runtime_Log/` | 跨会话 tool 调用历史，供高频模式识别使用 |
 
 新增规则文件前，先判断它是在教“怎么建”，还是在教“怎么用”，再决定归属。
 
@@ -98,13 +98,13 @@
 
 ## Skill 候选识别与提议
 
-- **识别范围**：基于 `log/` 下的持久化 activity log；单会话数据不足以稳定识别。
+- **识别范围**：基于 `Runtime_Log/` 下的持久化 activity log；单会话数据不足以稳定识别。
 - **提议方式**：在任务回复末尾单独附一段“Skill 候选建议”，说明重复组合、出现次数或最近时间、以及一句话定位。
 - **后续动作**：只有用户明确说“开始写 PLAN”，才进入构建链路；未采纳的候选不沉淀到任何文件。
 
 ## Activity Log 最小方案
 
-- **位置**：根目录 `log/`
+- **位置**：根目录 `Runtime_Log/`
 - **归档**：按月聚合，文件名 `YYMM.json`
 - **格式**：JSONL，单行一条记录，便于 append 与 grep
 - **写入**：统一经 `AppendActivityLogTool` 写入，业务 Tool 不自行写日志
@@ -124,19 +124,19 @@ AGENTS.md
 Project_Guides/
   MCP_Rhino Architecture.md
   MCP_Rhino Plan Log.md
-Workflow/
+Runtime_Workflow/
   task-orchestration-workflow.md
   MCP_Rhino Workflow.md
-log/
+Runtime_Log/
   2604.json
   2605.json
 ```
 
-不兼容 `AGENTS.md` 的客户端，可在自身配置里直接引用 `Project_Guides/` 与 `Workflow/` 下的 Markdown 作为规则源。
+不兼容 `AGENTS.md` 的客户端，可在自身配置里直接引用 `Project_Guides/` 与 `Runtime_Workflow/` 下的 Markdown 作为规则源。
 
 ## 后续动作建议
 
 1. 新建 `AGENTS.md` 作为薄入口。
-2. 将本文升格为 `Workflow/MCP_Rhino Workflow.md`。
+2. 将本文升格为 `Runtime_Workflow/MCP_Rhino Workflow.md`。
 3. 新建 `AppendActivityLogTool` 与 `ActivityLogService`。
 4. 从现有 Skills 中挑 1-2 个高频候选做首批 Skill Tool 模板，并按 `PLAN -> EXET -> TEST` 落地。

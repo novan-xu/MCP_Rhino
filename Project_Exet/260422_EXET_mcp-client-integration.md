@@ -1,4 +1,4 @@
-# 260422_EXET_mcp-client-integration
+﻿# 260422_EXET_mcp-client-integration
 
 ## 对应计划
 
@@ -136,7 +136,7 @@ PLAN §验收标准 "扩展性断言" 条：本期产物声明"后续任意新�
 
 1. **真实 Rhino 8 会话内端到端验收**（需要用户手动执行）：
    - 加载 `MCP_Rhino.Server.rhp`，确认命令行 `Named pipe ready: \\.\pipe\mcp_rhino`。
-   - Open + Save `test-files/MCP_rhino_test.3dm`。
+   - Open + Save `Runtime_Test/MCP_rhino_test.3dm`。
    - 运行 `_McpGeometryAnalysisSmoke`，确认全部检查点通过。
    - 把 `samples/claude_desktop_config.json` 或 `samples/claude_code.mcp.json` 合并到客户端配置，重启客户端。
    - 在客户端 prompt：`tools/list` 条目数 ≥ 当前 `Tools/**` 中 `[McpServerToolType]` 标注类数量。

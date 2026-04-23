@@ -21,7 +21,7 @@ Executed `Project_Plan/260420_PLAN_online-mutation-refactor.md` against the curr
   - Passed
 - `dotnet build src/MCP_Rhino.Bridge/MCP_Rhino.Bridge.csproj --nologo`
   - Passed
-- `dotnet run --project src/MCP_Rhino.Server/MCP_Rhino.Server.csproj -- online-mutation-refactor-smoke-test test-files/MCP_rhino_test.3dm`
+- `dotnet run --project src/MCP_Rhino.Server/MCP_Rhino.Server.csproj -- online-mutation-refactor-smoke-test Runtime_Test/MCP_rhino_test.3dm`
   - Passed
   - Verified offline read path remains usable in CLI fallback.
   - Verified live-only mutation paths return `LIVE_RHINO_REQUIRED` in CLI fallback.
@@ -60,7 +60,7 @@ Cross-checked the tree against every bullet in `260420_PLAN_online-mutation-refa
 
 - `dotnet build src/MCP_Rhino.Server/MCP_Rhino.Server.csproj --nologo` → succeeded (0 warnings, 0 errors).
 - `dotnet build src/MCP_Rhino.Bridge/MCP_Rhino.Bridge.csproj --nologo` → succeeded.
-- `dotnet run --project src/MCP_Rhino.Server/MCP_Rhino.Server.csproj --no-build -- online-mutation-refactor-smoke-test test-files/MCP_rhino_test.3dm` → all six checkpoints green; `Initial objects: 1014 / Final objects: 1014`; `LIVE_RHINO_REQUIRED` returned for `SetDocumentUserStrings`, `CreatePoints`, `ApplyObjectUserTextWrites`.
+- `dotnet run --project src/MCP_Rhino.Server/MCP_Rhino.Server.csproj --no-build -- online-mutation-refactor-smoke-test Runtime_Test/MCP_rhino_test.3dm` → all six checkpoints green; `Initial objects: 1014 / Final objects: 1014`; `LIVE_RHINO_REQUIRED` returned for `SetDocumentUserStrings`, `CreatePoints`, `ApplyObjectUserTextWrites`.
 - `dotnet run --project src/MCP_Rhino.Bridge/MCP_Rhino.Bridge.csproj --no-build` → exited with the expected friendly `\\.\pipe\mcp_rhino` connect-timeout message (Rhino not running).
 
 ### Outstanding Notes

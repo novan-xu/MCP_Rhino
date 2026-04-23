@@ -169,7 +169,7 @@ MCP Client 配置不变(仍通过 `MCP_Rhino.Bridge.exe` 连 `\\.\pipe\mcp_rhino
 ## 验证
 
 1. **build**:`dotnet build src/MCP_Rhino.Server/MCP_Rhino.Server.csproj --nologo` 无警告通过;`dotnet build src/MCP_Rhino.Bridge/...` 同步通过。
-2. **CLI fallback smoke**:`dotnet run --project src/MCP_Rhino.Server -- layer-management-smoke-test test-files/MCP_rhino_test.3dm`
+2. **CLI fallback smoke**:`dotnet run --project src/MCP_Rhino.Server -- layer-management-smoke-test Runtime_Test/MCP_rhino_test.3dm`
    - `GetLayers` 返回 offline 读取结果,字段含 PlotColor/PlotWeight/LinetypeName/RenderMaterialName;`Warnings.Count == 0`(无 live 宿主可查 stale)。
    - `CreateLayers` / `ModifyLayers` / `DeleteLayers` / `PurgeLayers` / `PreviewModifyLayers` / `PreviewDeleteLayers` / `PreviewPurgeLayers` 全部返回 `LIVE_RHINO_REQUIRED`。
    - 工作副本对象数和图层数无变化。

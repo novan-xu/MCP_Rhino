@@ -1,4 +1,4 @@
-# 260422_EXET_file-import-export-tools
+﻿# 260422_EXET_file-import-export-tools
 
 ## 对应计划
 
@@ -55,7 +55,7 @@
    本次会话内只实际执行了 CLI fallback smoke，未在 Rhino 插件宿主内执行 `_McpFileImportExportSmoke`。live smoke 代码已接入并编译通过，但其 happy path 结果尚未在本次 EXET 中实测记录。
 
 4. linked block happy path fixture
-   现有 `test-files/` 未提供已挂接 linked block 的现成夹具，因此当前 smoke 主要覆盖了 `UpdateLinkedBlock` 的 missing-definition 硬错误路径；真实 refresh happy path 需后续补 fixture 后再跑。
+   现有 `Runtime_Test/` 未提供已挂接 linked block 的现成夹具，因此当前 smoke 主要覆盖了 `UpdateLinkedBlock` 的 missing-definition 硬错误路径；真实 refresh happy path 需后续补 fixture 后再跑。
 
 ## 施工中发现并修复的问题
 
@@ -93,7 +93,7 @@ dotnet build src\MCP_Rhino.Server\MCP_Rhino.Server.csproj --nologo
 命令：
 
 ```powershell
-dotnet run --project src\MCP_Rhino.Server -- file-import-export-smoke-test test-files\MCP_rhino_test.3dm
+dotnet run --project src\MCP_Rhino.Server -- file-import-export-smoke-test Runtime_Test\MCP_rhino_test.3dm
 ```
 
 结果：
@@ -112,7 +112,7 @@ dotnet run --project src\MCP_Rhino.Server -- file-import-export-smoke-test test-
 结论：
 
 - 8 个 live-only tool 在 CLI fallback 模式下均按预期返回 live-only 拒绝路径。
-- 本次会话未对 `test-files/MCP_rhino_test.3dm` 做离线写回。
+- 本次会话未对 `Runtime_Test/MCP_rhino_test.3dm` 做离线写回。
 
 ### 3. live smoke
 

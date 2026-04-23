@@ -331,7 +331,7 @@ MCP Tool 调用示例：
 
 构建 / smoke：
 - `dotnet build src/MCP_Rhino.Server/MCP_Rhino.Server.csproj --nologo` 无 Warning 通过。
-- 各子域 smoke：`dotnet run --project src/MCP_Rhino.Server -- geometry-<subdomain>-smoke-test test-files/MCP_rhino_test.3dm`
+- 各子域 smoke：`dotnet run --project src/MCP_Rhino.Server -- geometry-<subdomain>-smoke-test Runtime_Test/MCP_rhino_test.3dm`
   - CLI fallback 路径下：所有 Apply / Preview Tool 返回 `LIVE_RHINO_REQUIRED`；工作副本对象数无变化。
 - Live 手工 smoke（Rhino 内 `_McpDevSmoke <subdomain>`）：
   - Mirror / NonUniformScale / Array / Orient：源对象数量变化符合预期；Edit → Undo 一步还原。

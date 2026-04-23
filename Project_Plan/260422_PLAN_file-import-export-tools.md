@@ -294,7 +294,7 @@ MCP Tool 调用示例：
 
 构建 / smoke：
 - `dotnet build src/MCP_Rhino.Server/MCP_Rhino.Server.csproj --nologo` 无 Warning 通过。
-- CLI fallback：`dotnet run --project src/MCP_Rhino.Server -- file-import-export-smoke-test test-files/MCP_rhino_test.3dm`：
+- CLI fallback：`dotnet run --project src/MCP_Rhino.Server -- file-import-export-smoke-test Runtime_Test/MCP_rhino_test.3dm`：
   - 所有 8 个 Tool 返回明确的 live-only 错误，优先为 `LIVE_RHINO_REQUIRED`。
   - 工作副本对象数 / 图层数 / user text 无变化。
 - Live 手工 smoke（Rhino 内 `_McpFileImportExportSmoke`）：

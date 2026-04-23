@@ -13,7 +13,7 @@ MCP_Rhino 当前已有 Layer / 几何创建 / 几何修改 / UserText / Document
 
 - **只做 RhinoCommon + `RhinoDoc.ActiveDoc` 路径**，不再为本期引入任何 offline Tool / offline calculator。
 - 所有能力统一通过 `*InLive` Tool 暴露，读取当前 Rhino 会话中的真实文档状态。
-- 不写文档、不开 Undo record、不生成工作副本，测试统一直接使用 `test-files/MCP_rhino_test.3dm`。
+- 不写文档、不开 Undo record、不生成工作副本，测试统一直接使用 `Runtime_Test/MCP_rhino_test.3dm`。
 
 ## 目标
 
@@ -211,9 +211,9 @@ MCP Tool 调用示例：
 构建 / smoke：
 
 - `dotnet build src/MCP_Rhino.Server/MCP_Rhino.Server.csproj --nologo` 通过。
-- `dotnet run --project src/MCP_Rhino.Server -- geometry-analysis-smoke-test test-files/MCP_rhino_test.3dm`
+- `dotnet run --project src/MCP_Rhino.Server -- geometry-analysis-smoke-test Runtime_Test/MCP_rhino_test.3dm`
   在非 Rhino Plugin 环境下返回明确的 live-only 提示或 `LIVE_RHINO_REQUIRED`，不再假装提供 CLI fallback。
-- 在 Rhino 中打开并保存 `test-files/MCP_rhino_test.3dm` 后，运行 **`_McpGeometryAnalysisSmoke`**：
+- 在 Rhino 中打开并保存 `Runtime_Test/MCP_rhino_test.3dm` 后，运行 **`_McpGeometryAnalysisSmoke`**：
   - `McpGeometryAnalysisSmokeCommand` 直接调用 `"geometry-analysis-smoke-test"`。
   - 10 个 `*InLive` Tool 返回 `Success=true`。
   - `doc.Objects.Count`、`doc.Layers.ActiveCount`、`doc.Strings.Count`、object user text key count 前后无变化。
@@ -255,6 +255,6 @@ MCP Tool 调用示例：
   - `Project_Plan/260422_PLAN_geometry-analysis-tools.md`
   - `Project_Exet/260422_EXET_geometry-analysis-tools.md`
   - `Project_Test/260422_TEST_geometry-analysis-tools/`
-- 测试输入统一直接使用 `test-files/MCP_rhino_test.3dm`，不再引入工作副本约定。
+- 测试输入统一直接使用 `Runtime_Test/MCP_rhino_test.3dm`，不再引入工作副本约定。
 - Rhino live smoke 入口改为本期独立命令 `_McpGeometryAnalysisSmoke`，不再复用共享 `_McpDevSmoke`。
 

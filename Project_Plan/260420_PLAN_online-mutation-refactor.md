@@ -164,7 +164,7 @@ Live Rhino 能力在当前代码库是空白地——无任何 `RhinoDoc.ActiveD
    - 删除工具：`CreateArchiveSnapshotTool`、`CleanupArchiveTool`、`InspectFileMutationReadinessTool`。
    - 删除 Skill：`ArchiveSnapshotSkill`、`ArchiveRetentionSkill`、`FileMutationPreflightSkill`、`FileOpenStateCheckSkill`。
    - 删除 Contracts：归档相关 Request / Response DTO 及 warning code。
-   - 归档目录 `test-files/archive/` 的既有快照文件保留（不自动清理）；用户可手工管理。
+   - 归档目录 `Runtime_Test/archive/` 的既有快照文件保留（不自动清理）；用户可手工管理。
 
 7. **校验策略更新**
    - 在既有校验集合基础上新增硬错误：
@@ -184,8 +184,8 @@ Live Rhino 能力在当前代码库是空白地——无任何 `RhinoDoc.ActiveD
    - `OnLoad` 调用链：`RhinoPlugin.OnLoad` → `DependencyInjection.AddOfflineRhinoAdapters + AddLiveRhinoAdapters + AddMcpServer` → `McpNamedPipeServer.StartAsync()`；Client 侧通过 `MCP_Rhino.Bridge.exe` 把 stdio 桥到管道（详见关键设计 #13）。
 
 9. **测试策略**
-   - **Offline read 回归**：继续依赖 `test-files/*.3dm` fixture；`tests/MCP_Rhino.UnitTests/` 首次落盘（当前只有 README），把 filter / get / inspect 类 Service 的 unit test 补上。
-   - **Live write smoke**：`Project_Test/260420_TEST_online-mutation-refactor/` 新增一份 smoke 脚本，步骤：启动 Rhino 8 → 加载 plugin → 打开 `test-files/MCP_rhino_test.3dm` → 在 Rhino 命令行运行 `_McpDevSmoke` 依次触发 13 个写入 Tool 与 5 个 preview-of-mutation Tool → 校验 Preview/Apply 对齐 → 校验 Undo 能回退 → 校验关闭文档不触发落盘 → 校验空改动不产生 Undo 条目 → 校验未保存文档返回 `ACTIVE_DOC_UNSAVED`。MCP 正路（Bridge → Pipe → plugin）另行用真实 MCP Client 走冒烟，不走 `_McpDevSmoke`，确保两条路径都覆盖。
+   - **Offline read 回归**：继续依赖 `Runtime_Test/*.3dm` fixture；`tests/MCP_Rhino.UnitTests/` 首次落盘（当前只有 README），把 filter / get / inspect 类 Service 的 unit test 补上。
+   - **Live write smoke**：`Project_Test/260420_TEST_online-mutation-refactor/` 新增一份 smoke 脚本，步骤：启动 Rhino 8 → 加载 plugin → 打开 `Runtime_Test/MCP_rhino_test.3dm` → 在 Rhino 命令行运行 `_McpDevSmoke` 依次触发 13 个写入 Tool 与 5 个 preview-of-mutation Tool → 校验 Preview/Apply 对齐 → 校验 Undo 能回退 → 校验关闭文档不触发落盘 → 校验空改动不产生 Undo 条目 → 校验未保存文档返回 `ACTIVE_DOC_UNSAVED`。MCP 正路（Bridge → Pipe → plugin）另行用真实 MCP Client 走冒烟，不走 `_McpDevSmoke`，确保两条路径都覆盖。
    - **无头 CI**：一期不做；依赖 Rhino.Inside + xUnit 集成的成本暂不支付，列为后续扩展。
 
 10. **主线程封送（RhinoCommon threading）**

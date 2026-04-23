@@ -32,11 +32,11 @@ Project_Test/
 
 ## 2. 测试输入约定
 
-测试统一直接使用 `test-files/` 下的 `.3dm` fixture。
+测试统一直接使用 `Runtime_Test/` 下的 `.3dm` fixture。
 
 - 不再引入 `_validation/<slug>/` 工作副本约定。
 - 冒烟测试应优先选择只读路径；若测试本身涉及 mutation，必须在同一轮 smoke 末尾恢复 fixture 基线状态，并用断言证明状态已回归。
-- EXET 文档中的「测试记录」只记录实际使用的 `test-files/...` 路径，不再写工作副本路径。
+- EXET 文档中的「测试记录」只记录实际使用的 `Runtime_Test/...` 路径，不再写工作副本路径。
 
 ---
 
@@ -78,7 +78,7 @@ partial void RegisterExtensionHandlers()
 示例：
 
 ```powershell
-dotnet run --project src/MCP_Rhino.Server -- geometry-analysis-smoke-test test-files/MCP_rhino_test.3dm
+dotnet run --project src/MCP_Rhino.Server -- geometry-analysis-smoke-test Runtime_Test/MCP_rhino_test.3dm
 ```
 
 ```text
@@ -92,14 +92,14 @@ _McpGeometryAnalysisSmoke
 一个合格的轻量化冒烟测试单元必须：
 
 1. **入参单一**：首参数为 `.3dm` 路径，其它参数有默认值；缺参数时输出用法并返回失败。
-2. **统一使用 `test-files/` fixture**：不再复制工作副本；若测试会写文档，必须在测试结束前恢复到基线状态。
+2. **统一使用 `Runtime_Test/` fixture**：不再复制工作副本；若测试会写文档，必须在测试结束前恢复到基线状态。
 3. **退出码清晰**：
    - 全部 checkpoint 通过 → `ExitCode = 0`
    - 任一断言失败、源文件缺失、参数解析失败 → `ExitCode = 1`
 4. **checkpoint 汇报**：维护 `List<string> checkpoints`，每通过一步追加一条记录，结尾统一输出。
 5. **断言复用**：使用 `RequireSuccess / RequireFailure / Require*` 这类 helper 判断 `OperationResponse<T>` 与文档状态。
 6. **happy path + hard error 双覆盖**：
-   - happy path：每个 Tool 至少一次成功调用，并直接从 `test-files` 中的目标文档读回状态做断言。
+   - happy path：每个 Tool 至少一次成功调用，并直接从 `Runtime_Test` 中的目标文档读回状态做断言。
    - hard error：每类业务校验失败至少一次。
 7. **状态守恒或显式回归**：
    - 只读测试要证明对象数 / 图层数 / 文档字符串数 / user text key 数不变。
@@ -117,7 +117,7 @@ _McpGeometryAnalysisSmoke
 4. 在测试文件里实现 `partial void RegisterExtensionHandlers()`，注册 `"<feature>-smoke-test"`
 5. 若测试需要的 Skill / Service 尚未注入 `DeveloperCommandHandler`，补齐构造参数与 DI 注册
 6. `dotnet build src/MCP_Rhino.Server/MCP_Rhino.Server.csproj --nologo`
-7. `dotnet run --project src/MCP_Rhino.Server -- <feature>-smoke-test test-files/<fixture>.3dm`
+7. `dotnet run --project src/MCP_Rhino.Server -- <feature>-smoke-test Runtime_Test/<fixture>.3dm`
 8. 在 `Project_Exet/<YYMMDD>_EXET_<capability-name>.md` 中记录 checkpoint、退出码与验收结果
 
 ---

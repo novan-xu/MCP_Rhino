@@ -60,7 +60,7 @@
   - 结果: PASS
   - 输出摘要: `Build succeeded. 0 Warning(s) 0 Error(s)`
 - CLI fallback smoke:
-  - `dotnet run --project src\MCP_Rhino.Server -- layer-management-smoke-test test-files\MCP_rhino_test.3dm`
+  - `dotnet run --project src\MCP_Rhino.Server -- layer-management-smoke-test Runtime_Test\MCP_rhino_test.3dm`
   - 结果: PASS
   - 关键输出:
     - `Initial layers: 30`

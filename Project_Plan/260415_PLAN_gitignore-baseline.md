@@ -6,7 +6,7 @@ The repository did not yet have a root-level `.gitignore`, while local developme
 
 ## Goal
 
-Add a root `.gitignore` that fits the current MCP_Rhino repository and prevents common development artifacts from being committed, while keeping source code, documentation, project plans, and Rhino test assets under version control.
+Add a root `.gitignore` that fits the current MCP_Rhino repository and prevents common development artifacts from being committed, while keeping source code, project guides, project plans, and Rhino test assets under version control.
 
 ## Architecture Mapping
 
@@ -38,11 +38,11 @@ The repository also contains local/generated artifacts that are not part of the 
 
 The ignore file intentionally does **not** exclude repository content that appears to be real project assets, including:
 
-- `docs/`
+- `Project_Guides/`
 - `Project_Plan/`
-- `test-files/*.3dm`
+- `Runtime_Test/*.3dm`
 
-This keeps Rhino sample/test files and planning documents versioned.
+This keeps Rhino sample/test files, guide documents, and planning documents versioned.
 
 ## Files
 
