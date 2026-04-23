@@ -10,6 +10,8 @@ Define the runtime protocol for handling user tasks with existing `tool / skill 
 - `Workflow/`: how to use and route existing capabilities
 - `log/`: cross-session tool usage history for pattern detection
 
+When adding a new rule file, decide by intent: *how to build* goes to `Project_Guides/`, *how to use* goes to `Workflow/`.
+
 ## Routing Rules
 
 1. Route tasks autonomously. Do not require the user to name a skill.
@@ -39,17 +41,17 @@ Do not wait for execution failure before declaring a capability gap.
 
 Choose one path:
 
-- **Tool**: clear target, clear inputs, few calls, no complex branching
-- **Skill**: fixed workflow, repeated pattern, clear boundary, existing skill coverage
-- **Agent**: dynamic next-step selection, branching, cross-skill coordination
+- **Tool**: clear target, clear inputs, few calls, no complex branching. *Examples: read layers, export files, create basic geometry, read attributes or measurements.*
+- **Skill**: fixed workflow, repeated pattern, clear boundary, existing skill coverage. *Examples: filter-then-confirm, preview-then-apply.*
+- **Agent**: dynamic next-step selection, branching, cross-skill coordination. *Examples: audit-then-choose-analysis-path, state-driven branching.*
 
 ## Layer Boundaries
 
 - **Tool**: single capability, directly exposed, minimal orchestration
 - **Skill**: reusable workflow built from tools or services
-- **Agent**: decision-making, routing, and orchestration; prefer skills before tools
+- **Agent**: goal-driven routing and orchestration. Prefer Skill over Tool; never touch low-level Rhino details directly.
 
-Do not introduce a top-level Orchestrator Agent by default.
+Do not introduce a top-level Orchestrator Agent unless cross-Skill dynamic orchestration becomes a recurring need.
 
 ## Gap Handling
 
@@ -75,24 +77,31 @@ When confirmed, follow:
 3. `Project_Test/YYMMDD_TEST_<capability-name>/`
 4. `Project_Exet/YYMMDD_EXET_<capability-name>.md`
 
-All construction must follow `Project_Guides`.
+All construction must follow all Markdown guide files under `Project_Guides/`.
 
 ## Skill Metadata
 
-Use `*SkillTool` metadata as the single routing source.
-
-Each skill description should state:
-
-- what it does
-- when to use it
-- when it should beat atomic tools
-- input assumptions
-- boundaries
-- non-applicable cases
+- **Carrier**: the C# registration layer. Use the `*SkillTool` class's `[Description]` attribute as the single routing source. Do not maintain a separate prompt layer or standalone index - avoids multi-source drift.
+- **`*SkillTool` meaning**: server-side skills under `Skills/` must be wrapped as `*SkillTool` (or an equivalent MCP Tool) to be visible to the model; the model sees MCP tools, not raw Skills.
+- **Description style**:
+  - Skill Tool `[Description]` - **task-oriented**, close to user intent.
+  - Atomic Tool `[Description]` - **operation-oriented**.
+- **Naming**: keep the `Skill` infix in Skill Tool names to aid model classification.
+- **Description coverage**: each skill description states
+  - what it does
+  - when to use it
+  - when it should beat atomic tools
+  - input assumptions
+  - boundaries
+  - non-applicable cases
 
 ## Skill Candidate Suggestion
 
 Use `log/` as the basis for identifying repeated task patterns.
+
+- Detection requires cross-session `log/`; single-session data is insufficient for stable identification.
+- A repeated pattern is detected when there are at least 3 records and the overlap of used `tools` is 70% or higher.
+- Unaccepted candidates are not persisted to any file.
 
 If a repeated pattern is detected, suggest a skill candidate at the end of the response, including:
 
@@ -109,6 +118,9 @@ Do not start planning unless the user explicitly asks to begin.
 - format: JSONL
 - fields: `ts`, `task`, `tools`
 - write path: unified `AppendActivityLogTool`
+- **Read**: at task start, load logs for the current month plus the previous 2 months. Example: if the current month is April, read February, March, and April.
+- **Write discipline**: only `AppendActivityLogTool` writes; business tools do not write logs themselves.
+- **No params / no results**: record only `ts`, `task`, `tools`.
 
 Example:
 
