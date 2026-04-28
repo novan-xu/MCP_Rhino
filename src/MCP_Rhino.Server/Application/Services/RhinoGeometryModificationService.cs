@@ -50,10 +50,19 @@ public sealed class RhinoGeometryModificationService
         TransformObjectsRequest request,
         RhinoObjectFilterResult selection)
     {
+        return Apply(request, selection, "MCP: TransformObjects");
+    }
+
+    public OperationResponse<GeometryModificationResponse> Apply(
+        TransformObjectsRequest request,
+        RhinoObjectFilterResult selection,
+        string undoDescription)
+    {
         return ApplyTransformInternal(
             request.FilePath,
             request.Transform,
             selection,
+            undoDescription,
             request.ConfirmedObjectIds.Count > 0 && HasAnySelectionCriteria(
                 request.LayerQueries,
                 request.ConfirmedLayerFullPaths,
@@ -428,6 +437,7 @@ public sealed class RhinoGeometryModificationService
         string filePath,
         GeometryTransformSpec transform,
         RhinoObjectFilterResult selection,
+        string undoDescription,
         bool ignoredFilters)
     {
         if (selection.Objects.Count == 0)
@@ -435,7 +445,7 @@ public sealed class RhinoGeometryModificationService
             return OperationResponse<GeometryModificationResponse>.Fail("No objects matched the selection.");
         }
 
-        return _documentAccessor.ExecuteWithUndo(filePath, "MCP: TransformObjects", document =>
+        return _documentAccessor.ExecuteWithUndo(filePath, undoDescription, document =>
         {
             OperationResponse<IReadOnlyList<ObjectEditWarning>> validation = _validator.Validate(transform, selection.Objects);
             if (!validation.Success)

@@ -17,7 +17,7 @@ public sealed class GetGeometryFramesInLiveTool
     }
 
     [McpServerTool]
-    [Description("Inspect live curve start/end/tangent frames and surface normal/frame results from the active Rhino document. ObjectId only.")]
+    [Description("Inspect live curve and surface frames from the active Rhino document. Supports legacy single-frame entries plus ParameterSpec batch sampling. ObjectId only.")]
     public OperationResponse<GetGeometryFramesInLiveResponse> GetGeometryFramesInLive(string filePath, List<GeometryFrameEntryRequest> entries)
     {
         return _service.GetGeometryFramesInLive(new GetGeometryFramesInLiveRequest

@@ -17,17 +17,20 @@ public sealed class RhinoGeometryMetricsService
     private readonly IGeometryValidator _validator;
     private readonly ILiveGeometryBuilder _builder;
     private readonly ILiveGeometryMetricsCalculator _calculator;
+    private readonly IGeometryFrameSampler _frameSampler;
 
     public RhinoGeometryMetricsService(
         ILiveRhinoDocumentAccessor documentAccessor,
         IGeometryValidator validator,
         ILiveGeometryBuilder builder,
-        ILiveGeometryMetricsCalculator calculator)
+        ILiveGeometryMetricsCalculator calculator,
+        IGeometryFrameSampler frameSampler)
     {
         _documentAccessor = documentAccessor;
         _validator = validator;
         _builder = builder;
         _calculator = calculator;
+        _frameSampler = frameSampler;
     }
 
     public OperationResponse<GetObjectMetricsInLiveResponse> GetObjectMetricsInLive(GetObjectMetricsInLiveRequest request)
@@ -258,17 +261,20 @@ public sealed class RhinoGeometryMetricsService
                     continue;
                 }
 
-                OperationResponse<GeometryFrameResult> frame = _calculator.GetFrame(
-                    entryId,
-                    entry.ObjectId,
-                    resolved.Data.GeometryTypeName,
-                    resolved.Data.Geometry,
-                    entry.Kind,
-                    entry.Parameter,
-                    entry.U,
-                    entry.V);
+                OperationResponse<GeometryFrameResult> frame = entry.ParameterSpec is not null
+                    ? GetSampledFrameResult(entryId, entry, resolved.Data)
+                    : _calculator.GetFrame(
+                        entryId,
+                        entry.ObjectId,
+                        resolved.Data.GeometryTypeName,
+                        resolved.Data.Geometry,
+                        entry.Kind,
+                        entry.Parameter,
+                        entry.U,
+                        entry.V);
+
                 results.Add(frame.Success && frame.Data is not null
-                    ? frame.Data
+                    ? EnsureFrameSamples(frame.Data)
                     : new GeometryFrameResult
                     {
                         EntryId = entryId,
@@ -291,6 +297,73 @@ public sealed class RhinoGeometryMetricsService
 
             return OperationResponse<GetGeometryFramesInLiveResponse>.Ok(response, "Live geometry frame inspection completed.");
         });
+    }
+
+    private OperationResponse<GeometryFrameResult> GetSampledFrameResult(
+        string entryId,
+        GeometryFrameEntryRequest entry,
+        ResolvedGeometryReference resolved)
+    {
+        if (entry.ParameterSpec is null)
+        {
+            return OperationResponse<GeometryFrameResult>.Fail("ParameterSpec is required.");
+        }
+
+        OperationResponse<IReadOnlyList<FrameSample>> samples = _frameSampler.Sample(resolved.Geometry, entry.ParameterSpec);
+        if (!samples.Success || samples.Data is null)
+        {
+            return OperationResponse<GeometryFrameResult>.Fail(samples.Message);
+        }
+
+        FrameSample? first = samples.Data.FirstOrDefault();
+        return OperationResponse<GeometryFrameResult>.Ok(new GeometryFrameResult
+        {
+            EntryId = entryId,
+            ObjectId = entry.ObjectId,
+            GeometryTypeName = resolved.GeometryTypeName,
+            Kind = entry.Kind,
+            Success = true,
+            Message = samples.Data.Any(sample => sample.IsDegenerate) ? "FRAME_DEGENERATE" : string.Empty,
+            Parameter = first?.Parameter,
+            U = first?.U,
+            V = first?.V,
+            Origin = first?.Origin,
+            Tangent = first?.Tangent,
+            Normal = first?.Normal,
+            XAxis = first?.XAxis,
+            YAxis = first?.YAxis,
+            ZAxis = first?.ZAxis,
+            Samples = samples.Data
+        });
+    }
+
+    private static GeometryFrameResult EnsureFrameSamples(GeometryFrameResult result)
+    {
+        if (result.Samples.Count > 0)
+        {
+            return result;
+        }
+
+        result.Samples = new[]
+        {
+            new FrameSample
+            {
+                Index = 0,
+                Parameter = result.Parameter,
+                U = result.U,
+                V = result.V,
+                Origin = result.Origin,
+                Tangent = result.Tangent,
+                Normal = result.Normal,
+                XAxis = result.XAxis,
+                YAxis = result.YAxis,
+                ZAxis = result.ZAxis,
+                IsDegenerate = false,
+                Message = result.Message
+            }
+        };
+
+        return result;
     }
 
     private OperationResponse<GeometryAngleResult> MeasureThreePointAngle(

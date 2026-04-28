@@ -19,4 +19,5 @@ public sealed class GeometryFrameResult
     public GeometryVectorData? XAxis { get; set; }
     public GeometryVectorData? YAxis { get; set; }
     public GeometryVectorData? ZAxis { get; set; }
+    public IReadOnlyList<FrameSample> Samples { get; set; } = Array.Empty<FrameSample>();
 }

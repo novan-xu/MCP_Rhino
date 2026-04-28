@@ -10,4 +10,5 @@ public sealed class GeometryFrameEntryRequest
     public double? Parameter { get; set; }
     public double? U { get; set; }
     public double? V { get; set; }
+    public GeometryFrameParameterSpecRequest? ParameterSpec { get; set; }
 }

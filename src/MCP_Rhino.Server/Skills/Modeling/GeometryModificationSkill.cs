@@ -59,6 +59,33 @@ public sealed class GeometryModificationSkill
         return _modificationService.Apply(request, selection.Data);
     }
 
+    internal OperationResponse<GeometryModificationPreviewResponse> PreviewTransformForGeometryEdit(PreviewTransformObjectsRequest request)
+    {
+        return Preview(request);
+    }
+
+    internal OperationResponse<GeometryModificationResponse> ApplyTransformForGeometryEdit(
+        TransformObjectsRequest request,
+        string undoDescription)
+    {
+        OperationResponse<RhinoObjectFilterResult> selection = ResolveSelection(
+            request.FilePath,
+            request.ConfirmedObjectIds,
+            request.LayerQueries,
+            request.ConfirmedLayerFullPaths,
+            request.ObjectTypes,
+            request.UserAttributeConditions,
+            request.MatchMode,
+            request.UserAttributeMatchMode);
+
+        if (!selection.Success || selection.Data is null)
+        {
+            return OperationResponse<GeometryModificationResponse>.Fail(selection.Message);
+        }
+
+        return _modificationService.Apply(request, selection.Data, undoDescription);
+    }
+
     public OperationResponse<GeometryModificationPreviewResponse> Preview(PreviewDeleteObjectsRequest request)
     {
         OperationResponse<RhinoObjectFilterResult> selection = ResolveSelection(

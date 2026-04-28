@@ -1,6 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
 using MCP_Rhino.Server.Application.Interfaces;
 using MCP_Rhino.Server.Application.Services;
+using MCP_Rhino.Server.Application.Services.Edit;
+using MCP_Rhino.Server.Application.Services.Rebuild;
 using MCP_Rhino.Server.Application.Services.Analysis;
 using MCP_Rhino.Server.Application.Services.Filters;
 using MCP_Rhino.Server.Infrastructure.CLI;
@@ -37,6 +39,19 @@ public static class DependencyInjection
         services.AddSingleton<ILiveGeometryIntersectionCalculator, LiveRhinoGeometryIntersectionCalculator>();
         services.AddSingleton<ILiveFileExporter, LiveRhinoFileExporter>();
         services.AddSingleton<ILiveExternalReferenceManager, LiveRhinoExternalReferenceManager>();
+        services.AddSingleton<IEditableGeometryDescriptorService, LiveEditableGeometryDescriptorService>();
+        services.AddSingleton<IGeometryFrameSampler, LiveGeometryFrameSampler>();
+        services.AddSingleton<IGeometryMetadataOperator, LiveGeometryMetadataOperator>();
+        services.AddSingleton<IBrepSurfaceDowngrader, LiveBrepSurfaceDowngrader>();
+        services.AddSingleton<IGeometryEditValidator, LiveGeometryEditValidator>();
+        services.AddSingleton<IGeometryReconstructor, LiveGeometryReconstructor>();
+        services.AddSingleton<IGeometryMutationService, LiveGeometryMutationService>();
+        services.AddSingleton<IDerivedPointOperationEvaluator, LiveDerivedPointOperationEvaluator>();
+        services.AddSingleton<IGeometryEditStrategyResolver, LiveGeometryEditStrategyResolver>();
+        services.AddSingleton<IGeometryTransformExecutionBridge, LiveGeometryTransformExecutionBridge>();
+        services.AddSingleton<IBoundaryReferenceCurveAnalyzer, LiveBoundaryReferenceCurveAnalyzer>();
+        services.AddSingleton<ISurfaceLocalCoordinateSystemBuilder, LiveSurfaceLocalCoordinateSystemBuilder>();
+        services.AddSingleton<IBoundaryDrivenSurfaceReconstructor, LiveBoundaryDrivenSurfaceReconstructor>();
         return services;
     }
 
@@ -53,6 +68,19 @@ public static class DependencyInjection
         services.AddSingleton<ILiveGeometryIntersectionCalculator, LiveRhinoGeometryIntersectionCalculator>();
         services.AddSingleton<ILiveFileExporter, LiveRhinoFileExporter>();
         services.AddSingleton<ILiveExternalReferenceManager, LiveRhinoExternalReferenceManager>();
+        services.AddSingleton<IEditableGeometryDescriptorService, LiveEditableGeometryDescriptorService>();
+        services.AddSingleton<IGeometryFrameSampler, LiveGeometryFrameSampler>();
+        services.AddSingleton<IGeometryMetadataOperator, LiveGeometryMetadataOperator>();
+        services.AddSingleton<IBrepSurfaceDowngrader, LiveBrepSurfaceDowngrader>();
+        services.AddSingleton<IGeometryEditValidator, LiveGeometryEditValidator>();
+        services.AddSingleton<IGeometryReconstructor, LiveGeometryReconstructor>();
+        services.AddSingleton<IGeometryMutationService, LiveGeometryMutationService>();
+        services.AddSingleton<IDerivedPointOperationEvaluator, LiveDerivedPointOperationEvaluator>();
+        services.AddSingleton<IGeometryEditStrategyResolver, LiveGeometryEditStrategyResolver>();
+        services.AddSingleton<IGeometryTransformExecutionBridge, LiveGeometryTransformExecutionBridge>();
+        services.AddSingleton<IBoundaryReferenceCurveAnalyzer, LiveBoundaryReferenceCurveAnalyzer>();
+        services.AddSingleton<ISurfaceLocalCoordinateSystemBuilder, LiveSurfaceLocalCoordinateSystemBuilder>();
+        services.AddSingleton<IBoundaryDrivenSurfaceReconstructor, LiveBoundaryDrivenSurfaceReconstructor>();
         return services;
     }
 
@@ -70,6 +98,10 @@ public static class DependencyInjection
         services.AddSingleton<RhinoGeometryIntersectionService>();
         services.AddSingleton<RhinoFileExportService>();
         services.AddSingleton<RhinoExternalReferenceService>();
+        services.AddSingleton<ICurveEditOrchestrator, CurveEditOrchestrator>();
+        services.AddSingleton<ISurfaceEditOrchestrator, SurfaceEditOrchestrator>();
+        services.AddSingleton<ISurfaceBoundaryPointOrderer, SurfaceBoundaryPointOrderer>();
+        services.AddSingleton<ISurfaceRebuildOrchestrator, SurfaceRebuildOrchestrator>();
         services.AddSingleton<DeveloperCommandHandler>();
         return services;
     }

@@ -21,6 +21,7 @@ public static class AgentRegistration
         services.AddSingleton<ObjectEditApplySkill>();
         services.AddSingleton<GeometryCreationSkill>();
         services.AddSingleton<GeometryModificationSkill>();
+        services.AddSingleton<SurfacePointOrderRebuildSkill>();
         services.AddSingleton<RhinoObjectFilterAgent>();
         services.AddSingleton<RhinoObjectEditingAgent>();
         return services;

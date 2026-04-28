@@ -1,8 +1,10 @@
 ﻿# MCP_Rhino Agents Entry
 
-This file is the entry point for agents working in this repository.
+Before taking any action in this repository, read this file first.
+Do not skip it.
 
-Do not treat this file as the full rule body. Use it to decide which document set to follow next.
+This file is the required entry point for agents working in this repository.
+Do not treat it as the full rule body. Use it to decide which document set to follow next.
 
 ## Project Intent
 
