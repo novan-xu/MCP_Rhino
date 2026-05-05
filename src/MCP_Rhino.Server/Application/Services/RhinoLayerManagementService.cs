@@ -5,10 +5,6 @@ using MCP_Rhino.Server.Application.Interfaces;
 using MCP_Rhino.Server.Contracts.Requests;
 using MCP_Rhino.Server.Contracts.Responses;
 using MCP_Rhino.Server.Domain.Models;
-using Rhino.FileIO;
-using File3dmLayer = Rhino.DocObjects.Layer;
-using File3dmLinetype = Rhino.DocObjects.Linetype;
-using File3dmMaterial = Rhino.DocObjects.Material;
 using LiveLayer = rhinocommon::Rhino.DocObjects.Layer;
 using ObjectAttributes = rhinocommon::Rhino.DocObjects.ObjectAttributes;
 using RhinoDoc = rhinocommon::Rhino.RhinoDoc;
@@ -18,61 +14,20 @@ namespace MCP_Rhino.Server.Application.Services;
 
 public sealed class RhinoLayerManagementService
 {
-    private readonly IRhinoDocumentRepository _repository;
     private readonly ILiveRhinoDocumentAccessor _documentAccessor;
 
-    public RhinoLayerManagementService(
-        IRhinoDocumentRepository repository,
-        ILiveRhinoDocumentAccessor documentAccessor)
+    public RhinoLayerManagementService(ILiveRhinoDocumentAccessor documentAccessor)
     {
-        _repository = repository;
         _documentAccessor = documentAccessor;
     }
 
     public OperationResponse<LayerReadResponse> Get(GetLayersRequest request)
     {
-        if (!_repository.Exists(request.FilePath))
-        {
-            return OperationResponse<LayerReadResponse>.Fail($"File was not found: {request.FilePath}");
-        }
-
-        try
-        {
-            using var model = _repository.Read(request.FilePath);
-
-            Dictionary<int, int> objectCounts = BuildOfflineObjectCounts(model);
-            Dictionary<int, string> linetypeNames = BuildOfflineLinetypeNames(model);
-            Dictionary<int, string> materialNames = BuildOfflineMaterialNames(model);
-            Dictionary<Guid, string> layerPathsById = model.AllLayers
-                .Where(layer => !layer.IsDeleted)
-                .ToDictionary(layer => layer.Id, layer => layer.FullPath);
-
-            List<RhinoLayerDetail> entries = model.AllLayers
-                .Where(layer => !layer.IsDeleted)
-                .Select(layer => BuildOfflineDetail(layer, objectCounts, linetypeNames, materialNames, layerPathsById))
-                .OrderBy(layer => layer.FullPath, StringComparer.OrdinalIgnoreCase)
-                .ToList();
-
-            var response = new LayerReadResponse
-            {
-                FilePath = request.FilePath,
-                TotalCount = entries.Count,
-                Warnings = CreateOfflineWarnings(request.FilePath),
-                Entries = entries
-            };
-
-            return OperationResponse<LayerReadResponse>.Ok(response, "Layers read completed.");
-        }
-        catch (Exception ex)
-        {
-            return OperationResponse<LayerReadResponse>.Fail($"Layer read failed: {ex.Message}");
-        }
+        return GetInLive(request);
     }
 
-    // Live variant: reads layers from RhinoDoc so in-memory creates/renames/deletes
-    // that have not been saved to disk are visible. Reuses BuildLiveLayerSnapshots
-    // (already exercised by PreviewModify/Delete/Purge) so the output shape matches
-    // what the offline Get returns.
+    // Reads layers from RhinoDoc so in-memory creates/renames/deletes that have
+    // not been saved to disk are visible.
     public OperationResponse<LayerReadResponse> GetInLive(GetLayersRequest request)
     {
         return _documentAccessor.Execute(request.FilePath, document =>
@@ -1361,40 +1316,6 @@ public sealed class RhinoLayerManagementService
         return snapshots.OrderBy(item => item.FullPath, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
-    private static RhinoLayerDetail BuildOfflineDetail(
-        File3dmLayer layer,
-        IReadOnlyDictionary<int, int> objectCounts,
-        IReadOnlyDictionary<int, string> linetypeNames,
-        IReadOnlyDictionary<int, string> materialNames,
-        IReadOnlyDictionary<Guid, string> layerPathsById)
-    {
-        return new RhinoLayerDetail
-        {
-            LayerIndex = layer.Index,
-            LayerName = layer.Name,
-            FullPath = layer.FullPath,
-            ParentFullPath = layer.ParentLayerId == Guid.Empty || !layerPathsById.TryGetValue(layer.ParentLayerId, out string? parentPath)
-                ? null
-                : parentPath,
-            ObjectCount = objectCounts.GetValueOrDefault(layer.Index),
-            Color = ToDisplayColor(layer.Color),
-            Visible = layer.IsVisible,
-            Locked = layer.IsLocked,
-            IsCurrentLayer = false,
-            PlotColor = InferPlotColor(layer.Color, layer.PlotColor),
-            PlotWeight = InferPlotWeight(layer.PlotWeight),
-            LinetypeName = layer.LinetypeIndex >= 0 ? linetypeNames.GetValueOrDefault(layer.LinetypeIndex) : null,
-            RenderMaterialName = layer.RenderMaterialIndex >= 0 ? materialNames.GetValueOrDefault(layer.RenderMaterialIndex) : null
-        };
-    }
-
-    private static Dictionary<int, int> BuildOfflineObjectCounts(File3dm model)
-    {
-        return model.Objects
-            .GroupBy(item => item.Attributes.LayerIndex)
-            .ToDictionary(group => group.Key, group => group.Count());
-    }
-
     private static Dictionary<int, int> BuildLiveObjectCounts(RhinoDoc document)
     {
         var counts = new Dictionary<int, int>();
@@ -1412,20 +1333,6 @@ public sealed class RhinoLayerManagementService
         return counts;
     }
 
-    private static Dictionary<int, string> BuildOfflineLinetypeNames(File3dm model)
-    {
-        var result = new Dictionary<int, string>();
-        foreach (File3dmLinetype linetype in model.AllLinetypes)
-        {
-            if (!linetype.IsDeleted && !string.IsNullOrWhiteSpace(linetype.Name))
-            {
-                result[linetype.Index] = linetype.Name;
-            }
-        }
-
-        return result;
-    }
-
     private static Dictionary<int, string> BuildLiveLinetypeNames(RhinoDoc document)
     {
         var result = new Dictionary<int, string>();
@@ -1435,20 +1342,6 @@ public sealed class RhinoLayerManagementService
             if (!linetype.IsDeleted && !string.IsNullOrWhiteSpace(linetype.Name))
             {
                 result[linetype.LinetypeIndex] = linetype.Name;
-            }
-        }
-
-        return result;
-    }
-
-    private static Dictionary<int, string> BuildOfflineMaterialNames(File3dm model)
-    {
-        var result = new Dictionary<int, string>();
-        foreach (File3dmMaterial material in model.AllMaterials)
-        {
-            if (!material.IsDeleted && !string.IsNullOrWhiteSpace(material.Name))
-            {
-                result[material.Index] = material.Name;
             }
         }
 
@@ -1511,21 +1404,6 @@ public sealed class RhinoLayerManagementService
         }
 
         return GetLayerDepth(document.Layers[layerIndex].FullPath);
-    }
-
-    private List<ObjectEditWarning> CreateOfflineWarnings(string filePath)
-    {
-        var warnings = new List<ObjectEditWarning>();
-        if (_documentAccessor.TryGetActiveDocumentState(filePath, out bool hasUnsavedChanges) && hasUnsavedChanges)
-        {
-            warnings.Add(new ObjectEditWarning
-            {
-                Code = "OFFLINE_READ_STALE",
-                Message = "The target file is open in Rhino with unsaved changes, so offline read results may be stale."
-            });
-        }
-
-        return warnings;
     }
 
     private static string NormalizeLayerPath(string value)

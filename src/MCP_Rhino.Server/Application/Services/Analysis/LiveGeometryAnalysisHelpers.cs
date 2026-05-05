@@ -86,7 +86,7 @@ internal static class LiveGeometryAnalysisHelpers
     internal static OperationResponse<ResolvedGeometryReference> ResolveReference(
         RhinoDoc document,
         GeometryAnalysisReferenceRequest request,
-        IGeometryValidator validator,
+        ILiveGeometryValidator validator,
         ILiveGeometryBuilder builder,
         bool allowTemporary)
     {

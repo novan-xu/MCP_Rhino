@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "rhino": {
+      "command": "C:/MCP_Rhino/MCP_Rhino.Bridge.exe",
+      "args": ["--pipe", "mcp_rhino_12345"]
+    }
+  }
+}

@@ -13,13 +13,20 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.5" />
     <PackageReference Include="ModelContextProtocol" Version="1.1.0" />
-    <PackageReference Include="Rhino3dm" Version="8.17.0" />
     <PackageReference Include="System.Drawing.Common" Version="8.0.11" />
   </ItemGroup>
 
   <ItemGroup>
     <Reference Include="RhinoCommon" Aliases="rhinocommon">
       <HintPath>C:\Program Files\Rhino 8\System\netcore\RhinoCommon.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Rhino.UI">
+      <HintPath>C:\Program Files\Rhino 8\System\netcore\Rhino.UI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Eto">
+      <HintPath>C:\Program Files\Rhino 8\System\Eto.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>

@@ -8,6 +8,10 @@ namespace MCP_Rhino.Server.Application.Interfaces;
 
 public interface ILiveObjectEditValidator
 {
+    OperationResponse<IReadOnlyList<ObjectEditWarning>> Validate(
+        IReadOnlyList<RhinoObjectEditOperation> operations,
+        IReadOnlyList<RhinoObjectInfo> matchedObjects);
+
     OperationResponse ValidateAgainstDocument(
         RhinoDoc document,
         IReadOnlyList<RhinoObjectEditOperation> operations,

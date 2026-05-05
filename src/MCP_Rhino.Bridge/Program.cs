@@ -1,11 +1,23 @@
 using System.IO.Pipes;
 
-const string PipeName = "mcp_rhino";
 const int ConnectTimeoutMs = 5000;
+
+BridgeOptions? options = BridgeOptions.Parse(args);
+if (options is null)
+{
+    BridgeOptions.WriteUsage(Console.Error);
+    return 1;
+}
+
+if (options.ShowHelp)
+{
+    BridgeOptions.WriteUsage(Console.Error);
+    return 0;
+}
 
 using var pipe = new NamedPipeClientStream(
     ".",
-    PipeName,
+    options.PipeName,
     PipeDirection.InOut,
     PipeOptions.Asynchronous);
 
@@ -16,13 +28,13 @@ try
 catch (TimeoutException)
 {
     await Console.Error.WriteLineAsync(
-        $"Failed to connect to \\\\.\\pipe\\{PipeName} within {ConnectTimeoutMs} ms. Start Rhino and load the MCP_Rhino plugin first.");
+        $"Failed to connect to \\\\.\\pipe\\{options.PipeName} within {ConnectTimeoutMs} ms. Start Rhino and load the MCP_Rhino plugin first.");
     return 1;
 }
 catch (IOException ex)
 {
     await Console.Error.WriteLineAsync(
-        $"Failed to connect to \\\\.\\pipe\\{PipeName}: {ex.Message}. Start Rhino and load the MCP_Rhino plugin first.");
+        $"Failed to connect to \\\\.\\pipe\\{options.PipeName}: {ex.Message}. Start Rhino and load the MCP_Rhino plugin first.");
     return 1;
 }
 
@@ -72,5 +84,50 @@ static async Task AwaitQuietly(Task task)
     }
     catch (IOException)
     {
+    }
+}
+
+internal sealed record BridgeOptions(string PipeName, bool ShowHelp)
+{
+    private const string DefaultPipeName = "mcp_rhino";
+
+    public static BridgeOptions? Parse(string[] args)
+    {
+        string pipeName = DefaultPipeName;
+        bool showHelp = false;
+
+        for (int i = 0; i < args.Length; i++)
+        {
+            string arg = args[i];
+            if (string.Equals(arg, "--help", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(arg, "-h", StringComparison.OrdinalIgnoreCase))
+            {
+                showHelp = true;
+                continue;
+            }
+
+            if (string.Equals(arg, "--pipe", StringComparison.OrdinalIgnoreCase))
+            {
+                if (i + 1 >= args.Length || string.IsNullOrWhiteSpace(args[i + 1]))
+                {
+                    return null;
+                }
+
+                pipeName = args[++i];
+                continue;
+            }
+
+            return null;
+        }
+
+        return new BridgeOptions(pipeName, showHelp);
+    }
+
+    public static void WriteUsage(TextWriter writer)
+    {
+        writer.WriteLine("Usage: MCP_Rhino.Bridge.exe [--pipe <name>] [--help]");
+        writer.WriteLine();
+        writer.WriteLine("Without --pipe, connects to \\\\.\\pipe\\mcp_rhino (Developer Debug Control Path).");
+        writer.WriteLine("With --pipe mcp_rhino_<runtimeSerial>, connects to a panel-bound per-document server.");
     }
 }

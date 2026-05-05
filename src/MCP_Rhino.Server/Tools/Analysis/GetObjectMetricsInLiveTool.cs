@@ -17,7 +17,7 @@ public sealed class GetObjectMetricsInLiveTool
     }
 
     [McpServerTool]
-    [Description("Read live Rhino object metrics including length, area, perimeter, volume, and closed state. Requires the saved active document and has no offline fallback.")]
+    [Description("Read live Rhino object metrics including length, area, perimeter, volume, and closed state. Requires the saved active document.")]
     public OperationResponse<GetObjectMetricsInLiveResponse> GetObjectMetricsInLive(string filePath, List<Guid> objectIds)
     {
         return _service.GetObjectMetricsInLive(new GetObjectMetricsInLiveRequest

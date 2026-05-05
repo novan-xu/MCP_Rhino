@@ -9,7 +9,6 @@ RhinoRuntimeBootstrap.Initialize();
 var builder = Host.CreateApplicationBuilder(args);
 
 builder.Services
-    .AddOfflineRhinoAdapters()
     .AddCliFallbackLiveRhinoAdapters()
     .AddRhinoApplication()
     .AddRhinoAgents();

@@ -3,7 +3,6 @@ using MCP_Rhino.Server.Contracts.Responses;
 using MCP_Rhino.Server.Tools.Editing;
 using MCP_Rhino.Server.Tools.File;
 using MCP_Rhino.Server.Tools.Geometry;
-using Rhino.FileIO;
 
 namespace MCP_Rhino.Server.Infrastructure.CLI;
 
@@ -28,14 +27,9 @@ public sealed partial class DeveloperCommandHandler
                 return true;
             }
 
-            string validationDirectory = ResolveValidationDirectory("online-mutation-refactor");
-
-            string workingFilePath = Path.Combine(validationDirectory, "MCP_METtest.online-mutation-refactor.3dm");
-            File.Copy(sourceFilePath, workingFilePath, overwrite: true);
-
-            int initialObjectCount = GetOnlineMutationObjectCount(workingFilePath);
-            string layerFullPath = GetOnlineMutationFirstActiveLayerFullPath(workingFilePath);
-            Guid objectId = TryGetOnlineMutationFirstObjectId(workingFilePath) ?? Guid.NewGuid();
+            string workingFilePath = sourceFilePath;
+            string layerFullPath = "Default";
+            Guid objectId = Guid.NewGuid();
             var checkpoints = new List<string>();
 
             var readDocumentUserStringsTool = new GetDocumentUserStringsTool(_documentUserStringService);
@@ -45,32 +39,22 @@ public sealed partial class DeveloperCommandHandler
             var applyObjectUserTextWritesTool = new ApplyObjectUserTextWritesTool(_userTextService);
 
             OperationResponse<DocumentUserStringReadResponse> readResult = readDocumentUserStringsTool.GetDocumentUserStrings(workingFilePath);
-            DocumentUserStringReadResponse readData = RequireOnlineMutationSuccess(readResult, "GetDocumentUserStrings");
-            RequireOnlineMutation(readData.Warnings.Count == 0, "CLI fallback read should not emit stale warnings when no live Rhino host is present.");
-            checkpoints.Add("GetDocumentUserStrings ok");
+            RequireOnlineMutationFailureWithMessage(readResult, "LIVE_RHINO_REQUIRED", "GetDocumentUserStrings should require live Rhino.");
+            checkpoints.Add("GetDocumentUserStrings rejected in CLI fallback");
 
-            if (TryGetOnlineMutationFirstObjectId(workingFilePath).HasValue)
-            {
-                OperationResponse<ObjectEditPreviewResponse> previewResult = previewObjectUserTextWritesTool.PreviewObjectUserTextWrites(
-                    workingFilePath,
-                    new List<ObjectScopedUserTextEntryRequest>
+            OperationResponse<ObjectEditPreviewResponse> previewResult = previewObjectUserTextWritesTool.PreviewObjectUserTextWrites(
+                workingFilePath,
+                new List<ObjectScopedUserTextEntryRequest>
+                {
+                    new()
                     {
-                        new()
-                        {
-                            ObjectId = objectId,
-                            Key = "online_mutation_preview",
-                            Value = "preview-only"
-                        }
-                    });
-
-                ObjectEditPreviewResponse previewData = RequireOnlineMutationSuccess(previewResult, "PreviewObjectUserTextWrites");
-                RequireOnlineMutation(previewData.PreviewObjectCount == 1, "PreviewObjectUserTextWrites should still work in offline mode.");
-                checkpoints.Add("PreviewObjectUserTextWrites ok");
-            }
-            else
-            {
-                checkpoints.Add("PreviewObjectUserTextWrites skipped: source file contains no objects");
-            }
+                        ObjectId = objectId,
+                        Key = "online_mutation_preview",
+                        Value = "preview-only"
+                    }
+                });
+            RequireOnlineMutationFailureWithMessage(previewResult, "LIVE_RHINO_REQUIRED", "PreviewObjectUserTextWrites should require live Rhino.");
+            checkpoints.Add("PreviewObjectUserTextWrites rejected in CLI fallback");
 
             OperationResponse<DocumentUserStringMutationResponse> setDocumentResult = setDocumentUserStringsTool.SetDocumentUserStrings(
                 workingFilePath,
@@ -117,16 +101,8 @@ public sealed partial class DeveloperCommandHandler
             RequireOnlineMutationFailureWithMessage(applyUserTextResult, "LIVE_RHINO_REQUIRED", "ApplyObjectUserTextWrites should require live Rhino.");
             checkpoints.Add("ApplyObjectUserTextWrites rejected in CLI fallback");
 
-            RequireOnlineMutation(
-                GetOnlineMutationObjectCount(workingFilePath) == initialObjectCount,
-                $"CLI fallback smoke test should not mutate the working copy. Initial={initialObjectCount}, Current={GetOnlineMutationObjectCount(workingFilePath)}");
-            checkpoints.Add("Working copy remained unchanged");
-
             Console.WriteLine("Online mutation refactor smoke test completed successfully.");
             Console.WriteLine($"Source: {sourceFilePath}");
-            Console.WriteLine($"Working copy: {workingFilePath}");
-            Console.WriteLine($"Initial objects: {initialObjectCount}");
-            Console.WriteLine($"Final objects: {GetOnlineMutationObjectCount(workingFilePath)}");
 
             foreach (string checkpoint in checkpoints)
             {
@@ -142,16 +118,6 @@ public sealed partial class DeveloperCommandHandler
         return true;
     }
 
-    private static T RequireOnlineMutationSuccess<T>(OperationResponse<T> response, string operationName)
-    {
-        if (!response.Success || response.Data is null)
-        {
-            throw new InvalidOperationException($"{operationName} failed: {response.Message}");
-        }
-
-        return response.Data;
-    }
-
     private static void RequireOnlineMutationFailureWithMessage<T>(OperationResponse<T> response, string expectedMessage, string message)
     {
         if (response.Success)
@@ -165,54 +131,4 @@ public sealed partial class DeveloperCommandHandler
         }
     }
 
-    private static int GetOnlineMutationObjectCount(string filePath)
-    {
-        using File3dm model = ReadOnlineMutationModel(filePath);
-        return model.Objects.Count;
-    }
-
-    private static string GetOnlineMutationFirstActiveLayerFullPath(string filePath)
-    {
-        using File3dm model = ReadOnlineMutationModel(filePath);
-        var layer = model.AllLayers.FirstOrDefault(candidate => !candidate.IsDeleted);
-        if (layer is null)
-        {
-            throw new InvalidOperationException("The smoke test source file does not contain an active layer.");
-        }
-
-        return layer.FullPath;
-    }
-
-    private static Guid? TryGetOnlineMutationFirstObjectId(string filePath)
-    {
-        using File3dm model = ReadOnlineMutationModel(filePath);
-        foreach (File3dmObject modelObject in model.Objects)
-        {
-            if (modelObject.Attributes.ObjectId != Guid.Empty)
-            {
-                return modelObject.Attributes.ObjectId;
-            }
-        }
-
-        return null;
-    }
-
-    private static File3dm ReadOnlineMutationModel(string filePath)
-    {
-        File3dm? model = File3dm.Read(filePath);
-        if (model is null)
-        {
-            throw new InvalidOperationException($"Failed to read Rhino model: {filePath}");
-        }
-
-        return model;
-    }
-
-    private static void RequireOnlineMutation(bool condition, string message)
-    {
-        if (!condition)
-        {
-            throw new InvalidOperationException(message);
-        }
-    }
 }

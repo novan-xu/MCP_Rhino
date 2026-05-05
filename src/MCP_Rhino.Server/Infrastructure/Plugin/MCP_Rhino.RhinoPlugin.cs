@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.Loader;
 using Microsoft.Extensions.DependencyInjection;
 using MCP_Rhino.Server.Infrastructure.CLI;
+using MCP_Rhino.Server.Infrastructure.Plugin.Panel;
 using MCP_Rhino.Server.Infrastructure.Runtime;
 using MCP_Rhino.Server.Server;
 using LoadReturnCode = rhinocommon::Rhino.PlugIns.LoadReturnCode;
@@ -21,7 +22,9 @@ public sealed class McpRhinoPlugin : PlugIn
     public static McpRhinoPlugin? Instance { get; private set; }
 
     private AssemblyLoadContext? _isolatedContext;
+    private Type? _bootstrapType;
     private object? _serverHandle;
+    private PerDocumentPanelDispatcher? _panelDispatcher;
 
     public McpRhinoPlugin()
     {
@@ -47,13 +50,15 @@ public sealed class McpRhinoPlugin : PlugIn
             RhinoApp.WriteLine($"[MCP_Rhino diag] Loaded isolated assembly: {isolatedAssembly.FullName}");
             RhinoApp.WriteLine($"[MCP_Rhino diag] Isolated ALC: {AssemblyLoadContext.GetLoadContext(isolatedAssembly)?.Name}");
 
-            Type bootstrapType = isolatedAssembly.GetType(
+            _bootstrapType = isolatedAssembly.GetType(
                 "MCP_Rhino.Server.Infrastructure.Plugin.ServerBootstrap",
                 throwOnError: true)!;
 
-            _serverHandle = Activator.CreateInstance(bootstrapType)
+            _serverHandle = Activator.CreateInstance(_bootstrapType)
                 ?? throw new InvalidOperationException("Failed to create ServerBootstrap instance.");
-            bootstrapType.GetMethod("Start")!.Invoke(_serverHandle, new object[] { PipeName });
+            _bootstrapType.GetMethod("Start")!.Invoke(_serverHandle, new object[] { PipeName });
+
+            TryStartPanelDispatcher(pluginDir);
 
             RhinoApp.WriteLine($"MCP_Rhino plugin loaded. Named pipe ready: \\\\.\\pipe\\{PipeName}");
             return LoadReturnCode.Success;
@@ -68,17 +73,41 @@ public sealed class McpRhinoPlugin : PlugIn
 
     protected override void OnShutdown()
     {
+        _panelDispatcher?.Dispose();
+        _panelDispatcher = null;
+
         if (_serverHandle is IDisposable disposable)
         {
             disposable.Dispose();
         }
         _serverHandle = null;
+        _bootstrapType = null;
 
         _isolatedContext?.Unload();
         _isolatedContext = null;
 
         RhinoApp.WriteLine("MCP_Rhino plugin unloaded.");
         base.OnShutdown();
+    }
+
+    internal void StartBoundPipeServer(string pipeName, uint runtimeSerialNumber)
+    {
+        if (_bootstrapType is null || _serverHandle is null)
+        {
+            throw new InvalidOperationException("Server bootstrap is not available.");
+        }
+
+        _bootstrapType.GetMethod("StartBoundPipeServer")!.Invoke(_serverHandle, new object[] { pipeName, runtimeSerialNumber });
+    }
+
+    internal void StopBoundPipeServer(string pipeName)
+    {
+        if (_bootstrapType is null || _serverHandle is null)
+        {
+            return;
+        }
+
+        _bootstrapType.GetMethod("StopBoundPipeServer")!.Invoke(_serverHandle, new object[] { pipeName });
     }
 
     internal bool RunDeveloperCommand(params string[] args)
@@ -133,9 +162,24 @@ public sealed class McpRhinoPlugin : PlugIn
     internal static void ConfigurePluginServices(IServiceCollection services)
     {
         services
-            .AddOfflineRhinoAdapters()
             .AddLiveRhinoAdapters()
             .AddRhinoApplication()
             .AddRhinoAgents();
+    }
+
+    private void TryStartPanelDispatcher(string pluginDir)
+    {
+        try
+        {
+            PerDocumentPanelDispatcher.RegisterPanel(this);
+            var host = new RhinoChatPanelHost(pluginDir, StartBoundPipeServer, StopBoundPipeServer);
+            _panelDispatcher = new PerDocumentPanelDispatcher(host);
+            _panelDispatcher.Start();
+            RhinoApp.WriteLine("MCP_Rhino Claude Code panel dispatcher started.");
+        }
+        catch (Exception ex)
+        {
+            RhinoApp.WriteLine($"MCP_Rhino Claude Code panel dispatcher failed to start: {ex}");
+        }
     }
 }

@@ -2,7 +2,6 @@ using MCP_Rhino.Server.Contracts.Requests;
 using MCP_Rhino.Server.Contracts.Responses;
 using MCP_Rhino.Server.Tools.Geometry;
 using MCP_Rhino.Server.Tools.Layers;
-using Rhino.FileIO;
 
 namespace MCP_Rhino.Server.Infrastructure.CLI;
 
@@ -48,13 +47,8 @@ public sealed partial class DeveloperCommandHandler
 
     private void RunCliFallbackLayerManagementSmoke(string sourceFilePath)
     {
-        string validationDirectory = ResolveValidationDirectory("layer-management-tools");
-        string workingFilePath = Path.Combine(validationDirectory, "MCP_METtest.layer-management-tools.3dm");
-        File.Copy(sourceFilePath, workingFilePath, overwrite: true);
-
-        int initialObjectCount = GetLayerManagementObjectCount(workingFilePath);
-        int initialLayerCount = GetLayerManagementLayerCount(workingFilePath);
-        string firstLayerPath = GetLayerManagementFirstLayerPath(workingFilePath);
+        string workingFilePath = sourceFilePath;
+        string firstLayerPath = "Default";
         string createLayerPath = "__CodexSmoke__Create::Leaf";
         var checkpoints = new List<string>();
 
@@ -67,12 +61,11 @@ public sealed partial class DeveloperCommandHandler
         var previewDeleteTool = new PreviewDeleteLayersTool(_layerManagementService);
         var previewPurgeTool = new PreviewPurgeLayersTool(_layerManagementService);
 
-        LayerReadResponse readData = RequireLayerManagementSuccess(
+        RequireLayerManagementFailureWithMessage(
             getTool.GetLayers(workingFilePath),
-            "GetLayers");
-        RequireLayerManagement(readData.Warnings.Count == 0, "CLI fallback GetLayers should not emit stale warnings without live Rhino.");
-        RequireLayerManagement(readData.TotalCount == initialLayerCount, "GetLayers should report the current offline layer count.");
-        checkpoints.Add("GetLayers ok");
+            "LIVE_RHINO_REQUIRED",
+            "GetLayers should require live Rhino.");
+        checkpoints.Add("GetLayers rejected in CLI fallback");
 
         RequireLayerManagementFailureWithMessage(
             createTool.CreateLayers(
@@ -142,21 +135,8 @@ public sealed partial class DeveloperCommandHandler
             "PreviewPurgeLayers should require live Rhino.");
         checkpoints.Add("PreviewPurgeLayers rejected in CLI fallback");
 
-        RequireLayerManagement(
-            GetLayerManagementObjectCount(workingFilePath) == initialObjectCount,
-            $"CLI fallback smoke test should not mutate object count. Initial={initialObjectCount}, Current={GetLayerManagementObjectCount(workingFilePath)}");
-        RequireLayerManagement(
-            GetLayerManagementLayerCount(workingFilePath) == initialLayerCount,
-            $"CLI fallback smoke test should not mutate layer count. Initial={initialLayerCount}, Current={GetLayerManagementLayerCount(workingFilePath)}");
-        checkpoints.Add("Working copy remained unchanged");
-
         Console.WriteLine("Layer management smoke test completed successfully (CLI fallback mode).");
         Console.WriteLine($"Source: {sourceFilePath}");
-        Console.WriteLine($"Working copy: {workingFilePath}");
-        Console.WriteLine($"Initial layers: {initialLayerCount}");
-        Console.WriteLine($"Final layers: {GetLayerManagementLayerCount(workingFilePath)}");
-        Console.WriteLine($"Initial objects: {initialObjectCount}");
-        Console.WriteLine($"Final objects: {GetLayerManagementObjectCount(workingFilePath)}");
 
         foreach (string checkpoint in checkpoints)
         {
@@ -365,38 +345,4 @@ public sealed partial class DeveloperCommandHandler
         }
     }
 
-    private static int GetLayerManagementObjectCount(string filePath)
-    {
-        using File3dm model = ReadLayerManagementModel(filePath);
-        return model.Objects.Count;
-    }
-
-    private static int GetLayerManagementLayerCount(string filePath)
-    {
-        using File3dm model = ReadLayerManagementModel(filePath);
-        return model.AllLayers.Count(layer => !layer.IsDeleted);
-    }
-
-    private static string GetLayerManagementFirstLayerPath(string filePath)
-    {
-        using File3dm model = ReadLayerManagementModel(filePath);
-        global::Rhino.DocObjects.Layer? layer = model.AllLayers.FirstOrDefault(candidate => !candidate.IsDeleted);
-        if (layer is null)
-        {
-            throw new InvalidOperationException("The smoke test source file does not contain an active layer.");
-        }
-
-        return layer.FullPath;
-    }
-
-    private static File3dm ReadLayerManagementModel(string filePath)
-    {
-        File3dm? model = File3dm.Read(filePath);
-        if (model is null)
-        {
-            throw new InvalidOperationException($"Failed to read Rhino model: {filePath}");
-        }
-
-        return model;
-    }
 }

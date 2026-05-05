@@ -15,13 +15,13 @@ public sealed class RhinoGeometryCreationService
     private const double LargeBBoxDiagonalThreshold = 1e12;
 
     private readonly ILiveRhinoDocumentAccessor _documentAccessor;
-    private readonly IGeometryValidator _validator;
+    private readonly ILiveGeometryValidator _validator;
     private readonly ILiveGeometryBuilder _builder;
     private readonly IEditResultFormatter _formatter;
 
     public RhinoGeometryCreationService(
         ILiveRhinoDocumentAccessor documentAccessor,
-        IGeometryValidator validator,
+        ILiveGeometryValidator validator,
         ILiveGeometryBuilder builder,
         IEditResultFormatter formatter)
     {
@@ -51,22 +51,22 @@ public sealed class RhinoGeometryCreationService
             });
         }
 
-        foreach (GeometryCreationSpec spec in specs)
-        {
-            OperationResponse<IReadOnlyList<ObjectEditWarning>> validation = _validator.Validate(spec, attributes);
-            if (!validation.Success)
-            {
-                return OperationResponse<GeometryCreationResponse>.Fail(validation.Message);
-            }
-
-            warnings.AddRange(validation.Data ?? Array.Empty<ObjectEditWarning>());
-        }
-
         return _documentAccessor.ExecuteWithUndo(
             filePath,
             "MCP: CreateGeometry",
             document =>
             {
+                foreach (GeometryCreationSpec spec in specs)
+                {
+                    OperationResponse<IReadOnlyList<ObjectEditWarning>> validation = _validator.Validate(spec, attributes);
+                    if (!validation.Success)
+                    {
+                        return OperationResponse<(bool Mutated, GeometryCreationResponse Result)>.Fail(validation.Message);
+                    }
+
+                    warnings.AddRange(validation.Data ?? Array.Empty<ObjectEditWarning>());
+                }
+
                 int layerIndex = document.Layers.FindByFullPath(attributes.LayerFullPath, -1);
                 if (layerIndex < 0)
                 {

@@ -14,14 +14,14 @@ namespace MCP_Rhino.Server.Application.Services.Analysis;
 public sealed class RhinoGeometryMetricsService
 {
     private readonly ILiveRhinoDocumentAccessor _documentAccessor;
-    private readonly IGeometryValidator _validator;
+    private readonly ILiveGeometryValidator _validator;
     private readonly ILiveGeometryBuilder _builder;
     private readonly ILiveGeometryMetricsCalculator _calculator;
     private readonly IGeometryFrameSampler _frameSampler;
 
     public RhinoGeometryMetricsService(
         ILiveRhinoDocumentAccessor documentAccessor,
-        IGeometryValidator validator,
+        ILiveGeometryValidator validator,
         ILiveGeometryBuilder builder,
         ILiveGeometryMetricsCalculator calculator,
         IGeometryFrameSampler frameSampler)

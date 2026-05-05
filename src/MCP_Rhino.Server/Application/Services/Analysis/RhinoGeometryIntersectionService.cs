@@ -11,13 +11,13 @@ namespace MCP_Rhino.Server.Application.Services.Analysis;
 public sealed class RhinoGeometryIntersectionService
 {
     private readonly ILiveRhinoDocumentAccessor _documentAccessor;
-    private readonly IGeometryValidator _validator;
+    private readonly ILiveGeometryValidator _validator;
     private readonly ILiveGeometryBuilder _builder;
     private readonly ILiveGeometryIntersectionCalculator _calculator;
 
     public RhinoGeometryIntersectionService(
         ILiveRhinoDocumentAccessor documentAccessor,
-        IGeometryValidator validator,
+        ILiveGeometryValidator validator,
         ILiveGeometryBuilder builder,
         ILiveGeometryIntersectionCalculator calculator)
     {

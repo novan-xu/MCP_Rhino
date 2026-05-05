@@ -11,6 +11,8 @@ namespace MCP_Rhino.Server.Infrastructure.Plugin;
 // keeps a single, stable PlugIn instance.
 public sealed class ServerBootstrap : IDisposable
 {
+    private readonly object _boundPipeLock = new();
+    private readonly Dictionary<string, McpNamedPipeServer> _boundPipeServers = new(StringComparer.OrdinalIgnoreCase);
     private McpNamedPipeServer? _pipeServer;
 
     public void Start(string pipeName)
@@ -19,8 +21,50 @@ public sealed class ServerBootstrap : IDisposable
         _pipeServer.Start();
     }
 
+    public void StartBoundPipeServer(string pipeName, uint runtimeSerialNumber)
+    {
+        lock (_boundPipeLock)
+        {
+            if (_boundPipeServers.ContainsKey(pipeName))
+            {
+                return;
+            }
+
+            var pipeServer = new McpNamedPipeServer(pipeName, BoundHostFactory.For(runtimeSerialNumber));
+            pipeServer.Start();
+            _boundPipeServers.Add(pipeName, pipeServer);
+        }
+    }
+
+    public void StopBoundPipeServer(string pipeName)
+    {
+        McpNamedPipeServer? pipeServer = null;
+
+        lock (_boundPipeLock)
+        {
+            if (_boundPipeServers.Remove(pipeName, out McpNamedPipeServer? existing))
+            {
+                pipeServer = existing;
+            }
+        }
+
+        pipeServer?.Dispose();
+    }
+
     public void Dispose()
     {
+        List<McpNamedPipeServer> boundServers;
+        lock (_boundPipeLock)
+        {
+            boundServers = _boundPipeServers.Values.ToList();
+            _boundPipeServers.Clear();
+        }
+
+        foreach (McpNamedPipeServer boundServer in boundServers)
+        {
+            boundServer.Dispose();
+        }
+
         _pipeServer?.Dispose();
         _pipeServer = null;
     }

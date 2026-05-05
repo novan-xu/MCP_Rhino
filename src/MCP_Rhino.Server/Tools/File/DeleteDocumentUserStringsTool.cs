@@ -17,7 +17,7 @@ public sealed class DeleteDocumentUserStringsTool
     }
 
     [McpServerTool]
-    [Description("批量删除 Rhino 文件的文档级 user string。每条 entry 仅需 Section（可空）与 Key，对应 File3dmStringTable.Delete。")]
+    [Description("批量删除当前 Rhino 文档的文档级 user string。每条 entry 仅需 Section（可空）与 Key。")]
     public OperationResponse<DocumentUserStringMutationResponse> DeleteDocumentUserStrings(
         string filePath,
         List<DocumentUserStringEntryRequest> entries)

@@ -9,8 +9,8 @@ namespace MCP_Rhino.Server.Infrastructure.Plugin;
 // Isolates MCP SDK loading so that System.Text.Json 10.x (and its transitive chain
 // via Microsoft.Extensions.AI) resolves from the plugin bin instead of the older
 // System.Text.Json 7.0 that Rhino 8 preloads into AssemblyLoadContext.Default.
-// RhinoCommon and Rhino3dm must fall back to the default context; otherwise tools
-// and runtime bootstrap would see duplicate Rhino.Geometry.* / Rhino.FileIO.* types.
+// RhinoCommon must fall back to the default context; otherwise tools and runtime
+// bootstrap would see duplicate Rhino.Geometry.* / Rhino.FileIO.* types.
 internal sealed class PluginLoadContext : AssemblyLoadContext
 {
     private readonly AssemblyDependencyResolver _resolver;
@@ -23,7 +23,7 @@ internal sealed class PluginLoadContext : AssemblyLoadContext
 
     protected override Assembly? Load(AssemblyName assemblyName)
     {
-        if (assemblyName.Name is "RhinoCommon" or "Rhino3dm")
+        if (assemblyName.Name is "RhinoCommon" or "Rhino.UI" or "Eto" or "Eto.Wpf")
         {
             RhinoApp.WriteLine($"[MCP_Rhino diag] ALC.Load({assemblyName.Name}) -> share with default context");
             return null;

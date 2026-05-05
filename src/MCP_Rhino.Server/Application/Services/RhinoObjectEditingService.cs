@@ -15,20 +15,17 @@ public sealed class RhinoObjectEditingService
     private const int PreviewLimit = 20;
 
     private readonly ILiveRhinoDocumentAccessor _documentAccessor;
-    private readonly IObjectEditSpecValidator _specValidator;
     private readonly ILiveObjectEditValidator _liveValidator;
     private readonly IObjectEditOperationApplier _operationApplier;
     private readonly IEditResultFormatter _formatter;
 
     public RhinoObjectEditingService(
         ILiveRhinoDocumentAccessor documentAccessor,
-        IObjectEditSpecValidator specValidator,
         ILiveObjectEditValidator liveValidator,
         IObjectEditOperationApplier operationApplier,
         IEditResultFormatter formatter)
     {
         _documentAccessor = documentAccessor;
-        _specValidator = specValidator;
         _liveValidator = liveValidator;
         _operationApplier = operationApplier;
         _formatter = formatter;
@@ -46,7 +43,7 @@ public sealed class RhinoObjectEditingService
 
         return _documentAccessor.Execute(request.FilePath, document =>
         {
-            OperationResponse<IReadOnlyList<ObjectEditWarning>> validation = _specValidator.Validate(operations, selection.Objects);
+            OperationResponse<IReadOnlyList<ObjectEditWarning>> validation = _liveValidator.Validate(operations, selection.Objects);
             if (!validation.Success)
             {
                 return OperationResponse<ObjectEditPreviewResponse>.Fail(validation.Message);
@@ -114,7 +111,7 @@ public sealed class RhinoObjectEditingService
 
         return _documentAccessor.ExecuteWithUndo(request.FilePath, "MCP: ApplyObjectEdits", document =>
         {
-            OperationResponse<IReadOnlyList<ObjectEditWarning>> validation = _specValidator.Validate(operations, selection.Objects);
+            OperationResponse<IReadOnlyList<ObjectEditWarning>> validation = _liveValidator.Validate(operations, selection.Objects);
             if (!validation.Success)
             {
                 return OperationResponse<(bool Mutated, ObjectEditExecutionResponse Result)>.Fail(validation.Message);

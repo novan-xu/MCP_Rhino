@@ -47,6 +47,7 @@ public sealed partial class DeveloperCommandHandler
     partial void RegisterGeometryEditDerivedRoutingHandlers();
     partial void RegisterGeometryEditSurfaceCompositeHandlers();
     partial void RegisterSurfacePointOrderRebuildHandlers();
+    partial void RegisterRhinoClaudeCodePanelHandlers();
 
     partial void RegisterExtensionHandlers()
     {
@@ -57,6 +58,7 @@ public sealed partial class DeveloperCommandHandler
         RegisterGeometryEditDerivedRoutingHandlers();
         RegisterGeometryEditSurfaceCompositeHandlers();
         RegisterSurfacePointOrderRebuildHandlers();
+        RegisterRhinoClaudeCodePanelHandlers();
     }
 
     public DeveloperCommandHandler(
@@ -125,18 +127,9 @@ public sealed partial class DeveloperCommandHandler
 
         return key switch
         {
-            "find-layer-candidates" => HandleFindLayerCandidates(args),
-            "filter-objects-by-layer" => HandleFilterObjectsByLayer(args),
-            "filter-objects-by-type" => HandleFilterObjectsByType(args),
-            "filter-objects-by-user-attributes" => HandleFilterObjectsByUserAttributes(args),
-            "filter-objects-agent" => HandleFilterObjectsAgent(args),
-            "preview-object-edits" => HandlePreviewObjectEdits(args),
             "apply-object-edits" => HandleApplyObjectEdits(args),
-            "preview-object-user-text-writes" => HandlePreviewObjectUserTextWrites(args),
             "apply-object-user-text-writes" => HandleApplyObjectUserTextWrites(args),
-            "get-object-user-strings" => HandleGetObjectUserStrings(args),
             "delete-object-user-text" => HandleDeleteObjectUserText(args),
-            "get-document-user-strings" => HandleGetDocumentUserStrings(args),
             "set-document-user-strings" => HandleSetDocumentUserStrings(args),
             "delete-document-user-strings" => HandleDeleteDocumentUserStrings(args),
             "geometry-smoke-test" => HandleGeometrySmokeTest(args),

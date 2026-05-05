@@ -89,8 +89,19 @@
 - **slug 命名**：形如 `<feature>-smoke-test`，全小写、短横线分隔，必须全仓唯一。
 - **注册入口**：每个能力的 slug 只能由
   `Project_Test/<YYMMDD>_TEST_<capability-name>/DeveloperCommandHandler.<Feature>SmokeTest.cs`
-  这一个 partial 文件承担注册。该文件实现 `partial void RegisterExtensionHandlers()`，并写入
-  `_extensionHandlers["<feature>-smoke-test"] = Handle<Feature>SmokeTest;`。
+  这一个 partial 文件承担注册，但该文件**不得**实现 `RegisterExtensionHandlers()` 聚合入口。
+  `RegisterExtensionHandlers()` 只能由
+  `src/MCP_Rhino.Server/Infrastructure/CLI/DeveloperCommandHandler.cs` 主文件持有唯一实现。
+  新能力应按既有 hook 聚合模式接入：
+  - 在 `DeveloperCommandHandler.cs` 声明
+    `partial void Register<Feature>Handlers();`
+  - 在 `DeveloperCommandHandler.cs` 的 `RegisterExtensionHandlers()` 聚合实现中追加
+    `Register<Feature>Handlers();`
+  - 在本能力的 `Project_Test/.../DeveloperCommandHandler.<Feature>SmokeTest.cs` 中实现
+    `partial void Register<Feature>Handlers()`，并写入
+    `_extensionHandlers["<feature>-smoke-test"] = Handle<Feature>SmokeTest;`。
+  这样每个能力仍然只拥有一个注册 partial 文件，同时避免多个测试文件重复实现同一个
+  `RegisterExtensionHandlers()` partial 方法。
 - **pluginMode 分派在入口内部完成**：是否需要按 `McpRhinoPlugin.Instance is null` 分派，由 `Handle<Feature>SmokeTest` 内部自行决定；不允许为同一能力再申请第二条 live 专属 slug。
 - **Rhino live smoke 命令也必须能力独占**：每次新能力的 live smoke 都应新增一个专属 `RhinoCommand`，例如 `McpGeometryAnalysisSmokeCommand` 对应 `_McpGeometryAnalysisSmoke`，并在命令内部直接调用该能力自己的 smoke slug。不再使用共享的 `_McpDevSmoke` 入口，以便多个功能组能在 Rhino 内并行复核。
 - **slug 归属**：一条 slug 一旦出现在某份 Plan / TEST / EXET 中即视为该能力独占，后续能力不得改写其语义；若回收复用，必须在新的 Plan / EXET 中显式声明。

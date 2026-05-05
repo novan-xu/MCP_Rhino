@@ -4,7 +4,6 @@ using System.Text;
 using MCP_Rhino.Server.Application.Interfaces;
 using MCP_Rhino.Server.Contracts.Requests;
 using MCP_Rhino.Server.Contracts.Responses;
-using Rhino.FileIO;
 using RhinoDoc = rhinocommon::Rhino.RhinoDoc;
 using StringTable = rhinocommon::Rhino.DocObjects.Tables.StringTable;
 
@@ -14,14 +13,10 @@ public sealed class RhinoDocumentUserStringService
 {
     private const int DisplayLimit = 50;
 
-    private readonly IRhinoDocumentRepository _repository;
     private readonly ILiveRhinoDocumentAccessor _documentAccessor;
 
-    public RhinoDocumentUserStringService(
-        IRhinoDocumentRepository repository,
-        ILiveRhinoDocumentAccessor documentAccessor)
+    public RhinoDocumentUserStringService(ILiveRhinoDocumentAccessor documentAccessor)
     {
-        _repository = repository;
         _documentAccessor = documentAccessor;
     }
 
@@ -63,44 +58,7 @@ public sealed class RhinoDocumentUserStringService
 
     public OperationResponse<DocumentUserStringReadResponse> Read(DocumentUserStringReadRequest request)
     {
-        if (!_repository.Exists(request.FilePath))
-        {
-            return OperationResponse<DocumentUserStringReadResponse>.Fail($"File was not found: {request.FilePath}");
-        }
-
-        try
-        {
-            using var model = _repository.Read(request.FilePath);
-            File3dmStringTable strings = model.Strings;
-            int count = strings.Count;
-
-            var entries = new List<DocumentUserStringEntryResponse>(count);
-            for (int i = 0; i < count; i++)
-            {
-                string key = strings.GetKey(i) ?? string.Empty;
-                string value = strings.GetValue(i) ?? string.Empty;
-                entries.Add(new DocumentUserStringEntryResponse
-                {
-                    Section = null,
-                    Key = key,
-                    Value = value
-                });
-            }
-
-            var response = new DocumentUserStringReadResponse
-            {
-                FilePath = request.FilePath,
-                TotalCount = count,
-                Warnings = CreateOfflineWarnings(request.FilePath),
-                Entries = entries
-            };
-
-            return OperationResponse<DocumentUserStringReadResponse>.Ok(response, "Document user strings read completed.");
-        }
-        catch (Exception ex)
-        {
-            return OperationResponse<DocumentUserStringReadResponse>.Fail($"Document user string read failed: {ex.Message}");
-        }
+        return ReadInLive(request);
     }
 
     public OperationResponse<DocumentUserStringMutationResponse> Set(DocumentUserStringWriteRequest request)
@@ -231,21 +189,6 @@ public sealed class RhinoDocumentUserStringService
         }
 
         return builder.ToString();
-    }
-
-    private List<ObjectEditWarning> CreateOfflineWarnings(string filePath)
-    {
-        var warnings = new List<ObjectEditWarning>();
-        if (_documentAccessor.TryGetActiveDocumentState(filePath, out bool hasUnsavedChanges) && hasUnsavedChanges)
-        {
-            warnings.Add(new ObjectEditWarning
-            {
-                Code = "OFFLINE_READ_STALE",
-                Message = "The target file is open in Rhino with unsaved changes, so offline read results may be stale."
-            });
-        }
-
-        return warnings;
     }
 
     private OperationResponse<DocumentUserStringMutationResponse> Mutate(

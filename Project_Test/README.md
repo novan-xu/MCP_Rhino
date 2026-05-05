@@ -60,9 +60,16 @@ Project_Test/
 里的 partial 扩展钩子注册，而不是修改主 `TryHandle` switch。
 
 ```csharp
-partial void RegisterExtensionHandlers();
+// In DeveloperCommandHandler.cs:
+partial void Register<Feature>Handlers();
 
 partial void RegisterExtensionHandlers()
+{
+    Register<Feature>Handlers();
+}
+
+// In Project_Test/.../DeveloperCommandHandler.<Feature>SmokeTest.cs:
+partial void Register<Feature>Handlers()
 {
     _extensionHandlers["<feature>-smoke-test"] = Handle<Feature>SmokeTest;
 }
@@ -71,7 +78,7 @@ partial void RegisterExtensionHandlers()
 约定：
 
 - TEST 文件夹名用 `<capability-name>`，CLI 命令名用 `<feature>-smoke-test`，两者语义对应，但不是同一个占位符。
-- 同一能力只允许一个 partial 文件实现 `RegisterExtensionHandlers()`。
+- `RegisterExtensionHandlers()` 只能由 `DeveloperCommandHandler.cs` 主文件实现一次；测试 partial 文件只实现自己的 `Register<Feature>Handlers()`。
 - `TryHandle` 会先查 `_extensionHandlers`，只有未命中时才走主 switch。
 - Rhino 内 live smoke 也必须使用每期独立的 Rhino 命令名，不再共用 `_McpDevSmoke` 这类统一入口。
 
@@ -114,11 +121,13 @@ _McpGeometryAnalysisSmoke
 1. 建目录：`Project_Test/<YYMMDD>_TEST_<capability-name>/`
 2. 在目录内建 `DeveloperCommandHandler.<Feature>SmokeTest.cs`
 3. 声明 `namespace MCP_Rhino.Server.Infrastructure.CLI` 并扩展 `partial class DeveloperCommandHandler`
-4. 在测试文件里实现 `partial void RegisterExtensionHandlers()`，注册 `"<feature>-smoke-test"`
-5. 若测试需要的 Skill / Service 尚未注入 `DeveloperCommandHandler`，补齐构造参数与 DI 注册
-6. `dotnet build src/MCP_Rhino.Server/MCP_Rhino.Server.csproj --nologo`
-7. `dotnet run --project src/MCP_Rhino.Server -- <feature>-smoke-test Runtime_Test/<fixture>.3dm`
-8. 在 `Project_Exet/<YYMMDD>_EXET_<capability-name>.md` 中记录 checkpoint、退出码与验收结果
+4. 在 `DeveloperCommandHandler.cs` 声明 `partial void Register<Feature>Handlers();`
+5. 在 `DeveloperCommandHandler.cs` 的 `RegisterExtensionHandlers()` 聚合实现中追加 `Register<Feature>Handlers();`
+6. 在测试文件里实现 `partial void Register<Feature>Handlers()`，注册 `"<feature>-smoke-test"`
+7. 若测试需要的 Skill / Service 尚未注入 `DeveloperCommandHandler`，补齐构造参数与 DI 注册
+8. `dotnet build src/MCP_Rhino.Server/MCP_Rhino.Server.csproj --nologo`
+9. `dotnet run --project src/MCP_Rhino.Server -- <feature>-smoke-test Runtime_Test/<fixture>.3dm`
+10. 在 `Project_Exet/<YYMMDD>_EXET_<capability-name>.md` 中记录 checkpoint、退出码与验收结果
 
 ---
 

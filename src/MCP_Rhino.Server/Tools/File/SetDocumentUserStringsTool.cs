@@ -17,7 +17,7 @@ public sealed class SetDocumentUserStringsTool
     }
 
     [McpServerTool]
-    [Description("批量写入 Rhino 文件的文档级 user string。每条 entry 可指定 Section（可空）、Key、Value，对应 File3dmStringTable.SetString。")]
+    [Description("批量写入当前 Rhino 文档的文档级 user string。每条 entry 可指定 Section（可空）、Key、Value。")]
     public OperationResponse<DocumentUserStringMutationResponse> SetDocumentUserStrings(
         string filePath,
         List<DocumentUserStringEntryRequest> entries)

@@ -9,8 +9,8 @@
 ### 1. Program.cs
 - 只负责应用启动、Host 构建、调用注册扩展。
 - 不放业务逻辑。
-- 不放 Rhino3dm / RhinoCommon 读写细节。
-- MCP server 的默认启动形态为 **Rhino Plugin 加载回调**（`.rhp` 宿主）；plugin 在 Rhino 进程内启动 **Named Pipe MCP server**。外部 Client 由独立的 `MCP_Rhino.Bridge` 项目产出的 `.exe` 承担 stdio-to-pipe 桥接。`Program.cs` 保留为可执行入口，但仅服务于只读 CLI 工具与开发期 offline smoke 流程，不承担 MCP host 角色。
+- 不放 RhinoCommon 读写细节。
+- MCP server 的默认启动形态为 **Rhino Plugin 加载回调**（`.rhp` 宿主）；plugin 在 Rhino 进程内启动 **Named Pipe MCP server**。外部 Client 由独立的 `MCP_Rhino.Bridge` 项目产出的 `.exe` 承担 stdio-to-pipe 桥接。`Program.cs` 保留为可执行入口，但仅服务于开发期 live smoke fallback，不承担 MCP host 角色。
 
 ### 2. Server/
 - `DependencyInjection.cs`：注册内部服务、仓储、基础设施实现。
@@ -22,21 +22,21 @@
 - Tool 负责参数接收、调用 Application/Service、格式化输出。
 - Tool 中禁止堆积大段 Rhino 文件读写逻辑。
 - 命名统一使用 `*Tool` 后缀。
-- **执行模式约束**：mutation 类 Tool 与 preview-of-mutation 类 Tool 只能依赖 Live 适配接口（见 §Infrastructure `Rhino/Live/`）；read / preview-of-read 类 Tool 默认优先依赖 Live 适配接口以获取当前真值。若需支持未打开文件、CLI 或批处理场景，可额外提供显式 Offline 入口（`Rhino/Offline/`）；不得在同一个 Tool 内把 live 失败静默回退成 offline 结果。详见「执行模式指南」章节。
+- **执行模式约束**：所有 Tool 只能依赖 Live 适配接口获取当前 Rhino 文档真值；不得提供磁盘文件读取或写入兜底。详见「执行模式指南」章节。
 
 ### 4. Skills/
 - 放置固定流程的复合能力。
 - Skill 可以组合多个 service / use case / tool。
 - Skill 不直接承担底层文件 API 细节。
 - 命名统一使用 `*Skill` 后缀。
-- **执行模式约束**：mutation 流程与 preview-of-mutation 流程的 Skill 只能依赖 Live 适配接口；read / preview-of-read 流程默认优先依赖 Live 适配接口。若需要无 Rhino 可运行性，应通过显式 Offline 分支或显式 Offline Tool 组合实现，而不是在 Skill 内静默降级数据源。
+- **执行模式约束**：Skill 只能组合 Live 能力；不得引入磁盘文件读取或写入分支。
 
 ### 5. Agents/
 - 放置目标驱动、可做决策/调度的执行者。
 - Agent 优先调用 Skill 或 Application Service。
-- Agent 不直接写 Rhino3dm / RhinoCommon 细节。
+- Agent 不直接写 RhinoCommon 细节。
 - 命名统一使用 `*Agent` 后缀。
-- **执行模式约束**：当 Agent 触发 mutation 或 preview-of-mutation 步骤时，必须走 Live 适配接口；read / preview-of-read 步骤默认优先走 Live 适配接口。若要读取未打开文件或执行批处理离线审计，应显式选择 Offline 路径，不得让 Agent 在一次调用里混用 live/offline 真值。
+- **执行模式约束**：Agent 的 read / preview / mutation 步骤都必须走 Live 适配接口；不得在一次调用里混入磁盘文件真值。
 
 ### 6. Application/
 - 放置用例、服务、流程编排、接口抽象。
@@ -46,17 +46,15 @@
 
 ### 7. Domain/
 - 放置核心业务模型、值对象、指南、枚举。
-- Domain 不依赖 MCP、Rhino3dm、文件系统实现。
+- Domain 不依赖 MCP、RhinoCommon、文件系统实现。
 - 这里回答“业务概念和指南是什么”。
 
 ### 8. Infrastructure/
-- 放置 Rhino 适配（`File3dm` 默认仅离线读，`RhinoDoc` 在线读写）、文件系统、配置、日志、命令行入口适配等具体实现。
-- 所有 `File3dm.Read`、例外场景下显式启用的 `File3dm.Write`，以及 `RhinoDoc` / `RhinoCommon` 等细节集中在这里。
+- 放置 Rhino 适配（`RhinoDoc` / RhinoCommon 在线读写）、文件系统、配置、日志、命令行入口适配等具体实现。
+- 所有 `RhinoDoc` / `RhinoCommon` 访问细节集中在这里。
 - 这里回答"具体如何和外部技术打交道"。
 
-- **Rhino 适配子目录按执行模式拆分**：
-  - `Rhino/Offline/`：承载 `File3dm` 离线读实现，服务显式 Offline 的 read / filter / get / inspect / preview-of-read 流程；必要时可协同查询 Live 状态生成 stale warning，但磁盘读取仍是唯一数据源。
-  - `Rhino/Live/`：承载 `RhinoDoc` / RhinoCommon 在线实现，服务所有 mutation、preview-of-mutation，以及默认 live-first 的 read / preview-of-read 流程；所有 `RhinoDoc.ActiveDoc` / `Rhino.RhinoApp` / `BeginUndoRecord` 等调用集中在这里。
+- **Rhino 适配组织**：`Infrastructure/Rhino/` 承载 RhinoCommon 适配；所有与文档状态有关的适配器以 `Live*` 前缀命名。历史保留的 `Rhino/Live/` 子目录可继续作为分组使用，但项目执行模式只有 Live 一种。
 - **`Plugin/` 子目录**：放置 Rhino `.rhp` 宿主入口（`MCP_Rhino.RhinoPlugin.cs`、`McpNamedPipeServer.cs` 等）。在 `OnLoad` 里启动 **Named Pipe MCP server**（管道 `\\.\pipe\mcp_rhino`），承载 MCP 协议帧；Client 端经独立的 `MCP_Rhino.Bridge` 项目提供的 stdio-to-pipe 桥接 exe 连入。MCP server 的默认部署形态即由此承载。
 - `CLI/` 放置面向开发者 / 终端的命令行适配实现（例如 `DeveloperCommandHandler`），作为外部入口到 Application / Agent 层的薄适配层；`Program.cs` 只负责解析并委托给这里。
 
@@ -77,55 +75,69 @@
 - 目标驱动、需要选择步骤或调度 → `Agents/`
 - 功能流程编排、服务组织 → `Application/`
 - 业务模型、值对象、指南 → `Domain/`
-- Rhino 适配（`File3dm` 离线 / `RhinoDoc` 在线）/ IO / Logging / Config 实现 → `Infrastructure/`
+- Rhino 适配（`RhinoDoc` 在线）/ IO / Logging / Config 实现 → `Infrastructure/`
 - 请求/响应/消息结构 → `Contracts/`
 - LLM 指令模板 → `Prompts/`
 
-## 执行模式指南（在线 vs 离线）
+## 执行模式指南（Live Only）
 
-Rhino 侧的能力按"是否修改文档状态"划分执行模式，互相不混用。
+Rhino 侧的能力只跑一种模式：经 RhinoCommon 操作运行中的 `RhinoDoc`。本仓库不再支持磁盘 `.3dm` 业务读写。
 
-### 只读路径（Live First，Offline Allowed）
+### 通用契约
 
-- 覆盖动作：Read / Filter / Get / Find / Inspect，以及 preview-of-read 类能力。
-- 默认实现：优先经 `Infrastructure/Rhino/Live/` 读取运行中的 `RhinoDoc.ActiveDoc`，拿当前文档真值。
-- 适用场景：对 Rhino 当前会话中的对象做审计、筛查、属性导出、几何分析，尤其是文档可能存在未保存改动时。
-- 约束：
-  - Live read 变体必须由 Rhino Plugin 宿主加载；目标文档必须为 `RhinoDoc.ActiveDoc`、已 Save 到磁盘（`doc.Path` 非空）、且 `doc.Path` 与请求中的 `FilePath` 匹配，否则分别返回 `NO_ACTIVE_DOCUMENT` / `ACTIVE_DOC_UNSAVED` / `FILE_NOT_ACTIVE`。
-  - RhinoCommon 的 `RhinoDoc` / `Rhino.Geometry` 只读访问同样受 UI 主线程约束；所有 live read 必须经 `ILiveRhinoDocumentAccessor` 封送到主线程同步执行。主线程长时间阻塞（> 10s）时返回 `RHINO_MAIN_THREAD_BUSY`。
-  - read / preview-of-read 路径不得开启 Undo record，也不得修改任何文档状态。
-  - 若能力需要支持未打开文件、CLI 或批处理场景，可额外提供显式 Offline 变体，经 `Infrastructure/Rhino/Offline/` 直接读 `.3dm` 文件（`Rhino.FileIO.File3dm`），无需运行中的 Rhino 实例。
-  - 离线路径**不得**调用任何写入 API（`model.Objects.Add` / `Delete` / `Replace` / `SetUserString` 等）。
-  - 若显式 Offline 变体检测到目标文件正以 ActiveDoc 形态在 Rhino 中打开且存在未保存改动，应在响应中写入 `OFFLINE_READ_STALE` 软警告；不阻断调用。该检测属于 best-effort 行为，可通过只读的 Live 状态查询完成；CLI 模式或无 Rhino 可用时静默跳过，不得让 offline read 调用失败。
-  - 不允许在同一个 read API 内部把 live 失败静默回退到 offline；调用方必须显式选择数据源，避免"当前真值"与"磁盘真值"混淆。
+- 所有能力必须由 Rhino Plugin 宿主加载，或经未来的 panel-bound MCP server 驱动。
+- 全局 pipe 路径解析为 `RhinoDoc.ActiveDoc`。目标文档必须存在、已 Save 到磁盘（`doc.Path` 非空）、且 `doc.Path` 与请求中的 `FilePath` 匹配，否则分别返回 `NO_ACTIVE_DOCUMENT` / `ACTIVE_DOC_UNSAVED` / `FILE_NOT_ACTIVE`。
+- Panel-bound 路径解析为 `RhinoDoc.FromRuntimeSerialNumber(boundSerial)`。目标文档必须存在、已 Save 到磁盘；请求 `FilePath` 在 bound mode 下被忽略并重写为绑定文档当前 `Path`。文档不存在 / 未保存分别返回 `DOCUMENT_CLOSED` / `ACTIVE_DOC_UNSAVED`；正常不返回 `FILE_NOT_ACTIVE`。
+- RhinoCommon 的 `RhinoDoc` / `Rhino.Geometry` API 限定在 Rhino UI 主线程。所有访问必须经 `ILiveRhinoDocumentAccessor` 封送到主线程同步执行；主线程长时间阻塞（> 10s）时返回 `RHINO_MAIN_THREAD_BUSY`。
+- 不允许在 live 失败后改读磁盘快照；调用方必须面对当前 Rhino 会话状态。
 
-### 写入路径（Live 强制）
+### 读 / Preview-of-read
 
-- 覆盖动作：Create / Transform / Replace / Delete / EditControlPoints / ApplyObjectEdits / Apply/DeleteObjectUserText / Set/DeleteDocumentUserStrings、preview-of-mutation，以及未来所有改动文档状态或依赖在线文档一致性的新能力。
-- 强制实现：经 `Infrastructure/Rhino/Live/` 路由到运行中的 Rhino 实例（`RhinoDoc.ActiveDoc`），通过 RhinoCommon 执行。
-- 理由：
-  - 离线 `File3dm.Write` 落盘即生效，绕过 Rhino Undo 栈与用户的 Save 动作，**不可撤销**；团队已确认此行为不可接受。
-  - 在线 `RhinoDoc` 写入自然进入 Undo 栈，用户在 Rhino 中 `Ctrl+Z` 即可撤销；viewport 实时刷新；多 MCP 工具共享同一份文档状态，不会出现"离线改完但 Rhino 里仍是旧版"的撕裂。
-- 约束：
-  - 写入工具与 preview-of-mutation 工具必须由 Rhino Plugin 宿主加载；目标文档必须为 `RhinoDoc.ActiveDoc`、已 Save 到磁盘（`doc.Path` 非空）、且 `doc.Path` 与请求中的 `FilePath` 匹配，否则分别返回 `NO_ACTIVE_DOCUMENT` / `ACTIVE_DOC_UNSAVED` / `FILE_NOT_ACTIVE`。
-  - **主线程封送**：RhinoCommon 的 `RhinoDoc` / `Rhino.Geometry` API 限定在 Rhino UI 主线程。MCP stdio host 请求运行在后台线程，因此所有 `RhinoDoc` 读写必须经 `RhinoApp.InvokeOnUiThread` 封送到主线程同步执行。封送实现集中在 `ILiveRhinoDocumentAccessor` 内部，业务层（Service / Skill / Tool）对线程模型无感。主线程长时间阻塞（> 10s）时返回 `RHINO_MAIN_THREAD_BUSY`。
-  - 每次 Apply 调用用 `doc.BeginUndoRecord(...)` / `EndUndoRecord(...)` 包裹，保证"一次写入 Tool 调用 = 一次 Undo 条目"；无实际变更或提前失败时改用 `CancelUndoRecord` 关闭，避免 Undo 栈出现空条目。
-  - 修改 Geometry / Attributes 优先使用 RhinoCommon 原生 API（`doc.Objects.Replace` / `doc.Objects.Transform`），保留 attributes 保真度并合并 Undo record；不沿用 Rhino3dm 的 delete+re-add 模式。
+- Read / Filter / Get / Find / Inspect，以及 preview-of-read 类能力都走 Live 路径。
+- 只读路径不得开启 Undo record，也不得修改任何文档状态。
 
-### Preview 归属
+### 写 / Mutation / Preview-of-mutation
 
-- Preview 本身不改文档，但在"Preview 某个 mutation"的语义下，Preview 看到的文档必须与随后 Apply 作用的文档一致。
-- 因此 Preview-of-mutation 也走 Live 路径：只读 `RhinoDoc`、不写、不开 Undo record；不允许走 Offline `File3dm` 回退，避免 Preview 与 Apply 对齐到不同的文档状态。
-- Preview-of-read 默认跟随对应 read 能力的执行模式，即 live-first；若产品需要未打开文件的预览能力，可额外提供显式 Offline 变体，并沿用 offline read 的 stale warning 指南。
+- Create / Transform / Replace / Delete / EditControlPoints / ApplyObjectEdits / Apply/DeleteObjectUserText / Set/DeleteDocumentUserStrings、preview-of-mutation，以及未来所有改动文档状态或依赖在线文档一致性的新能力都走 Live 路径。
+- mutation 使用 RhinoCommon API 修改文档，实时刷新视口，并进入 Rhino Undo 栈。
+- 每次 Apply 调用用 `doc.BeginUndoRecord(...)` / `EndUndoRecord(...)` 包裹，保证"一次写入 Tool 调用 = 一次 Undo 条目"。无实际变更时 Rhino 会丢弃空 Undo record。
+- 修改 Geometry / Attributes 优先使用 RhinoCommon 原生 API（`doc.Objects.Replace` / `doc.Objects.Transform`），保留 attributes 保真度并合并 Undo record。
+- Preview-of-mutation 只读 `RhinoDoc`、不写、不开 Undo record，但必须看见与随后 Apply 相同的 live 文档状态。
+
+### CLI 进程入口
+
+- `Program.cs` + `DeveloperCommandHandler` 的 CLI 模式只承担工具注册 smoke 与 live 调用 fallback。
+- CLI 模式下 `ILiveRhinoDocumentAccessor` 解析为 `NullLiveRhinoDocumentAccessor`，所有 live tool 返回 `LIVE_RHINO_REQUIRED`；该模式用于验证 DI、tool 签名与 partial smoke 注册，不承担业务功能。
 
 ### 去归档化
 
 - 因 Rhino Undo 已覆盖"误操作可回退"的核心诉求，`IFileMutationSafeguard` / Archive snapshot / preflight warning 机制不再保留，相关 Tool、Skill、Service、接口一并下线。
 - Save 时机回归 Rhino 既有流程（用户手动 Save 或 Rhino 自带 AutoSave）。
 
-### 例外处理
+### Developer Debug Control Path（Global Pipe）
 
-- 若后续出现"必须在无 Rhino 环境中做 mutation"的合理诉求（例如批处理服务器），需以显式开关（如 `--force-offline`）形式重新引入，并在本章节补充约束；该路径必须与默认 live mutation 实现严格隔离，默认禁用。
+`\\.\pipe\mcp_rhino` 是开发者调试控制路径，目标文档解析为 `RhinoDoc.ActiveDoc`。
+
+- 触发场景：外部 MCP client 或 smoke 经 `MCP_Rhino.Bridge.exe` 默认参数连接 `\\.\pipe\mcp_rhino`。
+- 用途：快速验证新 tool / skill / agent 的 live Rhino 行为、回归既有能力、调试外部 MCP client 配置。
+- 约束：目标文档必须是当前 `RhinoDoc.ActiveDoc`，且请求 `FilePath` 必须与 `ActiveDoc.Path` 匹配；否则沿用 `NO_ACTIVE_DOCUMENT` / `ACTIVE_DOC_UNSAVED` / `FILE_NOT_ACTIVE`。
+- 这条路径是正式保留的开发入口，但不是最终多文档用户体验路径；多文档用户体验应走 panel-bound per-doc server。
+- 新能力的 capability smoke 可以优先走该路径或专属 Rhino smoke command 验证业务能力；panel smoke 只验证 panel / bound accessor / CC / per-doc pipe 生命周期。
+
+### Panel-bound execution mode（Per-Document）
+
+Live Only 是默认模式，绑定到 `RhinoDoc.ActiveDoc`。本子节描述 panel 启用的 per-doc 绑定变体。
+
+- 触发场景：Rhino 内由 chat panel 启动的 per-doc MCP server 实例（`\\.\pipe\mcp_rhino_<RuntimeSerialNumber>`）。
+- 实现：`Infrastructure/Rhino/Live/BoundLiveRhinoDocumentAccessor` 实现 `ILiveRhinoDocumentAccessor`，所有 `RhinoDoc` 解析都来自 `RhinoDoc.FromRuntimeSerialNumber(boundSerial)`，不走 `ActiveDoc`。
+- 约束：
+  - 绑定 doc 必须存在（`FromRuntimeSerialNumber` 非 null）→ 否则返回 `DOCUMENT_CLOSED`。
+  - 绑定 doc 必须已落盘（`doc.Path` 非空）→ 否则沿用 `ACTIVE_DOC_UNSAVED`。
+  - 请求 `FilePath` 字段在 bound mode 下被忽略并自动重写为绑定 doc 的当前 `Path`；正常不返回 `FILE_NOT_ACTIVE`。
+  - 主线程封送、Undo record 包裹、超时（`> 10s` → `RHINO_MAIN_THREAD_BUSY`）等约束沿用 Live Only §通用契约。
+- 全局管道（`\\.\pipe\mcp_rhino`）作为 Developer Debug Control Path 保留 `ActiveDoc`-following 严格语义，不受本子节约束。
+- 新增错误码 `DOCUMENT_CLOSED`：bound doc 在 tool call 飞行期间被关闭。客户端处理建议：停止后续调用；面板侧此时已经在 dispatcher 触发 panel 销毁。
+- 并发：per-doc panel 不开启并行写入。所有 mutation 仍经 `RhinoApp.InvokeOnUiThread` 序列化在 UI 主线程，跨 panel 串行执行。
 
 ## 命名指南
 
@@ -140,7 +152,7 @@ Rhino 侧的能力按"是否修改文档状态"划分执行模式，互相不混
 ## 演进指南
 
 - 主 Server 项目（`MCP_Rhino.Server`，产出 `.rhp`）保持单项目分层的 DDD 目录结构；当业务复杂度显著上升时再考虑拆 `Application.Core` / `Infrastructure` 等子项目。
-- **例外：`MCP_Rhino.Bridge` 为独立 csproj**，承载 stdio-to-named-pipe 桥接能力（详见 §8 Plugin/ 子目录）。它只依赖 BCL 的 `System.IO.Pipes`，不引 RhinoCommon / Rhino3dm，不承担业务逻辑；不适合放进 `Infrastructure/` 下，因为它是 MCP Client 直接 spawn 的最小 exe，对部署可移动性有独立诉求。后续若有其他类似"对外 thin shim"项目，可建立 `src/` 下的兄弟 csproj，但禁止反向依赖主 Server 项目的业务层。
+- **例外：`MCP_Rhino.Bridge` 为独立 csproj**，承载 stdio-to-named-pipe 桥接能力（详见 §8 Plugin/ 子目录）。它只依赖 BCL 的 `System.IO.Pipes`，不引 RhinoCommon，不承担业务逻辑；不适合放进 `Infrastructure/` 下，因为它是 MCP Client 直接 spawn 的最小 exe，对部署可移动性有独立诉求。后续若有其他类似"对外 thin shim"项目，可建立 `src/` 下的兄弟 csproj，但禁止反向依赖主 Server 项目的业务层。
 - 任何新增功能都必须先判断归属，再决定目录位置。
 - 如果某个 Tool 开始承担复杂流程，应考虑将流程下沉到 `Application/` 或升级为 `Skill`。
 - 如果某个 Skill 开始出现目标判断与动态策略，应考虑升级为 `Agent`。

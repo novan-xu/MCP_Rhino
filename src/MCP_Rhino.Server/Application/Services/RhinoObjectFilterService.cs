@@ -6,7 +6,6 @@ using MCP_Rhino.Server.Contracts.Requests;
 using MCP_Rhino.Server.Contracts.Responses;
 using MCP_Rhino.Server.Domain.Enums;
 using MCP_Rhino.Server.Domain.Models;
-using Rhino.DocObjects;
 using LiveLayer = rhinocommon::Rhino.DocObjects.Layer;
 using RhinoDoc = rhinocommon::Rhino.RhinoDoc;
 
@@ -14,16 +13,13 @@ namespace MCP_Rhino.Server.Application.Services;
 
 public sealed class RhinoObjectFilterService
 {
-    private readonly IRhinoDocumentRepository _repository;
     private readonly ILiveRhinoDocumentAccessor _documentAccessor;
     private readonly IEnumerable<IObjectFilterCriterionEvaluator> _evaluators;
 
     public RhinoObjectFilterService(
-        IRhinoDocumentRepository repository,
         ILiveRhinoDocumentAccessor documentAccessor,
         IEnumerable<IObjectFilterCriterionEvaluator> evaluators)
     {
-        _repository = repository;
         _documentAccessor = documentAccessor;
         _evaluators = evaluators;
     }
@@ -74,8 +70,7 @@ public sealed class RhinoObjectFilterService
         });
     }
 
-    // Live variant: runs the same filter criteria evaluators against live
-    // document state instead of File3dm-on-disk snapshot.
+    // Runs filter criteria evaluators against live document state.
     public OperationResponse<RhinoObjectFilterResult> FilterInLive(FilterObjectsRequest request)
     {
         RhinoObjectFilterCriteria criteria = CreateCriteria(request);
@@ -163,41 +158,7 @@ public sealed class RhinoObjectFilterService
 
     public OperationResponse<IReadOnlyList<RhinoLayerCandidate>> FindLayerCandidates(FindLayerCandidatesRequest request)
     {
-        if (!_repository.Exists(request.FilePath))
-        {
-            return OperationResponse<IReadOnlyList<RhinoLayerCandidate>>.Fail($"File was not found: {request.FilePath}");
-        }
-
-        if (string.IsNullOrWhiteSpace(request.LayerQuery))
-        {
-            return OperationResponse<IReadOnlyList<RhinoLayerCandidate>>.Fail("LayerQuery cannot be empty.");
-        }
-
-        try
-        {
-            using var model = _repository.Read(request.FilePath);
-
-            var candidates = model.AllLayers
-                .Where(layer => !layer.IsDeleted)
-                .Where(layer => MatchesLayer(layer, request.LayerQuery, request.ExactMatch))
-                .Select(layer => new RhinoLayerCandidate
-                {
-                    LayerIndex = layer.Index,
-                    LayerName = layer.Name,
-                    FullPath = layer.FullPath,
-                    ObjectCount = model.Objects.Count(obj => obj.Attributes.LayerIndex == layer.Index)
-                })
-                .OrderBy(layer => layer.FullPath, StringComparer.OrdinalIgnoreCase)
-                .ToList();
-
-            return OperationResponse<IReadOnlyList<RhinoLayerCandidate>>.Ok(
-                candidates,
-                candidates.Count == 0 ? "No matching layers were found." : $"Found {candidates.Count} matching layers.");
-        }
-        catch (Exception ex)
-        {
-            return OperationResponse<IReadOnlyList<RhinoLayerCandidate>>.Fail($"Layer lookup failed: {ex.Message}");
-        }
+        return FindLayerCandidatesInLive(request);
     }
 
     public OperationResponse<RhinoObjectFilterResult> FilterByLayer(FilterObjectsByLayerRequest request)
@@ -230,105 +191,12 @@ public sealed class RhinoObjectFilterService
 
     public OperationResponse<RhinoObjectFilterResult> Filter(FilterObjectsRequest request)
     {
-        if (!_repository.Exists(request.FilePath))
-        {
-            return OperationResponse<RhinoObjectFilterResult>.Fail($"File was not found: {request.FilePath}");
-        }
-
-        RhinoObjectFilterCriteria criteria = CreateCriteria(request);
-        if (!criteria.HasAnyCriteria())
-        {
-            return OperationResponse<RhinoObjectFilterResult>.Fail("At least one filter criterion is required.");
-        }
-
-        try
-        {
-            using var model = _repository.Read(request.FilePath);
-            var objectInfos = BuildObjectInfos(model);
-            var activeEvaluators = _evaluators.Where(evaluator => evaluator.CanEvaluate(criteria)).ToList();
-
-            var matchedObjects = objectInfos
-                .Where(objectInfo => MatchesAllCriteria(objectInfo, criteria, activeEvaluators))
-                .ToList();
-
-            var result = new RhinoObjectFilterResult
-            {
-                FilePath = request.FilePath,
-                TotalObjectCount = objectInfos.Count,
-                MatchedCount = matchedObjects.Count,
-                CriteriaSummary = SummarizeCriteria(criteria),
-                Warnings = CreateOfflineWarnings(request.FilePath),
-                Objects = matchedObjects
-            };
-
-            return OperationResponse<RhinoObjectFilterResult>.Ok(result, $"Filter completed. Matched {matchedObjects.Count} objects.");
-        }
-        catch (Exception ex)
-        {
-            return OperationResponse<RhinoObjectFilterResult>.Fail($"Object filter failed: {ex.Message}");
-        }
+        return FilterInLive(request);
     }
 
     public OperationResponse<RhinoObjectFilterResult> ResolveByObjectIds(string filePath, IReadOnlyList<Guid> objectIds)
     {
-        if (!_repository.Exists(filePath))
-        {
-            return OperationResponse<RhinoObjectFilterResult>.Fail($"File was not found: {filePath}");
-        }
-
-        List<Guid> distinctObjectIds = objectIds
-            .Where(objectId => objectId != Guid.Empty)
-            .Distinct()
-            .ToList();
-
-        if (distinctObjectIds.Count == 0)
-        {
-            return OperationResponse<RhinoObjectFilterResult>.Fail("At least one non-empty ObjectId is required.");
-        }
-
-        try
-        {
-            using var model = _repository.Read(filePath);
-            List<RhinoObjectInfo> objectInfos = BuildObjectInfos(model);
-            Dictionary<Guid, RhinoObjectInfo> objectLookup = objectInfos.ToDictionary(objectInfo => objectInfo.ObjectId);
-
-            var resolvedObjects = new List<RhinoObjectInfo>(distinctObjectIds.Count);
-            var missingObjectIds = new List<Guid>();
-
-            foreach (Guid objectId in distinctObjectIds)
-            {
-                if (objectLookup.TryGetValue(objectId, out RhinoObjectInfo? objectInfo))
-                {
-                    resolvedObjects.Add(objectInfo);
-                }
-                else
-                {
-                    missingObjectIds.Add(objectId);
-                }
-            }
-
-            if (missingObjectIds.Count > 0)
-            {
-                return OperationResponse<RhinoObjectFilterResult>.Fail(
-                    $"The following ObjectIds were not found in the file: {string.Join(", ", missingObjectIds)}");
-            }
-
-            var result = new RhinoObjectFilterResult
-            {
-                FilePath = filePath,
-                TotalObjectCount = objectInfos.Count,
-                MatchedCount = resolvedObjects.Count,
-                CriteriaSummary = SummarizeObjectIds(distinctObjectIds),
-                Warnings = CreateOfflineWarnings(filePath),
-                Objects = resolvedObjects
-            };
-
-            return OperationResponse<RhinoObjectFilterResult>.Ok(result, $"Resolved {resolvedObjects.Count} explicit ObjectIds.");
-        }
-        catch (Exception ex)
-        {
-            return OperationResponse<RhinoObjectFilterResult>.Fail($"ObjectId resolution failed: {ex.Message}");
-        }
+        return ResolveByObjectIdsInLive(filePath, objectIds);
     }
 
     public string FormatLayerCandidates(string layerQuery, IReadOnlyList<RhinoLayerCandidate>? candidates, string message)
@@ -399,35 +267,6 @@ public sealed class RhinoObjectFilterService
         }
 
         return builder.ToString();
-    }
-
-    private IReadOnlyList<ObjectEditWarning> CreateOfflineWarnings(string filePath)
-    {
-        if (_documentAccessor.TryGetActiveDocumentState(filePath, out bool hasUnsavedChanges) && hasUnsavedChanges)
-        {
-            return new[]
-            {
-                new ObjectEditWarning
-                {
-                    Code = "OFFLINE_READ_STALE",
-                    Message = "The target file is open in Rhino with unsaved changes, so offline read results may be stale."
-                }
-            };
-        }
-
-        return Array.Empty<ObjectEditWarning>();
-    }
-
-    private static bool MatchesLayer(Layer layer, string query, bool exactMatch)
-    {
-        if (exactMatch)
-        {
-            return string.Equals(layer.Name, query, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(layer.FullPath, query, StringComparison.OrdinalIgnoreCase);
-        }
-
-        return string.Equals(layer.Name, query, StringComparison.OrdinalIgnoreCase)
-            || layer.FullPath.Contains(query, StringComparison.OrdinalIgnoreCase);
     }
 
     private RhinoObjectFilterCriteria CreateCriteria(FilterObjectsRequest request)
@@ -522,55 +361,6 @@ public sealed class RhinoObjectFilterService
                 LayerName = layer?.Name ?? "Unknown",
                 LayerFullPath = layer?.FullPath ?? "Unknown",
                 Name = rhinoObject.Attributes.Name ?? string.Empty,
-                UserAttributes = userAttributes
-            });
-        }
-
-        return objectInfos;
-    }
-
-    private List<RhinoObjectInfo> BuildObjectInfos(Rhino.FileIO.File3dm model)
-    {
-        var layerLookup = model.AllLayers
-            .Where(layer => !layer.IsDeleted)
-            .ToDictionary(layer => layer.Index);
-
-        var objectInfos = new List<RhinoObjectInfo>();
-        foreach (var modelObject in model.Objects)
-        {
-            layerLookup.TryGetValue(modelObject.Attributes.LayerIndex, out Layer? layer);
-            var userAttributes = new List<RhinoObjectUserAttributeEntry>();
-            var userStrings = modelObject.Attributes.GetUserStrings();
-            if (userStrings is not null)
-            {
-                foreach (string? key in userStrings.AllKeys)
-                {
-                    if (string.IsNullOrWhiteSpace(key))
-                    {
-                        continue;
-                    }
-
-                    userAttributes.Add(new RhinoObjectUserAttributeEntry
-                    {
-                        Key = key,
-                        Value = userStrings[key] ?? string.Empty
-                    });
-                }
-            }
-
-            string rawObjectType = modelObject.Geometry?.ObjectType.ToString() ?? "Unknown";
-            string geometryTypeName = modelObject.Geometry?.GetType().Name ?? rawObjectType;
-
-            objectInfos.Add(new RhinoObjectInfo
-            {
-                ObjectId = modelObject.Attributes.ObjectId,
-                ObjectTypeName = rawObjectType,
-                NormalizedObjectType = NormalizeObjectType(rawObjectType, geometryTypeName),
-                GeometryTypeName = geometryTypeName,
-                LayerIndex = modelObject.Attributes.LayerIndex,
-                LayerName = layer?.Name ?? "Unknown",
-                LayerFullPath = layer?.FullPath ?? "Unknown",
-                Name = modelObject.Attributes.Name ?? string.Empty,
                 UserAttributes = userAttributes
             });
         }

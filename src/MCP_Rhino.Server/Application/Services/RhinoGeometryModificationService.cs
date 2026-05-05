@@ -10,20 +10,17 @@ public sealed class RhinoGeometryModificationService
     private const int PreviewLimit = 20;
 
     private readonly ILiveRhinoDocumentAccessor _documentAccessor;
-    private readonly IGeometryValidator _validator;
     private readonly ILiveGeometryValidator _liveGeometryValidator;
     private readonly IGeometryMutator _mutator;
     private readonly IEditResultFormatter _formatter;
 
     public RhinoGeometryModificationService(
         ILiveRhinoDocumentAccessor documentAccessor,
-        IGeometryValidator validator,
         ILiveGeometryValidator liveGeometryValidator,
         IGeometryMutator mutator,
         IEditResultFormatter formatter)
     {
         _documentAccessor = documentAccessor;
-        _validator = validator;
         _liveGeometryValidator = liveGeometryValidator;
         _mutator = mutator;
         _formatter = formatter;
@@ -127,7 +124,7 @@ public sealed class RhinoGeometryModificationService
                     return OperationResponse<GeometryModificationPreviewResponse>.Fail($"Object not found: {spec.ObjectId}");
                 }
 
-                OperationResponse<IReadOnlyList<ObjectEditWarning>> validation = _validator.Validate(spec, target);
+                OperationResponse<IReadOnlyList<ObjectEditWarning>> validation = _liveGeometryValidator.Validate(spec, target);
                 if (!validation.Success)
                 {
                     return OperationResponse<GeometryModificationPreviewResponse>.Fail(validation.Message);
@@ -193,7 +190,7 @@ public sealed class RhinoGeometryModificationService
                     return OperationResponse<(bool Mutated, GeometryModificationResponse Result)>.Fail($"Object not found: {spec.ObjectId}");
                 }
 
-                OperationResponse<IReadOnlyList<ObjectEditWarning>> validation = _validator.Validate(spec, target);
+                OperationResponse<IReadOnlyList<ObjectEditWarning>> validation = _liveGeometryValidator.Validate(spec, target);
                 if (!validation.Success)
                 {
                     return OperationResponse<(bool Mutated, GeometryModificationResponse Result)>.Fail(validation.Message);
@@ -255,7 +252,7 @@ public sealed class RhinoGeometryModificationService
                     return OperationResponse<GeometryModificationPreviewResponse>.Fail($"Object not found: {spec.ObjectId}");
                 }
 
-                OperationResponse<IReadOnlyList<ObjectEditWarning>> validation = _validator.Validate(spec, target);
+                OperationResponse<IReadOnlyList<ObjectEditWarning>> validation = _liveGeometryValidator.Validate(spec, target);
                 if (!validation.Success)
                 {
                     return OperationResponse<GeometryModificationPreviewResponse>.Fail(validation.Message);
@@ -326,7 +323,7 @@ public sealed class RhinoGeometryModificationService
                     return OperationResponse<(bool Mutated, GeometryModificationResponse Result)>.Fail($"Object not found: {spec.ObjectId}");
                 }
 
-                OperationResponse<IReadOnlyList<ObjectEditWarning>> validation = _validator.Validate(spec, target);
+                OperationResponse<IReadOnlyList<ObjectEditWarning>> validation = _liveGeometryValidator.Validate(spec, target);
                 if (!validation.Success)
                 {
                     return OperationResponse<(bool Mutated, GeometryModificationResponse Result)>.Fail(validation.Message);
@@ -392,7 +389,7 @@ public sealed class RhinoGeometryModificationService
         RhinoObjectFilterResult selection,
         bool ignoredFilters)
     {
-        OperationResponse<IReadOnlyList<ObjectEditWarning>> validation = _validator.Validate(transform, selection.Objects);
+        OperationResponse<IReadOnlyList<ObjectEditWarning>> validation = _liveGeometryValidator.Validate(transform, selection.Objects);
         if (!validation.Success)
         {
             return OperationResponse<GeometryModificationPreviewResponse>.Fail(validation.Message);
@@ -447,7 +444,7 @@ public sealed class RhinoGeometryModificationService
 
         return _documentAccessor.ExecuteWithUndo(filePath, undoDescription, document =>
         {
-            OperationResponse<IReadOnlyList<ObjectEditWarning>> validation = _validator.Validate(transform, selection.Objects);
+            OperationResponse<IReadOnlyList<ObjectEditWarning>> validation = _liveGeometryValidator.Validate(transform, selection.Objects);
             if (!validation.Success)
             {
                 return OperationResponse<(bool Mutated, GeometryModificationResponse Result)>.Fail(validation.Message);
