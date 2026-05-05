@@ -14,6 +14,7 @@ using PlaneSurface = rhinocommon::Rhino.Geometry.PlaneSurface;
 using Point3d = rhinocommon::Rhino.Geometry.Point3d;
 using Polyline = rhinocommon::Rhino.Geometry.Polyline;
 using RhinoObject = rhinocommon::Rhino.DocObjects.RhinoObject;
+using Vector3d = rhinocommon::Rhino.Geometry.Vector3d;
 
 namespace MCP_Rhino.Server.Infrastructure.CLI;
 
@@ -191,17 +192,18 @@ public sealed partial class DeveloperCommandHandler
             _liveRhinoDocumentAccessor.ExecuteWithUndo(filePath, "MCP:SurfacePointOrderRebuildSmokeSetup", document =>
             {
                 var ids = new List<Guid>();
-                var quad = new PlaneSurface(Plane.WorldXY, new Interval(0d, 2d), new Interval(0d, 2d));
+                var verticalPlane = new Plane(Point3d.Origin, Vector3d.YAxis, Vector3d.ZAxis);
+                var quad = new PlaneSurface(verticalPlane, new Interval(0d, 2d), new Interval(0d, 2d));
                 ids.Add(document.Objects.AddSurface(quad, CreateSurfacePointOrderRebuildAttributes("quad")));
 
                 var polygon = new Polyline(new[]
                 {
                     new Point3d(4d, 0d, 0d),
-                    new Point3d(6d, 0d, 0d),
-                    new Point3d(7d, 1d, 0d),
-                    new Point3d(6d, 2d, 0d),
                     new Point3d(4d, 2d, 0d),
-                    new Point3d(3d, 1d, 0d),
+                    new Point3d(4d, 3d, 1d),
+                    new Point3d(4d, 2d, 2d),
+                    new Point3d(4d, 0d, 2d),
+                    new Point3d(4d, -1d, 1d),
                     new Point3d(4d, 0d, 0d)
                 });
                 Brep[]? polygonBreps = Brep.CreatePlanarBreps(polygon.ToNurbsCurve(), document.ModelAbsoluteTolerance);

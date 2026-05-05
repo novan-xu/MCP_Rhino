@@ -6,20 +6,49 @@ namespace MCP_Rhino.Server.Infrastructure.Rhino.Live;
 
 public sealed class LiveSurfaceLocalCoordinateSystemBuilder : ISurfaceLocalCoordinateSystemBuilder
 {
-    public OperationResponse<SurfaceLocalCoordinateSystem> Build(
-        SurfaceBoundaryLoop boundaryLoop,
-        SurfaceReferenceCurveSpec referenceCurve)
+    private const double Tolerance = 1e-12;
+
+    public OperationResponse<SurfaceLocalCoordinateSystem> Build(SurfaceBoundaryLoop boundaryLoop)
     {
-        GeometryVectorData xAxis = Normalize(Subtract(referenceCurve.EndPoint, referenceCurve.StartPoint));
-        GeometryVectorData normal = Normalize(ComputeNormal(boundaryLoop.Vertices3d));
-        GeometryVectorData yAxis = Normalize(Cross(normal, xAxis));
+        GeometryVectorData normal = Normalize(boundaryLoop.FrontNormal);
+        if (IsZero(normal))
+        {
+            normal = Normalize(ComputeNormal(boundaryLoop.Vertices3d));
+        }
+
+        if (IsZero(normal))
+        {
+            return OperationResponse<SurfaceLocalCoordinateSystem>.Fail("DEGENERATE_SURFACE_NORMAL");
+        }
+
+        GeometryVectorData gravity = new() { X = 0d, Y = 0d, Z = -1d };
+        double gravityAlongNormal = Dot(gravity, normal);
+        GeometryVectorData down = Normalize(new GeometryVectorData
+        {
+            X = gravity.X - (gravityAlongNormal * normal.X),
+            Y = gravity.Y - (gravityAlongNormal * normal.Y),
+            Z = gravity.Z - (gravityAlongNormal * normal.Z)
+        });
+        if (IsZero(down))
+        {
+            return OperationResponse<SurfaceLocalCoordinateSystem>.Fail("SURFACE_GRAVITY_PROJECTION_DEGENERATE");
+        }
+
+        GeometryVectorData yAxis = new()
+        {
+            X = -down.X,
+            Y = -down.Y,
+            Z = -down.Z
+        };
+        GeometryVectorData xAxis = Normalize(Cross(normal, down));
         bool degenerate = IsZero(xAxis) || IsZero(normal) || IsZero(yAxis);
 
         return OperationResponse<SurfaceLocalCoordinateSystem>.Ok(new SurfaceLocalCoordinateSystem
         {
-            Origin = referenceCurve.Midpoint,
+            Origin = ComputeCentroid(boundaryLoop.Vertices3d),
             XAxis = xAxis,
             YAxis = yAxis,
+            DownAxis = down,
             Normal = normal,
             IsDegenerate = degenerate
         });
@@ -52,6 +81,31 @@ public sealed class LiveSurfaceLocalCoordinateSystemBuilder : ISurfaceLocalCoord
         };
     }
 
+    private static GeometryPointData ComputeCentroid(IReadOnlyList<GeometryPointData> points)
+    {
+        if (points.Count == 0)
+        {
+            return new GeometryPointData();
+        }
+
+        double x = 0d;
+        double y = 0d;
+        double z = 0d;
+        foreach (GeometryPointData point in points)
+        {
+            x += point.X;
+            y += point.Y;
+            z += point.Z;
+        }
+
+        return new GeometryPointData
+        {
+            X = x / points.Count,
+            Y = y / points.Count,
+            Z = z / points.Count
+        };
+    }
+
     private static GeometryVectorData Cross(GeometryVectorData a, GeometryVectorData b)
     {
         return new GeometryVectorData
@@ -65,7 +119,7 @@ public sealed class LiveSurfaceLocalCoordinateSystemBuilder : ISurfaceLocalCoord
     private static GeometryVectorData Normalize(GeometryVectorData vector)
     {
         double length = Math.Sqrt((vector.X * vector.X) + (vector.Y * vector.Y) + (vector.Z * vector.Z));
-        if (length <= 1e-12 || double.IsNaN(length) || double.IsInfinity(length))
+        if (length <= Tolerance || double.IsNaN(length) || double.IsInfinity(length))
         {
             return new GeometryVectorData();
         }
@@ -80,6 +134,11 @@ public sealed class LiveSurfaceLocalCoordinateSystemBuilder : ISurfaceLocalCoord
 
     private static bool IsZero(GeometryVectorData vector)
     {
-        return Math.Abs(vector.X) <= 1e-12 && Math.Abs(vector.Y) <= 1e-12 && Math.Abs(vector.Z) <= 1e-12;
+        return Math.Abs(vector.X) <= Tolerance && Math.Abs(vector.Y) <= Tolerance && Math.Abs(vector.Z) <= Tolerance;
+    }
+
+    private static double Dot(GeometryVectorData a, GeometryVectorData b)
+    {
+        return (a.X * b.X) + (a.Y * b.Y) + (a.Z * b.Z);
     }
 }

@@ -24,16 +24,20 @@ public sealed partial class DeveloperCommandHandler
     private readonly RhinoObjectEditingAgent _editingAgent;
     private readonly GeometryCreationSkill _geometryCreationSkill;
     private readonly GeometryModificationSkill _geometryModificationSkill;
+    private readonly StandardFourPointSurfaceRebuildSkill _standardFourPointSurfaceRebuildSkill;
     private readonly ILiveRhinoDocumentAccessor _liveRhinoDocumentAccessor;
     private readonly IEditableGeometryDescriptorService _editableGeometryDescriptorService;
     private readonly IGeometryMetadataOperator _geometryMetadataOperator;
     private readonly ICurveEditOrchestrator _curveEditOrchestrator;
     private readonly ISurfaceEditOrchestrator _surfaceEditOrchestrator;
     private readonly ISurfaceRebuildOrchestrator _surfaceRebuildOrchestrator;
+    private readonly ISurfaceDirectionTweakOrchestrator _surfaceDirectionTweakOrchestrator;
+    private readonly ISurfaceFrontBackFlipOrchestrator _surfaceFrontBackFlipOrchestrator;
     private readonly RhinoGeometryMetricsService _geometryMetricsService;
     private readonly RhinoGeometryCurvatureService _geometryCurvatureService;
     private readonly RhinoGeometryIntersectionService _geometryIntersectionService;
     private readonly RhinoFileExportService _fileExportService;
+    private readonly RhinoDrawingExportService _drawingExportService;
     private readonly RhinoExternalReferenceService _externalReferenceService;
     private readonly Dictionary<string, Func<string[], bool>> _extensionHandlers = new(StringComparer.OrdinalIgnoreCase);
 
@@ -48,6 +52,11 @@ public sealed partial class DeveloperCommandHandler
     partial void RegisterGeometryEditSurfaceCompositeHandlers();
     partial void RegisterSurfacePointOrderRebuildHandlers();
     partial void RegisterRhinoClaudeCodePanelHandlers();
+    partial void RegisterGravityAwareSurfacePointOrderHandlers();
+    partial void RegisterSurfaceDirectionTweakHandlers();
+    partial void RegisterStandardFourPointSurfaceRebuildHandlers();
+    partial void RegisterSurfaceFrontBackFlipHandlers();
+    partial void RegisterDrawingExportHandlers();
 
     partial void RegisterExtensionHandlers()
     {
@@ -59,6 +68,11 @@ public sealed partial class DeveloperCommandHandler
         RegisterGeometryEditSurfaceCompositeHandlers();
         RegisterSurfacePointOrderRebuildHandlers();
         RegisterRhinoClaudeCodePanelHandlers();
+        RegisterGravityAwareSurfacePointOrderHandlers();
+        RegisterSurfaceDirectionTweakHandlers();
+        RegisterStandardFourPointSurfaceRebuildHandlers();
+        RegisterSurfaceFrontBackFlipHandlers();
+        RegisterDrawingExportHandlers();
     }
 
     public DeveloperCommandHandler(
@@ -74,16 +88,20 @@ public sealed partial class DeveloperCommandHandler
         RhinoObjectEditingAgent editingAgent,
         GeometryCreationSkill geometryCreationSkill,
         GeometryModificationSkill geometryModificationSkill,
+        StandardFourPointSurfaceRebuildSkill standardFourPointSurfaceRebuildSkill,
         ILiveRhinoDocumentAccessor liveRhinoDocumentAccessor,
         IEditableGeometryDescriptorService editableGeometryDescriptorService,
         IGeometryMetadataOperator geometryMetadataOperator,
         ICurveEditOrchestrator curveEditOrchestrator,
         ISurfaceEditOrchestrator surfaceEditOrchestrator,
         ISurfaceRebuildOrchestrator surfaceRebuildOrchestrator,
+        ISurfaceDirectionTweakOrchestrator surfaceDirectionTweakOrchestrator,
+        ISurfaceFrontBackFlipOrchestrator surfaceFrontBackFlipOrchestrator,
         RhinoGeometryMetricsService geometryMetricsService,
         RhinoGeometryCurvatureService geometryCurvatureService,
         RhinoGeometryIntersectionService geometryIntersectionService,
         RhinoFileExportService fileExportService,
+        RhinoDrawingExportService drawingExportService,
         RhinoExternalReferenceService externalReferenceService)
     {
         _filterService = filterService;
@@ -98,16 +116,20 @@ public sealed partial class DeveloperCommandHandler
         _editingAgent = editingAgent;
         _geometryCreationSkill = geometryCreationSkill;
         _geometryModificationSkill = geometryModificationSkill;
+        _standardFourPointSurfaceRebuildSkill = standardFourPointSurfaceRebuildSkill;
         _liveRhinoDocumentAccessor = liveRhinoDocumentAccessor;
         _editableGeometryDescriptorService = editableGeometryDescriptorService;
         _geometryMetadataOperator = geometryMetadataOperator;
         _curveEditOrchestrator = curveEditOrchestrator;
         _surfaceEditOrchestrator = surfaceEditOrchestrator;
         _surfaceRebuildOrchestrator = surfaceRebuildOrchestrator;
+        _surfaceDirectionTweakOrchestrator = surfaceDirectionTweakOrchestrator;
+        _surfaceFrontBackFlipOrchestrator = surfaceFrontBackFlipOrchestrator;
         _geometryMetricsService = geometryMetricsService;
         _geometryCurvatureService = geometryCurvatureService;
         _geometryIntersectionService = geometryIntersectionService;
         _fileExportService = fileExportService;
+        _drawingExportService = drawingExportService;
         _externalReferenceService = externalReferenceService;
         RegisterExtensionHandlers();
     }

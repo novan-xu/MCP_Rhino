@@ -237,9 +237,7 @@ public sealed class SurfaceRebuildOrchestrator : ISurfaceRebuildOrchestrator
             return OperationResponse<PreparedSurfaceRebuild>.Fail("REFERENCE_CURVE_AMBIGUOUS");
         }
 
-        OperationResponse<SurfaceLocalCoordinateSystem> localFrame = _localCoordinateSystemBuilder.Build(
-            descriptor.Data.OuterBoundaryLoop,
-            referenceCurve);
+        OperationResponse<SurfaceLocalCoordinateSystem> localFrame = _localCoordinateSystemBuilder.Build(descriptor.Data.OuterBoundaryLoop);
         if (!localFrame.Success || localFrame.Data is null)
         {
             return OperationResponse<PreparedSurfaceRebuild>.Fail(localFrame.Message);

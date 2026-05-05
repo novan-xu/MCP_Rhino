@@ -9,6 +9,7 @@ public sealed class SurfaceRebuildDescriptor
     public IReadOnlyList<SurfaceReferenceCurveSpec> CandidateReferenceCurves { get; set; } = Array.Empty<SurfaceReferenceCurveSpec>();
     public SurfaceReferenceCurveSpec? SuggestedReferenceCurve { get; set; }
     public SurfaceBoundaryLoop OuterBoundaryLoop { get; set; } = new();
+    public SurfaceLocalCoordinateSystem LocalFrame { get; set; } = new();
     public SurfacePointOrderDirection SuggestedDirection { get; set; } = SurfacePointOrderDirection.CounterClockwise;
     public SurfacePointOrderStartAnchorMode SuggestedStartAnchor { get; set; } = SurfacePointOrderStartAnchorMode.ReferenceStart;
     public SurfaceRebuildRouteKind SuggestedRoute { get; set; } = SurfaceRebuildRouteKind.FourPoint;

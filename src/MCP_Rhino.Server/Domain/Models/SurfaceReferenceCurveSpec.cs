@@ -4,6 +4,9 @@ public sealed class SurfaceReferenceCurveSpec
 {
     public Guid? ObjectId { get; set; }
     public int? EdgeIndex { get; set; }
+    public int? StartVertexIndex { get; set; }
+    public int? EndVertexIndex { get; set; }
+    public bool ReversedFromBoundary { get; set; }
     public GeometryPointData StartPoint { get; set; } = new();
     public GeometryPointData EndPoint { get; set; } = new();
     public GeometryPointData Midpoint { get; set; } = new();
