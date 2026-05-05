@@ -52,6 +52,10 @@ public static class DependencyInjection
         services.AddSingleton<IBoundaryReferenceCurveAnalyzer, LiveBoundaryReferenceCurveAnalyzer>();
         services.AddSingleton<ISurfaceLocalCoordinateSystemBuilder, LiveSurfaceLocalCoordinateSystemBuilder>();
         services.AddSingleton<IBoundaryDrivenSurfaceReconstructor, LiveBoundaryDrivenSurfaceReconstructor>();
+        services.AddSingleton<ILiveSurfaceDirectionTweakService, LiveSurfaceDirectionTweakService>();
+        services.AddSingleton<ILiveSurfaceFrontBackFlipService, LiveSurfaceFrontBackFlipService>();
+        services.AddSingleton<ILiveDrawingViewManager, LiveDrawingViewManager>();
+        services.AddSingleton<ILiveDrawingExportStateOperator, LiveDrawingExportStateOperator>();
         return services;
     }
 
@@ -81,6 +85,10 @@ public static class DependencyInjection
         services.AddSingleton<IBoundaryReferenceCurveAnalyzer, LiveBoundaryReferenceCurveAnalyzer>();
         services.AddSingleton<ISurfaceLocalCoordinateSystemBuilder, LiveSurfaceLocalCoordinateSystemBuilder>();
         services.AddSingleton<IBoundaryDrivenSurfaceReconstructor, LiveBoundaryDrivenSurfaceReconstructor>();
+        services.AddSingleton<ILiveSurfaceDirectionTweakService, LiveSurfaceDirectionTweakService>();
+        services.AddSingleton<ILiveSurfaceFrontBackFlipService, LiveSurfaceFrontBackFlipService>();
+        services.AddSingleton<ILiveDrawingViewManager, LiveDrawingViewManager>();
+        services.AddSingleton<ILiveDrawingExportStateOperator, LiveDrawingExportStateOperator>();
         return services;
     }
 
@@ -97,11 +105,15 @@ public static class DependencyInjection
         services.AddSingleton<RhinoGeometryCurvatureService>();
         services.AddSingleton<RhinoGeometryIntersectionService>();
         services.AddSingleton<RhinoFileExportService>();
+        services.AddSingleton<IDrawingExportSnapshotStore, DrawingExportSnapshotStore>();
+        services.AddSingleton<RhinoDrawingExportService>();
         services.AddSingleton<RhinoExternalReferenceService>();
         services.AddSingleton<ICurveEditOrchestrator, CurveEditOrchestrator>();
         services.AddSingleton<ISurfaceEditOrchestrator, SurfaceEditOrchestrator>();
         services.AddSingleton<ISurfaceBoundaryPointOrderer, SurfaceBoundaryPointOrderer>();
         services.AddSingleton<ISurfaceRebuildOrchestrator, SurfaceRebuildOrchestrator>();
+        services.AddSingleton<ISurfaceDirectionTweakOrchestrator, SurfaceDirectionTweakOrchestrator>();
+        services.AddSingleton<ISurfaceFrontBackFlipOrchestrator, SurfaceFrontBackFlipOrchestrator>();
         services.AddSingleton<DeveloperCommandHandler>();
         return services;
     }

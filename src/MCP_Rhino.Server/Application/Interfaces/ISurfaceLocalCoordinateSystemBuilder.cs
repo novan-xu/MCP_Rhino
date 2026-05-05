@@ -5,7 +5,5 @@ namespace MCP_Rhino.Server.Application.Interfaces;
 
 public interface ISurfaceLocalCoordinateSystemBuilder
 {
-    OperationResponse<SurfaceLocalCoordinateSystem> Build(
-        SurfaceBoundaryLoop boundaryLoop,
-        SurfaceReferenceCurveSpec referenceCurve);
+    OperationResponse<SurfaceLocalCoordinateSystem> Build(SurfaceBoundaryLoop boundaryLoop);
 }

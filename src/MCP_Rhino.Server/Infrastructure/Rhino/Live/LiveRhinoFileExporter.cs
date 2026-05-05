@@ -13,6 +13,7 @@ using RhinoView = rhinocommon::Rhino.Display.RhinoView;
 using ViewCapture = rhinocommon::Rhino.Display.ViewCapture;
 using ViewCaptureSettings = rhinocommon::Rhino.Display.ViewCaptureSettings;
 using ViewTypeFilter = rhinocommon::Rhino.Display.ViewTypeFilter;
+using ViewInfo = rhinocommon::Rhino.DocObjects.ViewInfo;
 using RhinoDoc = rhinocommon::Rhino.RhinoDoc;
 
 namespace MCP_Rhino.Server.Infrastructure.Rhino.Live;
@@ -119,15 +120,16 @@ public sealed class LiveRhinoFileExporter : ILiveFileExporter
             return OperationResponse<FileExportExecutionResult>.Fail("ImageSizePx is required for image export.");
         }
 
-        OperationResponse<ResolvedView> resolvedView = ResolveView(document, spec.ViewName);
-        if (!resolvedView.Success || resolvedView.Data is null)
+        OperationResponse<ResolvedView> resolvedViewResponse = ResolveView(document, spec.ViewName);
+        if (!resolvedViewResponse.Success || resolvedViewResponse.Data is null)
         {
-            return OperationResponse<FileExportExecutionResult>.Fail(resolvedView.Message);
+            return OperationResponse<FileExportExecutionResult>.Fail(resolvedViewResponse.Message);
         }
 
+        using ResolvedView resolvedView = resolvedViewResponse.Data;
         var stopwatch = Stopwatch.StartNew();
         var warnings = new List<ObjectEditWarning>();
-        warnings.AddRange(resolvedView.Data.Warnings);
+        warnings.AddRange(resolvedView.Warnings);
         AddOverwriteWarning(spec.OutputPath, warnings);
 
         if (spec.BackgroundTransparent && spec.Format == FileExportFormat.Jpg)
@@ -151,10 +153,10 @@ public sealed class LiveRhinoFileExporter : ILiveFileExporter
                 DrawGridAxes = false
             };
 
-            using Bitmap? bitmap = capture.CaptureToBitmap(resolvedView.Data.View);
+            using Bitmap? bitmap = capture.CaptureToBitmap(resolvedView.View);
             if (bitmap is null)
             {
-                return OperationResponse<FileExportExecutionResult>.Fail($"Image capture failed for view [{resolvedView.Data.View.MainViewport.Name}].");
+                return OperationResponse<FileExportExecutionResult>.Fail($"Image capture failed for view [{resolvedView.View.MainViewport.Name}].");
             }
 
             float dpi = (float)(spec.DotsPerInch ?? 96d);
@@ -177,15 +179,16 @@ public sealed class LiveRhinoFileExporter : ILiveFileExporter
             return OperationResponse<FileExportExecutionResult>.Fail("PageSizeMm is required for PDF export.");
         }
 
-        OperationResponse<ResolvedView> resolvedView = ResolveView(document, spec.ViewName);
-        if (!resolvedView.Success || resolvedView.Data is null)
+        OperationResponse<ResolvedView> resolvedViewResponse = ResolveView(document, spec.ViewName);
+        if (!resolvedViewResponse.Success || resolvedViewResponse.Data is null)
         {
-            return OperationResponse<FileExportExecutionResult>.Fail(resolvedView.Message);
+            return OperationResponse<FileExportExecutionResult>.Fail(resolvedViewResponse.Message);
         }
 
+        using ResolvedView resolvedView = resolvedViewResponse.Data;
         var stopwatch = Stopwatch.StartNew();
         var warnings = new List<ObjectEditWarning>();
-        warnings.AddRange(resolvedView.Data.Warnings);
+        warnings.AddRange(resolvedView.Warnings);
         AddOverwriteWarning(spec.OutputPath, warnings);
 
         try
@@ -195,7 +198,7 @@ public sealed class LiveRhinoFileExporter : ILiveFileExporter
                 Math.Max(1, (int)Math.Round(spec.PageSizeMm.WidthMm / 25.4d * dpi)),
                 Math.Max(1, (int)Math.Round(spec.PageSizeMm.HeightMm / 25.4d * dpi)));
 
-            using var settings = new ViewCaptureSettings(resolvedView.Data.View, mediaSize, dpi);
+            using var settings = new ViewCaptureSettings(resolvedView.View, mediaSize, dpi);
             settings.DrawMargins = false;
             settings.DrawBackground = true;
             settings.DrawGrid = false;
@@ -238,7 +241,41 @@ public sealed class LiveRhinoFileExporter : ILiveFileExporter
 
         if (matches.Length == 0)
         {
-            return OperationResponse<ResolvedView>.Fail("EXPORT_VIEW_NOT_FOUND");
+            int namedViewIndex = document.NamedViews.FindByName(requestedViewName);
+            if (namedViewIndex < 0)
+            {
+                return OperationResponse<ResolvedView>.Fail("EXPORT_VIEW_NOT_FOUND");
+            }
+
+            RhinoView? activeView = document.Views.ActiveView;
+            if (activeView is null)
+            {
+                return OperationResponse<ResolvedView>.Fail("EXPORT_VIEW_NOT_FOUND");
+            }
+
+            var originalView = new ViewInfo(activeView.MainViewport);
+            bool restored = document.NamedViews.Restore(namedViewIndex, activeView.MainViewport);
+            if (!restored)
+            {
+                originalView.Dispose();
+                return OperationResponse<ResolvedView>.Fail("EXPORT_VIEW_NOT_FOUND");
+            }
+
+            activeView.MainViewport.Name = requestedViewName;
+            activeView.Redraw();
+            return OperationResponse<ResolvedView>.Ok(new ResolvedView
+            {
+                View = activeView,
+                RestoreViewInfo = originalView,
+                Warnings = new[]
+                {
+                    new ObjectEditWarning
+                    {
+                        Code = "EXPORT_NAMED_VIEW_MATERIALIZED",
+                        Message = $"Named view [{requestedViewName}] was restored into the active viewport for capture."
+                    }
+                }
+            });
         }
 
         var warnings = new List<ObjectEditWarning>();
@@ -337,9 +374,22 @@ public sealed class LiveRhinoFileExporter : ILiveFileExporter
         }
     }
 
-    private sealed class ResolvedView
+    private sealed class ResolvedView : IDisposable
     {
         public RhinoView View { get; init; } = null!;
         public IReadOnlyList<ObjectEditWarning> Warnings { get; init; } = Array.Empty<ObjectEditWarning>();
+        public ViewInfo? RestoreViewInfo { get; init; }
+
+        public void Dispose()
+        {
+            if (RestoreViewInfo is null)
+            {
+                return;
+            }
+
+            View.MainViewport.PushViewInfo(RestoreViewInfo, false);
+            View.Redraw();
+            RestoreViewInfo.Dispose();
+        }
     }
 }
