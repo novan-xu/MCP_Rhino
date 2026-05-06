@@ -36,6 +36,7 @@ public sealed class RhinoChatPanelHost : IDisposable
         uint serial = document.RuntimeSerialNumber;
         if (_sessions.ContainsKey(serial))
         {
+            Panels.OpenPanel(typeof(RhinoChatPanel));
             BindExistingPanel(document);
             return;
         }

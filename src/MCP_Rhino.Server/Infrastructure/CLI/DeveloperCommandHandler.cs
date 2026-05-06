@@ -52,6 +52,7 @@ public sealed partial class DeveloperCommandHandler
     partial void RegisterGeometryEditSurfaceCompositeHandlers();
     partial void RegisterSurfacePointOrderRebuildHandlers();
     partial void RegisterRhinoClaudeCodePanelHandlers();
+    partial void RegisterRhinoClaudeCodeCompanionUiHandlers();
     partial void RegisterGravityAwareSurfacePointOrderHandlers();
     partial void RegisterSurfaceDirectionTweakHandlers();
     partial void RegisterStandardFourPointSurfaceRebuildHandlers();
@@ -68,6 +69,7 @@ public sealed partial class DeveloperCommandHandler
         RegisterGeometryEditSurfaceCompositeHandlers();
         RegisterSurfacePointOrderRebuildHandlers();
         RegisterRhinoClaudeCodePanelHandlers();
+        RegisterRhinoClaudeCodeCompanionUiHandlers();
         RegisterGravityAwareSurfacePointOrderHandlers();
         RegisterSurfaceDirectionTweakHandlers();
         RegisterStandardFourPointSurfaceRebuildHandlers();

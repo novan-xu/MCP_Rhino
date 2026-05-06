@@ -1,5 +1,6 @@
 extern alias rhinocommon;
 
+using System.Runtime.InteropServices;
 using Eto.Forms;
 using MCP_Rhino.Server.Domain.Enums;
 using RhinoApp = rhinocommon::Rhino.RhinoApp;
@@ -8,6 +9,7 @@ using ShowPanelReason = rhinocommon::Rhino.UI.ShowPanelReason;
 
 namespace MCP_Rhino.Server.Infrastructure.Plugin.Panel;
 
+[Guid("E103F168-9689-4846-9D7B-04DC71EF298B")]
 public sealed class RhinoChatPanel : Eto.Forms.Panel, IPanel
 {
     private readonly Label _header = new() { Text = "Claude Code Chat" };
