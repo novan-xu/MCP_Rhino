@@ -26,6 +26,7 @@ The command verifies the bound accessor ignores a wrong `FilePath`, starts a tem
 
 1. Confirm `claude --version` is at least `2.1.119`.
 2. Open a saved `.3dm`; the `Claude Code Chat` panel should appear.
+   If it does not appear, run `_Mcpchat` to open it manually for the active saved document.
 3. Send `List the current layers.` and confirm a tool call card appears.
 4. Open a second saved `.3dm`; confirm its session is independent.
 5. Close the second document and confirm no orphan `claude.exe` remains.

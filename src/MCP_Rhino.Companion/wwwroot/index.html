@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MCP_Rhino Companion</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div class="doc-block">
+        <div class="doc-name" id="docName">MCP_Rhino Companion</div>
+        <div class="doc-path" id="docPath">Waiting for Rhino document binding</div>
+      </div>
+      <div class="status-strip">
+        <span class="status-pill" id="mcpStatus">Starting</span>
+        <span class="status-pill neutral" id="modelStatus">Default model</span>
+        <span class="status-pill neutral" id="costStatus">$0.0000</span>
+        <button class="ghost-button" id="stopButton" type="button">Stop</button>
+      </div>
+    </header>
+
+    <section class="transcript" id="transcript" aria-live="polite"></section>
+
+    <footer class="composer">
+      <textarea id="composerInput" rows="3" placeholder="Ask Claude to inspect or modify this Rhino document"></textarea>
+      <button id="sendButton" type="button">Send</button>
+    </footer>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -5,19 +5,24 @@ using System.Runtime.InteropServices;
 using System.Runtime.Loader;
 using Microsoft.Extensions.DependencyInjection;
 using MCP_Rhino.Server.Infrastructure.CLI;
+using MCP_Rhino.Server.Infrastructure.ClaudeCode;
+using MCP_Rhino.Server.Infrastructure.Plugin.Companion;
 using MCP_Rhino.Server.Infrastructure.Plugin.Panel;
 using MCP_Rhino.Server.Infrastructure.Runtime;
 using MCP_Rhino.Server.Server;
 using LoadReturnCode = rhinocommon::Rhino.PlugIns.LoadReturnCode;
 using PlugIn = rhinocommon::Rhino.PlugIns.PlugIn;
 using RhinoApp = rhinocommon::Rhino.RhinoApp;
+using RhinoDoc = rhinocommon::Rhino.RhinoDoc;
 
 namespace MCP_Rhino.Server.Infrastructure.Plugin;
 
-[Guid("7A3FC2F0-24A8-4B79-BE58-5A08CFB0D10A")]
+[Guid(PluginIdText)]
 public sealed class McpRhinoPlugin : PlugIn
 {
+    internal const string PluginIdText = "7A3FC2F0-24A8-4B79-BE58-5A08CFB0D10A";
     internal const string PipeName = "mcp_rhino";
+    internal static readonly Guid PluginId = new(PluginIdText);
 
     public static McpRhinoPlugin? Instance { get; private set; }
 
@@ -25,6 +30,9 @@ public sealed class McpRhinoPlugin : PlugIn
     private Type? _bootstrapType;
     private object? _serverHandle;
     private PerDocumentPanelDispatcher? _panelDispatcher;
+    private string? _pluginDirectory;
+    private bool _panelRegistered;
+    private readonly Dictionary<uint, CompanionSessionHandle> _companionSessions = new();
 
     public McpRhinoPlugin()
     {
@@ -41,6 +49,8 @@ public sealed class McpRhinoPlugin : PlugIn
 
             string pluginDir = Path.GetDirectoryName(typeof(McpRhinoPlugin).Assembly.Location)
                 ?? throw new InvalidOperationException("Unable to determine plugin assembly directory.");
+            _pluginDirectory = pluginDir;
+
             string pluginDllPath = Path.Combine(pluginDir, "MCP_Rhino.Server.dll");
             RhinoApp.WriteLine($"[MCP_Rhino diag] Plugin dir: {pluginDir}");
             RhinoApp.WriteLine($"[MCP_Rhino diag] Plugin DLL exists: {File.Exists(pluginDllPath)}");
@@ -58,7 +68,7 @@ public sealed class McpRhinoPlugin : PlugIn
                 ?? throw new InvalidOperationException("Failed to create ServerBootstrap instance.");
             _bootstrapType.GetMethod("Start")!.Invoke(_serverHandle, new object[] { PipeName });
 
-            TryStartPanelDispatcher(pluginDir);
+            RhinoDoc.CloseDocument += OnCloseDocumentForCompanion;
 
             RhinoApp.WriteLine($"MCP_Rhino plugin loaded. Named pipe ready: \\\\.\\pipe\\{PipeName}");
             return LoadReturnCode.Success;
@@ -73,8 +83,13 @@ public sealed class McpRhinoPlugin : PlugIn
 
     protected override void OnShutdown()
     {
+        RhinoDoc.CloseDocument -= OnCloseDocumentForCompanion;
+        StopAllCompanions();
+
         _panelDispatcher?.Dispose();
         _panelDispatcher = null;
+        _panelRegistered = false;
+        _pluginDirectory = null;
 
         if (_serverHandle is IDisposable disposable)
         {
@@ -152,6 +167,96 @@ public sealed class McpRhinoPlugin : PlugIn
         }
     }
 
+    internal bool TryShowChatPanel(RhinoDoc document)
+    {
+        if (TryShowCompanion(document))
+        {
+            return true;
+        }
+
+        RhinoApp.WriteLine("MCP_Rhino Companion is not available. Falling back to the Rhino-hosted chat panel.");
+        return TryShowEtoPanel(document);
+    }
+
+    private bool TryShowCompanion(RhinoDoc document)
+    {
+        if (string.IsNullOrWhiteSpace(_pluginDirectory))
+        {
+            RhinoApp.WriteLine("MCP_Rhino plugin directory is not available. Reload the plugin and try _Mcpchat again.");
+            return false;
+        }
+
+        string? companionPath = CompanionProcessLauncher.FindCompanionExecutable(_pluginDirectory);
+        if (string.IsNullOrWhiteSpace(companionPath))
+        {
+            RhinoApp.WriteLine("MCP_Rhino Companion executable was not found. Build src\\MCP_Rhino.Companion first.");
+            return false;
+        }
+
+        string? bridgePath = McpConfigBuilder.FindBridgeExecutable(_pluginDirectory);
+        if (string.IsNullOrWhiteSpace(bridgePath))
+        {
+            RhinoApp.WriteLine("MCP_Rhino Bridge executable was not found. Build src\\MCP_Rhino.Bridge first.");
+            return false;
+        }
+
+        uint serial = document.RuntimeSerialNumber;
+        string documentPath = document.Path;
+        if (_companionSessions.TryGetValue(serial, out CompanionSessionHandle? existing))
+        {
+            if (existing.IsRunning
+                && string.Equals(existing.Spec.DocumentPath, documentPath, StringComparison.OrdinalIgnoreCase))
+            {
+                existing.Focus();
+                RhinoApp.WriteLine($"MCP_Rhino Companion focused for {Path.GetFileName(documentPath)}.");
+                return true;
+            }
+
+            StopCompanion(serial);
+        }
+
+        string pipeName = $"mcp_rhino_{serial}";
+        StartBoundPipeServer(pipeName, serial);
+
+        var spec = new CompanionLaunchSpec(
+            companionPath,
+            documentPath,
+            serial,
+            pipeName,
+            bridgePath);
+
+        try
+        {
+            CompanionSessionHandle handle = CompanionProcessLauncher.Start(spec);
+            _companionSessions[serial] = handle;
+            RhinoApp.WriteLine($"MCP_Rhino Companion started for {Path.GetFileName(documentPath)}. Pipe: {pipeName}");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            StopBoundPipeServer(pipeName);
+            RhinoApp.WriteLine($"MCP_Rhino Companion failed to start: {ex}");
+            return false;
+        }
+    }
+
+    private bool TryShowEtoPanel(RhinoDoc document)
+    {
+        if (_panelDispatcher is null)
+        {
+            if (string.IsNullOrWhiteSpace(_pluginDirectory))
+            {
+                RhinoApp.WriteLine("MCP_Rhino plugin directory is not available. Reload the plugin and try _Mcpchat again.");
+                return false;
+            }
+
+            RhinoApp.WriteLine("MCP_Rhino Claude Code panel dispatcher was not started; retrying panel startup.");
+            TryStartPanelDispatcher(_pluginDirectory, startOpenDocuments: false);
+        }
+
+        return _panelDispatcher?.TryShowDocument(document) ?? false;
+    }
+
     private static IServiceCollection CreatePluginServices()
     {
         var services = new ServiceCollection();
@@ -167,19 +272,70 @@ public sealed class McpRhinoPlugin : PlugIn
             .AddRhinoAgents();
     }
 
-    private void TryStartPanelDispatcher(string pluginDir)
+    private void TryStartPanelDispatcher(string pluginDir, bool startOpenDocuments)
     {
+        if (_panelDispatcher is not null)
+        {
+            return;
+        }
+
         try
         {
-            PerDocumentPanelDispatcher.RegisterPanel(this);
+            if (!_panelRegistered)
+            {
+                PerDocumentPanelDispatcher.RegisterPanel(this, PluginId);
+                _panelRegistered = true;
+            }
+
             var host = new RhinoChatPanelHost(pluginDir, StartBoundPipeServer, StopBoundPipeServer);
             _panelDispatcher = new PerDocumentPanelDispatcher(host);
-            _panelDispatcher.Start();
+            _panelDispatcher.Start(startOpenDocuments);
             RhinoApp.WriteLine("MCP_Rhino Claude Code panel dispatcher started.");
         }
         catch (Exception ex)
         {
             RhinoApp.WriteLine($"MCP_Rhino Claude Code panel dispatcher failed to start: {ex}");
         }
+    }
+
+    private void OnCloseDocumentForCompanion(object? sender, EventArgs e)
+    {
+        RhinoDoc? document = GetDocument(sender, e);
+        if (document is null)
+        {
+            return;
+        }
+
+        StopCompanion(document.RuntimeSerialNumber);
+    }
+
+    private void StopCompanion(uint runtimeSerialNumber)
+    {
+        if (!_companionSessions.Remove(runtimeSerialNumber, out CompanionSessionHandle? handle))
+        {
+            return;
+        }
+
+        handle.Dispose();
+        StopBoundPipeServer(handle.Spec.PipeName);
+    }
+
+    private void StopAllCompanions()
+    {
+        foreach (uint serial in _companionSessions.Keys.ToArray())
+        {
+            StopCompanion(serial);
+        }
+    }
+
+    private static RhinoDoc? GetDocument(object? sender, EventArgs e)
+    {
+        if (sender is RhinoDoc senderDocument)
+        {
+            return senderDocument;
+        }
+
+        object? document = e.GetType().GetProperty("Document")?.GetValue(e);
+        return document as RhinoDoc;
     }
 }

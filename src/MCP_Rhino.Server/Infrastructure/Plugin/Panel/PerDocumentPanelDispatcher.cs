@@ -1,6 +1,8 @@
 extern alias rhinocommon;
 
 using System.Collections;
+using System.Drawing;
+using System.Reflection;
 using PlugIn = rhinocommon::Rhino.PlugIns.PlugIn;
 using RhinoApp = rhinocommon::Rhino.RhinoApp;
 using RhinoDoc = rhinocommon::Rhino.RhinoDoc;
@@ -19,12 +21,33 @@ public sealed class PerDocumentPanelDispatcher : IDisposable
         _host = host;
     }
 
-    public static void RegisterPanel(PlugIn plugin)
+    public static void RegisterPanel(PlugIn plugin, Guid pluginId)
     {
-        Panels.RegisterPanel(plugin, typeof(RhinoChatPanel), "Claude Code Chat", null, PanelType.PerDoc);
+        if (plugin.Id != Guid.Empty)
+        {
+            Panels.RegisterPanel(plugin, typeof(RhinoChatPanel), "Claude Code Chat", null, PanelType.PerDoc);
+            return;
+        }
+
+        RegisterPanelByPluginId(pluginId);
     }
 
-    public void Start()
+    private static void RegisterPanelByPluginId(Guid pluginId)
+    {
+        Type panelSystemType = typeof(Panels).Assembly.GetType("Rhino.UI.PanelSystem", throwOnError: true)
+            ?? throw new InvalidOperationException("Rhino.UI.PanelSystem type was not found.");
+        MethodInfo registerMethod = panelSystemType.GetMethod(
+            "Register",
+            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static,
+            binder: null,
+            types: new[] { typeof(Guid), typeof(Type), typeof(string), typeof(Icon), typeof(PanelType) },
+            modifiers: null)
+            ?? throw new InvalidOperationException("Rhino.UI.PanelSystem.Register(Guid, Type, string, Icon, PanelType) was not found.");
+
+        registerMethod.Invoke(null, new object?[] { pluginId, typeof(RhinoChatPanel), "Claude Code Chat", null, PanelType.PerDoc });
+    }
+
+    public void Start(bool startOpenDocuments = true)
     {
         if (_started)
         {
@@ -37,10 +60,20 @@ public sealed class PerDocumentPanelDispatcher : IDisposable
         RhinoDoc.EndSaveDocument += OnEndSaveDocument;
         RhinoDoc.CloseDocument += OnCloseDocument;
 
+        if (!startOpenDocuments)
+        {
+            return;
+        }
+
         foreach (RhinoDoc document in GetOpenDocuments())
         {
             TryStartDocument(document);
         }
+    }
+
+    public bool TryShowDocument(RhinoDoc document)
+    {
+        return TryStartDocument(document);
     }
 
     public void Dispose()
@@ -85,20 +118,22 @@ public sealed class PerDocumentPanelDispatcher : IDisposable
         _host.StopDocument(document.RuntimeSerialNumber, closePanel: true);
     }
 
-    private void TryStartDocument(RhinoDoc? document)
+    private bool TryStartDocument(RhinoDoc? document)
     {
         if (document is null || string.IsNullOrWhiteSpace(document.Path))
         {
-            return;
+            return false;
         }
 
         try
         {
             _host.StartDocument(document);
+            return true;
         }
         catch (Exception ex)
         {
             RhinoApp.WriteLine($"MCP_Rhino panel startup failed for document {document.RuntimeSerialNumber}: {ex}");
+            return false;
         }
     }
 

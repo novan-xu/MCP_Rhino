@@ -82,7 +82,9 @@ public sealed class PanelChatSessionService : IPanelChatSession
             "--permission-mode",
             "bypassPermissions",
             "--disallowedTools",
-            DisallowedTools
+            DisallowedTools,
+            "--append-system-prompt",
+            BuildPanelBoundSystemPrompt()
         };
 
         if (!string.IsNullOrWhiteSpace(modelId))
@@ -167,5 +169,24 @@ public sealed class PanelChatSessionService : IPanelChatSession
     private void Emit(ChatRole role, string text, string? toolName = null, ChatToolCallStatus? toolStatus = null)
     {
         EventReceived?.Invoke(this, new PanelChatEvent(role, text, toolName, toolStatus));
+    }
+
+    private string BuildPanelBoundSystemPrompt()
+    {
+        return string.Join(
+            Environment.NewLine,
+            "You are running inside the MCP_Rhino Rhino panel.",
+            "This Claude Code session is bound to exactly one saved Rhino document.",
+            $"Bound Rhino document path: {DocumentPath}",
+            $"Bound Rhino runtime serial number: {RuntimeSerialNumber}",
+            $"Bound MCP pipe: {PipeName}",
+            "Use the Rhino MCP tools directly for this bound document.",
+            "When a Rhino MCP tool has a filePath parameter, always pass the bound Rhino document path shown above.",
+            "Do not ask the user for the .3dm path for this panel session.",
+            "The panel-bound MCP server resolves tool calls by the bound Rhino runtime serial number; it does not follow RhinoDoc.ActiveDoc.",
+            "The filePath argument exists for tool schema compatibility and is ignored for routing by the panel-bound server.",
+            "Do not try to operate on any other open Rhino document from this panel.",
+            "If the user says this file, current file, active model, the model, or similar, they mean the bound Rhino document.",
+            "Before destructive mutations, inspect or preview as appropriate, then apply changes only to the bound document.");
     }
 }
