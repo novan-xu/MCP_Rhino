@@ -18,7 +18,7 @@ public sealed class PreviewTransformObjectsTool
         _skill = skill;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("预览 Rhino 对象的几何变换，不落盘。")]
     public OperationResponse<GeometryModificationPreviewResponse> PreviewTransformObjects(
         string filePath,

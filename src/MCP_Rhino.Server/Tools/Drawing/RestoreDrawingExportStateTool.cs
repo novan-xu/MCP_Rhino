@@ -16,7 +16,7 @@ public sealed class RestoreDrawingExportStateTool
         _service = service;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = false, Destructive = false, OpenWorld = false)]
     [Description("Restore object display attributes and drawing background from a captured drawing export snapshot. This is live-only.")]
     public OperationResponse<DrawingExportStateResponse> RestoreDrawingExportState(string filePath, string snapshotId)
     {

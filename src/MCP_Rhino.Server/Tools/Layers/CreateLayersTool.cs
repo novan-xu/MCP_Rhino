@@ -16,7 +16,7 @@ public sealed class CreateLayersTool
         _service = service;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = false, Destructive = false, OpenWorld = false)]
     [Description("Create layers in the active Rhino document. Missing parent layers are auto-created.")]
     public OperationResponse<LayerMutationResponse> CreateLayers(string filePath, List<LayerCreationEntryRequest> entries)
     {

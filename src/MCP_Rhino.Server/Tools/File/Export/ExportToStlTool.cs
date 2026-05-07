@@ -16,7 +16,7 @@ public sealed class ExportToStlTool
         _service = service;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = false, Destructive = true, OpenWorld = true)]
     [Description("Export the saved active Rhino document to STL through RhinoDoc.WriteFile. This is live-only and does not change document state.")]
     public OperationResponse<FileExportResponse> ExportToStl(string filePath, string outputPath, List<Guid>? selectedObjectIds = null, bool overwriteExisting = true, Dictionary<string, string>? formatOptions = null)
     {

@@ -16,7 +16,7 @@ public sealed class GetCurvatureSamplesInLiveTool
         _service = service;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("Sample live curve or surface curvature from the active Rhino document. ObjectId only. Supports EvenByCount, EvenByLength, AtParameters, and AtUVList.")]
     public OperationResponse<GetCurvatureSamplesInLiveResponse> GetCurvatureSamplesInLive(string filePath, List<CurvatureSampleEntryRequest> entries)
     {

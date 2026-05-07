@@ -10,14 +10,22 @@ public sealed class McpNamedPipeServer : IDisposable
 {
     private readonly string _pipeName;
     private readonly Func<Stream, Stream, IHost> _hostFactory;
+    private readonly bool _stopOnPipeCreateFailure;
+    private readonly string? _pipeCreateFailureHint;
     private readonly CancellationTokenSource _shutdown = new();
 
     private Task? _acceptLoop;
 
-    public McpNamedPipeServer(string pipeName, Func<Stream, Stream, IHost> hostFactory)
+    public McpNamedPipeServer(
+        string pipeName,
+        Func<Stream, Stream, IHost> hostFactory,
+        bool stopOnPipeCreateFailure = false,
+        string? pipeCreateFailureHint = null)
     {
         _pipeName = pipeName;
         _hostFactory = hostFactory;
+        _stopOnPipeCreateFailure = stopOnPipeCreateFailure;
+        _pipeCreateFailureHint = pipeCreateFailureHint;
     }
 
     public void Start()
@@ -70,6 +78,17 @@ public sealed class McpNamedPipeServer : IDisposable
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
+                break;
+            }
+            catch (IOException ex) when (pipe is null && _stopOnPipeCreateFailure)
+            {
+                RhinoApp.WriteLine(
+                    $"MCP_Rhino named pipe unavailable: \\\\.\\pipe\\{_pipeName}. {ex.Message}");
+                if (!string.IsNullOrWhiteSpace(_pipeCreateFailureHint))
+                {
+                    RhinoApp.WriteLine(_pipeCreateFailureHint);
+                }
+
                 break;
             }
             catch (Exception ex)

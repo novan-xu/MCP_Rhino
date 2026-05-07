@@ -14,10 +14,11 @@ namespace MCP_Rhino.Server.Infrastructure.Rhino.Live;
 public sealed class LiveRhinoObjectEditOperationApplier : IObjectEditOperationApplier
 {
     public OperationResponse<ObjectEditOperationResult> Apply(
+        RhinoDoc document,
         RhinoObjectInfo objectInfo,
         IReadOnlyList<RhinoObjectEditOperation> operations)
     {
-        RhinoObject? currentObject = RhinoDoc.ActiveDoc?.Objects.FindId(objectInfo.ObjectId);
+        RhinoObject? currentObject = document.Objects.FindId(objectInfo.ObjectId);
         if (currentObject is null)
         {
             return OperationResponse<ObjectEditOperationResult>.Fail($"Object not found: {objectInfo.ObjectId}");
@@ -41,7 +42,7 @@ public sealed class LiveRhinoObjectEditOperationApplier : IObjectEditOperationAp
                     break;
 
                 case ObjectEditOperationType.SetLayer:
-                    int layerIndex = RhinoDoc.ActiveDoc!.Layers.FindByFullPath(operation.TargetLayerFullPath!, -1);
+                    int layerIndex = document.Layers.FindByFullPath(operation.TargetLayerFullPath!, -1);
                     if (layerIndex < 0)
                     {
                         return OperationResponse<ObjectEditOperationResult>.Fail($"Target layer not found: {operation.TargetLayerFullPath}");
@@ -64,7 +65,7 @@ public sealed class LiveRhinoObjectEditOperationApplier : IObjectEditOperationAp
             }
         }
 
-        if (!RhinoDoc.ActiveDoc!.Objects.ModifyAttributes(objectInfo.ObjectId, attributes, true))
+        if (!document.Objects.ModifyAttributes(objectInfo.ObjectId, attributes, true))
         {
             return OperationResponse<ObjectEditOperationResult>.Fail($"ModifyAttributes failed: {objectInfo.ObjectId}");
         }

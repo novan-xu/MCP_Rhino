@@ -16,7 +16,7 @@ public sealed class GetClosestPointsInLiveTool
         _service = service;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("Get live closest-point results between a point-like source and Rhino geometry targets. Supports ObjectId and temporary geometry specs for each entry.")]
     public OperationResponse<GetClosestPointsInLiveResponse> GetClosestPointsInLive(string filePath, List<GeometryClosestPointEntryRequest> entries)
     {

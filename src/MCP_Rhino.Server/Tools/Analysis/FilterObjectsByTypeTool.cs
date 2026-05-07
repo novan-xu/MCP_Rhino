@@ -14,7 +14,7 @@ public sealed class FilterObjectsByTypeTool
         _objectTypeFilterSkill = objectTypeFilterSkill;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("按对象类型筛查 Rhino 物体，例如 points、surfaces、breps、blocks、annotation dots 等。")]
     public string FilterObjectsByType(string filePath, List<string> objectTypes)
     {

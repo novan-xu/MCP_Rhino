@@ -16,7 +16,7 @@ public sealed class FilterObjectsByUserAttributesTool
         _userAttributeObjectFilterSkill = userAttributeObjectFilterSkill;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("按 Rhino 对象的 user key/value attributes 筛查物体。支持 Exact、Contains、Exists 三种匹配方式。")]
     public string FilterObjectsByUserAttributes(
         string filePath,

@@ -16,7 +16,7 @@ public sealed class DeleteLayersTool
         _service = service;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = false, Destructive = true, OpenWorld = false)]
     [Description("Delete layer subtrees in the active Rhino document and move affected objects to the target parent layer.")]
     public OperationResponse<LayerMutationResponse> DeleteLayers(string filePath, List<string> fullPaths)
     {

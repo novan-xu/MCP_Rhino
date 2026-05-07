@@ -3,16 +3,20 @@ using System.IO;
 
 namespace MCP_Rhino.Companion;
 
-public sealed class ClaudeCodeSession : IDisposable
+public sealed class ClaudeCodeSession : IAgentSession
 {
-    private const string DisallowedTools = "Bash,Edit,Read,Write,Grep,Glob,WebFetch,WebSearch,TodoWrite,Task,NotebookEdit";
+    private const string DisallowedTools = "Bash,Edit,Read,Write,Grep,Glob,WebFetch,WebSearch,TodoWrite,Task,NotebookEdit,Monitor,TaskOutput,TaskStop,CronCreate,CronDelete,CronList,EnterPlanMode,ExitPlanMode,EnterWorktree,ExitWorktree,PushNotification,RemoteTrigger,AskUserQuestion";
 
     private readonly CompanionOptions _options;
-    private readonly CancellationTokenSource _shutdown = new();
+    private CancellationTokenSource _shutdown = new();
     private Process? _process;
     private Task? _stdoutTask;
     private Task? _stderrTask;
     private bool _inputEnabled;
+    // Captured from claude's stream events (`session_id`) on the first turn so
+    // subsequent restarts can `--resume` the same conversation rather than
+    // start a fresh one with no memory.
+    private string? _capturedSessionId;
 
     public ClaudeCodeSession(CompanionOptions options)
     {
@@ -25,7 +29,19 @@ public sealed class ClaudeCodeSession : IDisposable
     {
         if (_process is not null)
         {
-            return;
+            if (!_process.HasExited)
+            {
+                return;
+            }
+
+            _process.Dispose();
+            _process = null;
+        }
+
+        if (_shutdown.IsCancellationRequested)
+        {
+            _shutdown.Dispose();
+            _shutdown = new CancellationTokenSource();
         }
 
         Emit(CompanionUiEvent.SessionStatus("Starting"));
@@ -47,13 +63,18 @@ public sealed class ClaudeCodeSession : IDisposable
         }
 
         string configPath = McpConfigBuilder.WriteConfig(_options.RuntimeSerial, _options.BridgePath, _options.PipeName);
-        string workingDirectory = Path.GetDirectoryName(_options.DocumentPath) ?? Environment.CurrentDirectory;
+        string workingDirectory = CompanionWorkspace.GetWorkingDirectory(_options.PipeName);
         var arguments = new List<string>
         {
             "--print",
             "--output-format=stream-json",
             "--input-format=stream-json",
             "--verbose",
+            "--no-session-persistence",
+            "--setting-sources",
+            "user",
+            "--tools",
+            string.Empty,
             "--mcp-config",
             configPath,
             "--strict-mcp-config",
@@ -64,6 +85,15 @@ public sealed class ClaudeCodeSession : IDisposable
             "--append-system-prompt",
             BuildBoundDocumentPrompt()
         };
+
+        // If we previously ran in this Companion launch and captured a session
+        // id, resume that conversation so the agent retains its memory across
+        // process exits.
+        if (!string.IsNullOrWhiteSpace(_capturedSessionId))
+        {
+            arguments.Add("--resume");
+            arguments.Add(_capturedSessionId);
+        }
 
         if (!string.IsNullOrWhiteSpace(_options.ModelId))
         {
@@ -76,20 +106,39 @@ public sealed class ClaudeCodeSession : IDisposable
             StartInfo = ClaudeCodeAvailability.CreateStartInfo(availability.ExecutablePath, arguments, workingDirectory),
             EnableRaisingEvents = true
         };
-        _process.Exited += (_, _) =>
+        Process process = _process;
+        process.Exited += (_, _) =>
         {
             _inputEnabled = false;
             Emit(CompanionUiEvent.Input(false));
             Emit(CompanionUiEvent.SessionStatus("Claude Code exited"));
+            try
+            {
+                Emit(CompanionUiEvent.Diagnostic($"Claude Code exited with code {process.ExitCode}."));
+            }
+            catch (InvalidOperationException)
+            {
+            }
         };
-        _process.Start();
+        try
+        {
+            process.Start();
+        }
+        catch (Exception ex)
+        {
+            process.Dispose();
+            _process = null;
+            Emit(CompanionUiEvent.Diagnostic("Failed to start Claude Code: " + ex.Message));
+            Emit(CompanionUiEvent.SessionStatus("Claude Code error"));
+            return;
+        }
 
         _stdoutTask = StreamJsonReader.ReadEventsAsync(
-            _process.StandardOutput,
+            process.StandardOutput,
             OnStreamEvent,
             line => Emit(CompanionUiEvent.Diagnostic("Unparsed stdout: " + line)),
             _shutdown.Token);
-        _stderrTask = ReadStderrAsync(_process.StandardError, _shutdown.Token);
+        _stderrTask = ReadStderrAsync(process.StandardError, _shutdown.Token);
 
         _inputEnabled = true;
         Emit(CompanionUiEvent.Input(true));
@@ -99,6 +148,12 @@ public sealed class ClaudeCodeSession : IDisposable
 
     public Task SendUserMessageAsync(string text, CancellationToken cancellationToken)
     {
+        if (_process is null || _process.HasExited)
+        {
+            Emit(CompanionUiEvent.Diagnostic("Claude Code was not running; restarting."));
+            return RestartAndSendAsync(text, cancellationToken);
+        }
+
         if (!_inputEnabled || _process is null || _process.HasExited)
         {
             Emit(CompanionUiEvent.Diagnostic("Input is disabled because Claude Code is not running."));
@@ -107,6 +162,19 @@ public sealed class ClaudeCodeSession : IDisposable
 
         Emit(CompanionUiEvent.Message("user", text));
         return StreamJsonWriter.WriteUserMessageAsync(_process.StandardInput, text, cancellationToken);
+    }
+
+    private async Task RestartAndSendAsync(string text, CancellationToken cancellationToken)
+    {
+        await StartAsync(cancellationToken).ConfigureAwait(false);
+        if (!_inputEnabled || _process is null || _process.HasExited)
+        {
+            Emit(CompanionUiEvent.Diagnostic("Input is disabled because Claude Code is not running."));
+            return;
+        }
+
+        Emit(CompanionUiEvent.Message("user", text));
+        await StreamJsonWriter.WriteUserMessageAsync(_process.StandardInput, text, cancellationToken).ConfigureAwait(false);
     }
 
     public void Stop()
@@ -137,7 +205,8 @@ public sealed class ClaudeCodeSession : IDisposable
         }
         finally
         {
-            McpConfigBuilder.DeleteTempDirectory(_options.RuntimeSerial);
+            McpConfigBuilder.DeleteTempDirectory(_options.RuntimeSerial, _options.PipeName);
+            _process = null;
         }
     }
 
@@ -159,6 +228,14 @@ public sealed class ClaudeCodeSession : IDisposable
 
     private void OnStreamEvent(ClaudeCodeStreamEvent streamEvent)
     {
+        // Capture session_id from the first event that carries it so we can
+        // --resume the same conversation on any subsequent restart.
+        if (string.IsNullOrWhiteSpace(_capturedSessionId)
+            && !string.IsNullOrWhiteSpace(streamEvent.SessionId))
+        {
+            _capturedSessionId = streamEvent.SessionId;
+        }
+
         if (streamEvent.McpServers is { Count: > 0 })
         {
             string status = string.Join(", ", streamEvent.McpServers.Select(server => $"{server.Name}:{server.Status}"));
@@ -200,7 +277,11 @@ public sealed class ClaudeCodeSession : IDisposable
             Emit(CompanionUiEvent.Message("assistant", streamEvent.Text));
         }
 
-        if (string.Equals(streamEvent.Type, "result", StringComparison.OrdinalIgnoreCase))
+        // The parser stores Type as "<type>/<subtype>" when a subtype is
+        // present (e.g. "result/success", "result/error_max_turns"), so an
+        // exact equality check would miss the turn-end signal and the UI
+        // would stay busy. Match the bare "result" prefix instead.
+        if (streamEvent.Type.StartsWith("result", StringComparison.OrdinalIgnoreCase))
         {
             Emit(CompanionUiEvent.Result(streamEvent.TotalCostUsd));
             Emit(CompanionUiEvent.Input(true));
@@ -233,6 +314,8 @@ public sealed class ClaudeCodeSession : IDisposable
             "Use the Rhino MCP tools directly for this bound document.",
             "When a Rhino MCP tool has a filePath parameter, always pass the bound Rhino document path shown above.",
             "Do not ask the user for the .3dm path for this companion session.",
+            "Do not use local shell commands or direct .3dm file reads as a fallback; if a Rhino MCP tool fails, report the MCP failure.",
+            "Do not open, read, write, monitor, index, or otherwise touch the bound .3dm file through local file tools.",
             "The panel-bound MCP server resolves tool calls by the bound Rhino runtime serial number; it does not follow RhinoDoc.ActiveDoc.",
             "The filePath argument exists for tool schema compatibility and is ignored for routing by the panel-bound server.",
             "Do not try to operate on any other open Rhino document from this companion window.",
@@ -245,4 +328,3 @@ public sealed class ClaudeCodeSession : IDisposable
         EventReceived?.Invoke(this, uiEvent);
     }
 }
-

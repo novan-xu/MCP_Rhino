@@ -16,7 +16,7 @@ public sealed class PreviewModifyLayersTool
         _service = service;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("Preview layer modifications against the active Rhino document without changing it.")]
     public OperationResponse<LayerModificationPreviewResponse> PreviewModifyLayers(string filePath, List<LayerModificationEntryRequest> entries)
     {

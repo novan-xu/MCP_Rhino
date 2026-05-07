@@ -8,7 +8,7 @@ namespace MCP_Rhino.Server.Tools.Workflow;
 [McpServerToolType]
 public sealed class AppendActivityLogTool
 {
-    [McpServerTool]
+    [McpServerTool(ReadOnly = false, Destructive = false, OpenWorld = true)]
     [Description("Append a single JSONL activity record ({ts, task, tools}) to {logRoot}/YYMM.json. Per MCP_Rhino Workflow this is the unified writer for activity logs; business tools must not write logs themselves. The YYMM file is chosen from the current local date; the directory is created if missing.")]
     public OperationResponse<AppendActivityLogResponse> AppendActivityLog(
         string logRoot,

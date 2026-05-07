@@ -17,7 +17,7 @@ public sealed class GetEditableGeometryDescriptorTool
         _service = service;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("Read the editable descriptor for a live Rhino curve, surface, or untrimmed single-face Brep. Requires the file to be the active saved Rhino document; otherwise returns LIVE_RHINO_REQUIRED.")]
     public OperationResponse<EditableGeometryDescriptorResponse> GetEditableGeometryDescriptor(
         string filePath,

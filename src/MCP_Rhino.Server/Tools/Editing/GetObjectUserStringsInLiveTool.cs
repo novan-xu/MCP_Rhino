@@ -16,7 +16,7 @@ public sealed class GetObjectUserStringsInLiveTool
         _userTextService = userTextService;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("按 objectId 读取当前 Rhino 活动文档中物体的 user strings。需要文件在 Rhino 会话中处于活动状态；否则返回 LIVE_RHINO_REQUIRED。")]
     public OperationResponse<ObjectUserTextReadResponse> GetObjectUserStringsInLive(
         string filePath,

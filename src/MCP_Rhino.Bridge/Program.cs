@@ -128,6 +128,6 @@ internal sealed record BridgeOptions(string PipeName, bool ShowHelp)
         writer.WriteLine("Usage: MCP_Rhino.Bridge.exe [--pipe <name>] [--help]");
         writer.WriteLine();
         writer.WriteLine("Without --pipe, connects to \\\\.\\pipe\\mcp_rhino (Developer Debug Control Path).");
-        writer.WriteLine("With --pipe mcp_rhino_<runtimeSerial>, connects to a panel-bound per-document server.");
+        writer.WriteLine("With --pipe mcp_rhino_<processId>_<runtimeSerial>, connects to a panel-bound per-document server.");
     }
 }

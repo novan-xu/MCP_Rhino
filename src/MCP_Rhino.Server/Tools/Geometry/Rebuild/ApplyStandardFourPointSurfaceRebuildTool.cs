@@ -15,7 +15,7 @@ public sealed class ApplyStandardFourPointSurfaceRebuildTool
         _skill = skill;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = false, Destructive = false, OpenWorld = false)]
     [Description("Default standard tool for rebuilding four-point Rhino surfaces/panels. Use this whenever the user asks to rebuild 4 point surfaces unless they explicitly request a lower-level operation. It rebuilds with surface-local gravity coordinates, lower-left as point 1, clockwise point order, then applies Rhino Flip to force front/back face orientation and the standard Dir fix: SwapUV.")]
     public OperationResponse<StandardFourPointSurfaceRebuildResponse> ApplyStandardFourPointSurfaceRebuild(
         string filePath,

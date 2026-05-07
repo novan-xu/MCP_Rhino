@@ -15,7 +15,7 @@ public sealed class GetLayersInLiveTool
         _service = service;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("读取当前在 Rhino 中打开的文档的图层表。需要该文件在 Rhino 会话中处于活动状态；否则返回 LIVE_RHINO_REQUIRED。离线读请用 get-layers。")]
     public OperationResponse<LayerReadResponse> GetLayersInLive(string filePath)
     {

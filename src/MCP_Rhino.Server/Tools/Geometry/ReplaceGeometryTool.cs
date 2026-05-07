@@ -16,7 +16,7 @@ public sealed class ReplaceGeometryTool
         _skill = skill;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = false, Destructive = true, OpenWorld = false)]
     [Description("按 ObjectId 替换 Rhino 对象的几何，但保留对象属性与 ObjectId。")]
     public OperationResponse<GeometryModificationResponse> ReplaceGeometry(
         string filePath,

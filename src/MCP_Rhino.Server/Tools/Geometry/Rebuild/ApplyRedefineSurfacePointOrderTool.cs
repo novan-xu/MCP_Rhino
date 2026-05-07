@@ -17,7 +17,7 @@ public sealed class ApplyRedefineSurfacePointOrderTool
         _orchestrator = orchestrator;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = false, Destructive = false, OpenWorld = false)]
     [Description("Apply a boundary-driven surface point-order rebuild in the active Rhino document. Only quad outer boundaries are executable; successful targets share one Undo record and keep whitelisted object metadata.")]
     public OperationResponse<SurfacePointOrderApplyResponse> ApplyRedefineSurfacePointOrder(
         string filePath,

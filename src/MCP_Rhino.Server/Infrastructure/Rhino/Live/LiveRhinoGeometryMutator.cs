@@ -25,9 +25,9 @@ public sealed class LiveRhinoGeometryMutator : IGeometryMutator
         _builder = builder;
     }
 
-    public OperationResponse<ObjectEditOperationResult> Transform(RhinoObjectInfo target, GeometryTransformSpec spec)
+    public OperationResponse<ObjectEditOperationResult> Transform(RhinoDoc document, RhinoObjectInfo target, GeometryTransformSpec spec)
     {
-        RhinoObject? currentObject = FindObject(target.ObjectId);
+        RhinoObject? currentObject = FindObject(document, target.ObjectId);
         if (currentObject is null)
         {
             return OperationResponse<ObjectEditOperationResult>.Fail($"Object not found: {target.ObjectId}");
@@ -44,7 +44,7 @@ public sealed class LiveRhinoGeometryMutator : IGeometryMutator
             return OperationResponse<ObjectEditOperationResult>.Fail($"Transform failed: {target.ObjectId}");
         }
 
-        if (!RhinoDoc.ActiveDoc!.Objects.Replace(target.ObjectId, geometry, false))
+        if (!document.Objects.Replace(target.ObjectId, geometry, false))
         {
             return OperationResponse<ObjectEditOperationResult>.Fail($"Replace after transform failed: {target.ObjectId}");
         }
@@ -58,7 +58,7 @@ public sealed class LiveRhinoGeometryMutator : IGeometryMutator
         });
     }
 
-    public OperationResponse<ObjectEditOperationResult> Replace(RhinoObjectInfo target, GeometryReplacementSpec spec)
+    public OperationResponse<ObjectEditOperationResult> Replace(RhinoDoc document, RhinoObjectInfo target, GeometryReplacementSpec spec)
     {
         OperationResponse<GeometryBase> build = _builder.Build(spec.Geometry);
         if (!build.Success || build.Data is null)
@@ -66,7 +66,7 @@ public sealed class LiveRhinoGeometryMutator : IGeometryMutator
             return OperationResponse<ObjectEditOperationResult>.Fail(build.Message);
         }
 
-        if (!RhinoDoc.ActiveDoc!.Objects.Replace(target.ObjectId, build.Data, false))
+        if (!document.Objects.Replace(target.ObjectId, build.Data, false))
         {
             return OperationResponse<ObjectEditOperationResult>.Fail($"Replace failed: {target.ObjectId}");
         }
@@ -80,9 +80,9 @@ public sealed class LiveRhinoGeometryMutator : IGeometryMutator
         });
     }
 
-    public OperationResponse<ObjectEditOperationResult> Delete(RhinoObjectInfo target)
+    public OperationResponse<ObjectEditOperationResult> Delete(RhinoDoc document, RhinoObjectInfo target)
     {
-        if (!RhinoDoc.ActiveDoc!.Objects.Delete(target.ObjectId, true))
+        if (!document.Objects.Delete(target.ObjectId, true))
         {
             return OperationResponse<ObjectEditOperationResult>.Fail($"Delete failed: {target.ObjectId}");
         }
@@ -97,10 +97,11 @@ public sealed class LiveRhinoGeometryMutator : IGeometryMutator
     }
 
     public OperationResponse<ObjectEditOperationResult> EditControlPoints(
+        RhinoDoc document,
         RhinoObjectInfo target,
         IReadOnlyList<ControlPointEditSpec> specs)
     {
-        RhinoObject? currentObject = FindObject(target.ObjectId);
+        RhinoObject? currentObject = FindObject(document, target.ObjectId);
         if (currentObject is null)
         {
             return OperationResponse<ObjectEditOperationResult>.Fail($"Object not found: {target.ObjectId}");
@@ -164,7 +165,7 @@ public sealed class LiveRhinoGeometryMutator : IGeometryMutator
                 return OperationResponse<ObjectEditOperationResult>.Fail($"Object is not editable NURBS geometry: {target.ObjectId}");
         }
 
-        if (!RhinoDoc.ActiveDoc!.Objects.Replace(target.ObjectId, geometry, false))
+        if (!document.Objects.Replace(target.ObjectId, geometry, false))
         {
             return OperationResponse<ObjectEditOperationResult>.Fail($"Replace after control point edit failed: {target.ObjectId}");
         }
@@ -178,9 +179,9 @@ public sealed class LiveRhinoGeometryMutator : IGeometryMutator
         });
     }
 
-    private static RhinoObject? FindObject(Guid objectId)
+    private static RhinoObject? FindObject(RhinoDoc document, Guid objectId)
     {
-        return RhinoDoc.ActiveDoc?.Objects.FindId(objectId);
+        return document.Objects.FindId(objectId);
     }
 
     private static RhinoTransform BuildTransform(GeometryTransformSpec spec)

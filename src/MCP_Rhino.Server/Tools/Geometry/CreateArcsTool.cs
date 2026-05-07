@@ -16,7 +16,7 @@ public sealed class CreateArcsTool
         _skill = skill;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = false, Destructive = false, OpenWorld = false)]
     [Description("在 Rhino .3dm 文件中批量创建圆弧对象。")]
     public OperationResponse<GeometryCreationResponse> CreateArcs(
         string filePath,

@@ -18,7 +18,7 @@ public sealed class ApplyEditSurfaceGeometryTool
         _orchestrator = orchestrator;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = false, Destructive = false, OpenWorld = false)]
     [Description("Apply a surface geometry edit in the active Rhino document. Uses one Undo record and replays whitelisted object metadata after reconstruction.")]
     public OperationResponse<GeometryEditApplyResponse> ApplyEditSurfaceGeometry(
         string filePath,

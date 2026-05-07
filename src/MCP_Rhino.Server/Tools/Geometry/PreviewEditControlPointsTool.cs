@@ -16,7 +16,7 @@ public sealed class PreviewEditControlPointsTool
         _skill = skill;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("预览 NurbsCurve / NurbsSurface 的控制点编辑结果，不落盘。")]
     public OperationResponse<GeometryModificationPreviewResponse> PreviewEditControlPoints(
         string filePath,

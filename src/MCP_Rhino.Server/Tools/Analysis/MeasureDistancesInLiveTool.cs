@@ -16,7 +16,7 @@ public sealed class MeasureDistancesInLiveTool
         _service = service;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("Measure live distances between point-like references and Rhino geometry. Supports ObjectId and temporary geometry specs for each entry.")]
     public OperationResponse<MeasureDistancesInLiveResponse> MeasureDistancesInLive(string filePath, List<MeasureDistanceEntryRequest> entries)
     {

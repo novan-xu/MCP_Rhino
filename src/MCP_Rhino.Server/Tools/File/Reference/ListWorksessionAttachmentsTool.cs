@@ -16,7 +16,7 @@ public sealed class ListWorksessionAttachmentsTool
         _service = service;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("List the current worksession attachments of the saved active Rhino document. This is live-only and read-only.")]
     public OperationResponse<WorksessionAttachmentResponse> ListWorksessionAttachments(string filePath)
     {

@@ -16,7 +16,7 @@ public sealed class EditControlPointsTool
         _skill = skill;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = false, Destructive = false, OpenWorld = false)]
     [Description("按 ObjectId 编辑 NurbsCurve / NurbsSurface 的控制点，并覆盖写回原文件。")]
     public OperationResponse<GeometryModificationResponse> EditControlPoints(
         string filePath,

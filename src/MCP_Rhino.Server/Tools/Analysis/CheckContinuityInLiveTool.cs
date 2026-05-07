@@ -16,7 +16,7 @@ public sealed class CheckContinuityInLiveTool
         _service = service;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("Check live G0/G1/G2 continuity between curves or between surface/brep edges in the active Rhino document. ObjectId only.")]
     public OperationResponse<CheckContinuityInLiveResponse> CheckContinuityInLive(string filePath, List<ContinuityCheckEntryRequest> entries)
     {

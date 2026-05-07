@@ -15,7 +15,7 @@ public sealed class FindLayerCandidatesTool
         _filterService = filterService;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("根据图层名称或层级路径查找 Rhino 文件中的匹配图层候选，用于后续筛查时确认目标图层。")]
     public string FindLayerCandidates(string filePath, string layerQuery, bool exactMatch = false)
     {

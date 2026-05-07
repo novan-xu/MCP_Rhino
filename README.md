@@ -4,7 +4,7 @@
 
 ## 项目形态
 
-- [src/MCP_Rhino.Server/](src/MCP_Rhino.Server/) —— 主工程，构建产出 `MCP_Rhino.Server.rhp`（Rhino 插件）。插件加载后在 Rhino 进程内启动一条 Named Pipe MCP server（`\\.\pipe\mcp_rhino`）。
+- [src/MCP_Rhino.Server/](src/MCP_Rhino.Server/) —— 主工程，构建产出 `MCP_Rhino.Server.rhp`（Rhino 插件）。插件加载后会尝试启动固定 debug/test Named Pipe（`\\.\pipe\mcp_rhino`），并为 `_Mcpchat` 启动 process-scoped panel pipes（`\\.\pipe\mcp_rhino_<ProcessId>_<RuntimeSerialNumber>`）。
 - [src/MCP_Rhino.Bridge/](src/MCP_Rhino.Bridge/) —— 独立 `.exe`，承担 **stdio ↔ Named Pipe** 桥接，给 MCP Client 直接 spawn。
 
 能力矩阵（当前已落地的 MCP Tool 分类）：几何创建 / 几何修改 / 对象编辑 / 对象与文档级 UserString / 图层管理 / 对象筛查 / 几何分析。详见 [src/MCP_Rhino.Server/Tools/](src/MCP_Rhino.Server/Tools/) 下各子目录。
@@ -35,7 +35,7 @@ dotnet build src\MCP_Rhino.Bridge\MCP_Rhino.Bridge.csproj -c Release
 拖入 Rhino 视口，或运行 `_PlugInManager` → `Install...`。成功标志是命令行出现：
 
 ```text
-MCP_Rhino plugin loaded. Named pipe ready: \\.\pipe\mcp_rhino
+MCP_Rhino plugin loaded. Developer debug pipe requested: \\.\pipe\mcp_rhino
 ```
 
 ### Step 3 —— 打开并保存一个 .3dm
@@ -73,6 +73,8 @@ MCP_Rhino pipe client connected: \\.\pipe\mcp_rhino
 ```
 
 这条日志 = 端到端通了。
+
+> 多个 Rhino 进程并行时，`\\.\pipe\mcp_rhino` 仍然只作为单 owner debug/test 入口；每个 `_Mcpchat` 会自动使用独立的 `mcp_rhino_<ProcessId>_<RuntimeSerialNumber>` 管道。
 
 ### Step 5 —— 开始聊天
 

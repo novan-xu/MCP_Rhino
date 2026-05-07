@@ -16,7 +16,7 @@ public sealed class InspectSurfaceRebuildDescriptorTool
         _orchestrator = orchestrator;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("Inspect live Rhino surface boundary data for quad-only point-order rebuild. Returns candidate reference edges, selected reference edge, boundary loop, topology, and route without modifying the document.")]
     public OperationResponse<SurfaceRebuildDescriptorResponse> InspectSurfaceRebuildDescriptor(
         string filePath,

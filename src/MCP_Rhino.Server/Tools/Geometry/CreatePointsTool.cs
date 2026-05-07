@@ -16,7 +16,7 @@ public sealed class CreatePointsTool
         _skill = skill;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = false, Destructive = false, OpenWorld = false)]
     [Description("在 Rhino .3dm 文件中批量创建点对象。")]
     public OperationResponse<GeometryCreationResponse> CreatePoints(
         string filePath,

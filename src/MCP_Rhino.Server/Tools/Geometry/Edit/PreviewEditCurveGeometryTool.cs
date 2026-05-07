@@ -18,7 +18,7 @@ public sealed class PreviewEditCurveGeometryTool
         _orchestrator = orchestrator;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("Preview a DirectOverride curve geometry edit against the active Rhino document. Reconstructs a curve from a full replacement point list without modifying the document.")]
     public OperationResponse<GeometryEditPreviewResponse> PreviewEditCurveGeometry(
         string filePath,

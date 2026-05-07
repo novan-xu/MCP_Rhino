@@ -17,7 +17,7 @@ public sealed class ApplyTweakSurfaceDirectionsTool
         _orchestrator = orchestrator;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = false, Destructive = false, OpenWorld = false)]
     [Description("Apply Rhino Dir-style surface direction tweaks in the active Rhino document. If operations is omitted or empty, defaults to the standard post-rebuild Dir fix: SwapUV. Supports ReverseU, ReverseV, SwapUV, and explicit FlipNormal for surfaces and single-face Breps, using one Undo record and preserving object metadata.")]
     public OperationResponse<SurfaceDirectionTweakApplyResponse> ApplyTweakSurfaceDirections(
         string filePath,

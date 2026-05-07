@@ -16,10 +16,15 @@ public sealed record CompanionUiEvent(
     uint? RuntimeSerial = null,
     string? PipeName = null,
     string? Model = null,
+    string? Cli = null,
+    IReadOnlyList<string>? Models = null,
     decimal? TotalCostUsd = null,
     bool? InputEnabled = null)
 {
-    public static CompanionUiEvent Session(CompanionOptions options)
+    public static CompanionUiEvent Session(
+        CompanionOptions options,
+        string? cli = null,
+        IReadOnlyList<string>? models = null)
     {
         return new CompanionUiEvent(
             "session",
@@ -27,7 +32,9 @@ public sealed record CompanionUiEvent(
             DocumentName: Path.GetFileName(options.DocumentPath),
             RuntimeSerial: options.RuntimeSerial,
             PipeName: options.PipeName,
-            Model: options.ModelId);
+            Model: options.ModelId,
+            Cli: cli,
+            Models: models);
     }
 
     public static CompanionUiEvent Message(string role, string text)

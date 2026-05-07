@@ -16,7 +16,7 @@ public sealed class PreviewPurgeLayersTool
         _service = service;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("Preview layer purge impact against the active Rhino document without changing it.")]
     public OperationResponse<LayerDeletionPreviewResponse> PreviewPurgeLayers(string filePath, List<string> fullPaths)
     {

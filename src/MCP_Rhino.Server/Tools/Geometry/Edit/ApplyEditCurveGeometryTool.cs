@@ -18,7 +18,7 @@ public sealed class ApplyEditCurveGeometryTool
         _orchestrator = orchestrator;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = false, Destructive = false, OpenWorld = false)]
     [Description("Apply a DirectOverride curve geometry edit in the active Rhino document. Uses one Undo record and replays whitelisted object metadata after replacement.")]
     public OperationResponse<GeometryEditApplyResponse> ApplyEditCurveGeometry(
         string filePath,

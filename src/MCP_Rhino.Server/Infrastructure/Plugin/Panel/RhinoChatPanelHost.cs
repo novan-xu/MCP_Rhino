@@ -41,7 +41,7 @@ public sealed class RhinoChatPanelHost : IDisposable
             return;
         }
 
-        string pipeName = $"mcp_rhino_{serial}";
+        string pipeName = McpPipeNames.ForPanelBoundDocument(serial);
         _startBoundPipeServer(pipeName, serial);
 
         string? bridgeExecutablePath = McpConfigBuilder.FindBridgeExecutable(_pluginDirectory);

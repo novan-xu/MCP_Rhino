@@ -16,7 +16,7 @@ public sealed class ModifyLayersTool
         _service = service;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = false, Destructive = false, OpenWorld = false)]
     [Description("Modify layer properties, rename layers, or reparent layers in the active Rhino document.")]
     public OperationResponse<LayerMutationResponse> ModifyLayers(string filePath, List<LayerModificationEntryRequest> entries)
     {

@@ -16,7 +16,7 @@ public sealed class SetDrawingExportBackgroundTool
         _service = service;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = false, Destructive = false, OpenWorld = false)]
     [Description("Set drawing export background color after capturing a drawing export snapshot. Defaults to white. This is live-only.")]
     public OperationResponse<DrawingExportStateResponse> SetDrawingExportBackground(
         string filePath,

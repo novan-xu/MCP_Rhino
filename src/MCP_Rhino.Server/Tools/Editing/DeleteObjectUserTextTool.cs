@@ -16,7 +16,7 @@ public sealed class DeleteObjectUserTextTool
         _userTextService = userTextService;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = false, Destructive = true, OpenWorld = false)]
     [Description("按对象批量删除 Rhino user text。每条 entry 直接指定 ObjectId、Key，对应 ObjectAttributes.DeleteUserString。")]
     public OperationResponse<ObjectEditExecutionResponse> DeleteObjectUserText(
         string filePath,

@@ -17,7 +17,7 @@ public sealed class SetupDrawingViewsTool
         _service = service;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = false, Destructive = false, OpenWorld = false)]
     [Description("Create or update standard layer-fitted named drawing views for PDF/JPG export. Returns candidate layers when layer selection is missing. This is live-only.")]
     public OperationResponse<DrawingViewSetupResponse> SetupDrawingViews(
         string filePath,

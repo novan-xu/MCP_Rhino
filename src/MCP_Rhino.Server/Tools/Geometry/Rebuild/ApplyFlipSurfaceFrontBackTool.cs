@@ -16,7 +16,7 @@ public sealed class ApplyFlipSurfaceFrontBackTool
         _orchestrator = orchestrator;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = false, Destructive = false, OpenWorld = false)]
     [Description("Apply Rhino Flip-style front/back face orientation flip to surfaces or Breps in the active Rhino document. Use this after rebuilding surfaces and before Dir-style UV tweaks when front/back display must be forced to flip.")]
     public OperationResponse<SurfaceFrontBackFlipApplyResponse> ApplyFlipSurfaceFrontBack(
         string filePath,

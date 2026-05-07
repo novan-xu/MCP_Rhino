@@ -17,7 +17,7 @@ public sealed class PreviewObjectEditsTool
         _previewSkill = previewSkill;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("预览 Rhino 物体批量编辑。支持 user text、图层、显示颜色修改，并复用现有筛查条件。")]
     public OperationResponse<ObjectEditPreviewResponse> PreviewObjectEdits(
         string filePath,

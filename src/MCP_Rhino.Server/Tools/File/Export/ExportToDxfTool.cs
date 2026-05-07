@@ -16,7 +16,7 @@ public sealed class ExportToDxfTool
         _service = service;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = false, Destructive = true, OpenWorld = true)]
     [Description("Export the saved active Rhino document to DXF through RhinoDoc.WriteFile. This is live-only and does not modify document geometry or document path.")]
     public OperationResponse<FileExportResponse> ExportToDxf(string filePath, string outputPath, List<Guid>? selectedObjectIds = null, bool overwriteExisting = true, Dictionary<string, string>? formatOptions = null)
     {

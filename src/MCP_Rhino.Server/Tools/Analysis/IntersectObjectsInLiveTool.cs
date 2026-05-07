@@ -16,7 +16,7 @@ public sealed class IntersectObjectsInLiveTool
         _service = service;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("Intersect live Rhino geometry pairs. Supports ObjectId and temporary geometry specs for each entry, with tolerance defaulting to the active document tolerance.")]
     public OperationResponse<IntersectObjectsInLiveResponse> IntersectObjectsInLive(string filePath, List<GeometryIntersectionEntryRequest> entries)
     {

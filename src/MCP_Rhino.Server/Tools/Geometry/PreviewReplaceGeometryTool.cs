@@ -16,7 +16,7 @@ public sealed class PreviewReplaceGeometryTool
         _skill = skill;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("预览按 ObjectId 替换几何的结果，不落盘。")]
     public OperationResponse<GeometryModificationPreviewResponse> PreviewReplaceGeometry(
         string filePath,

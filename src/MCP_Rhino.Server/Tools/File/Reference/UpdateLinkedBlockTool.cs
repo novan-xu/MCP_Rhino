@@ -16,7 +16,7 @@ public sealed class UpdateLinkedBlockTool
         _service = service;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = false, Destructive = false, OpenWorld = true)]
     [Description("Refresh one or more existing linked block definitions in the saved active Rhino document. This is live-only and creates a Rhino undo step when updates succeed.")]
     public OperationResponse<LinkedBlockMutationResponse> UpdateLinkedBlock(string filePath, List<string> definitionNames)
     {

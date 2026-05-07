@@ -128,7 +128,7 @@ public sealed class RhinoObjectEditingService
 
             foreach (RhinoObjectInfo objectInfo in selection.Objects)
             {
-                OperationResponse<ObjectEditOperationResult> applyResult = _operationApplier.Apply(objectInfo, operations);
+                OperationResponse<ObjectEditOperationResult> applyResult = _operationApplier.Apply(document, objectInfo, operations);
                 operationResults.Add(ToOperationResult(objectInfo, applyResult));
             }
 

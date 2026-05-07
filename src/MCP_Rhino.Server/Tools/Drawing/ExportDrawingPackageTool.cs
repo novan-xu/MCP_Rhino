@@ -17,7 +17,7 @@ public sealed class ExportDrawingPackageTool
         _service = service;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = false, Destructive = true, OpenWorld = true)]
     [Description("Set up layer-fitted drawing views, apply temporary styling/background, export PDF/JPG drawings, and restore exact state. This is live-only.")]
     public OperationResponse<DrawingExportPackageResponse> ExportDrawingPackage(
         string filePath,

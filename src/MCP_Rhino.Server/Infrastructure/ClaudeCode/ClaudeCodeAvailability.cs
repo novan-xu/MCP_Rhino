@@ -82,38 +82,7 @@ public static class ClaudeCodeAvailability
 
     internal static ProcessStartInfo CreateStartInfo(string executablePath, IReadOnlyList<string> arguments, string? workingDirectory)
     {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = executablePath,
-            UseShellExecute = false,
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true
-        };
-
-        if (!string.IsNullOrWhiteSpace(workingDirectory))
-        {
-            startInfo.WorkingDirectory = workingDirectory;
-        }
-
-        if (IsCommandScript(executablePath))
-        {
-            startInfo.FileName = Environment.GetEnvironmentVariable("COMSPEC") ?? "cmd.exe";
-            startInfo.ArgumentList.Add("/d");
-            startInfo.ArgumentList.Add("/s");
-            startInfo.ArgumentList.Add("/c");
-            startInfo.ArgumentList.Add($"\"{executablePath}\" {string.Join(" ", arguments.Select(QuoteForCmd))}");
-        }
-        else
-        {
-            foreach (string argument in arguments)
-            {
-                startInfo.ArgumentList.Add(argument);
-            }
-        }
-
-        return startInfo;
+        return CliProcessStartInfo.Create(executablePath, arguments, workingDirectory);
     }
 
     private static string? FindClaudeExecutable()
@@ -164,17 +133,4 @@ public static class ClaudeCodeAvailability
             : null;
     }
 
-    private static bool IsCommandScript(string executablePath)
-    {
-        string extension = Path.GetExtension(executablePath);
-        return string.Equals(extension, ".cmd", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(extension, ".bat", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static string QuoteForCmd(string argument)
-    {
-        return argument.Contains(' ') || argument.Contains('"')
-            ? "\"" + argument.Replace("\"", "\\\"") + "\""
-            : argument;
-    }
 }

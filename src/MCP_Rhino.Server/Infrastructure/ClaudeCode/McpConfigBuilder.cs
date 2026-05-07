@@ -23,7 +23,7 @@ public static class McpConfigBuilder
 
     public static string WriteConfig(uint runtimeSerialNumber, string bridgeExecutablePath, string pipeName)
     {
-        string directory = GetTempDirectory(runtimeSerialNumber);
+        string directory = GetTempDirectory(runtimeSerialNumber, pipeName);
         Directory.CreateDirectory(directory);
 
         string configPath = Path.Combine(directory, ".mcp.json");
@@ -36,9 +36,26 @@ public static class McpConfigBuilder
         return Path.Combine(Path.GetTempPath(), "MCP_Rhino", runtimeSerialNumber.ToString());
     }
 
+    public static string GetTempDirectory(uint runtimeSerialNumber, string pipeName)
+    {
+        return Path.Combine(
+            Path.GetTempPath(),
+            "MCP_Rhino",
+            SanitizeDirectoryName(pipeName));
+    }
+
     public static void DeleteTempDirectory(uint runtimeSerialNumber)
     {
         string directory = GetTempDirectory(runtimeSerialNumber);
+        if (Directory.Exists(directory))
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    public static void DeleteTempDirectory(uint runtimeSerialNumber, string pipeName)
+    {
+        string directory = GetTempDirectory(runtimeSerialNumber, pipeName);
         if (Directory.Exists(directory))
         {
             Directory.Delete(directory, recursive: true);
@@ -106,5 +123,11 @@ public static class McpConfigBuilder
     private static string NormalizePath(string path)
     {
         return Path.GetFullPath(path).Replace('\\', '/');
+    }
+
+    private static string SanitizeDirectoryName(string value)
+    {
+        char[] invalid = Path.GetInvalidFileNameChars();
+        return string.Concat(value.Select(ch => invalid.Contains(ch) ? '_' : ch));
     }
 }

@@ -16,7 +16,7 @@ public sealed class FilterObjectsTool
         _compositeObjectFilterSkill = compositeObjectFilterSkill;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("按单一条件或任意组合条件筛查 Rhino 物体。当前支持 layer、object type、user attributes，并支持 AND/OR 组合。")]
     public string FilterObjects(
         string filePath,

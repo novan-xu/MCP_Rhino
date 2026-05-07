@@ -18,7 +18,7 @@ public sealed class PreviewEditSurfaceGeometryTool
         _orchestrator = orchestrator;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("Preview a surface geometry edit against the active Rhino document. Supports direct control-point-grid replacement and derived point operations without modifying the document.")]
     public OperationResponse<GeometryEditPreviewResponse> PreviewEditSurfaceGeometry(
         string filePath,

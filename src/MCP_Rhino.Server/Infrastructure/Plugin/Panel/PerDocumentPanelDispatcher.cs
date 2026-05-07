@@ -103,7 +103,6 @@ public sealed class PerDocumentPanelDispatcher : IDisposable
             return;
         }
 
-        TryStartDocument(document);
         _host.UpdateDocumentPath(document);
     }
 

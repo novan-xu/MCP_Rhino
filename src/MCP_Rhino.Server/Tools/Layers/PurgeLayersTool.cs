@@ -16,7 +16,7 @@ public sealed class PurgeLayersTool
         _service = service;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = false, Destructive = true, OpenWorld = false)]
     [Description("Purge layer subtrees from the active Rhino document and remove all objects on those layers.")]
     public OperationResponse<LayerMutationResponse> PurgeLayers(string filePath, List<string> fullPaths)
     {

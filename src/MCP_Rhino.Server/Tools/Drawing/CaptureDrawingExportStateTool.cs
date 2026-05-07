@@ -17,7 +17,7 @@ public sealed class CaptureDrawingExportStateTool
         _service = service;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("Capture exact object display attributes and drawing background state before staged drawing export. This is live-only.")]
     public OperationResponse<DrawingExportStateResponse> CaptureDrawingExportState(
         string filePath,

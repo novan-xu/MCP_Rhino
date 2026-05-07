@@ -16,7 +16,7 @@ public sealed class PreviewObjectUserTextWritesInLiveTool
         _userTextService = userTextService;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("针对当前 Rhino 活动文档预览物体 user string 写入（不做变更）。需要文件在 Rhino 会话中处于活动状态；否则返回 LIVE_RHINO_REQUIRED。")]
     public OperationResponse<ObjectEditPreviewResponse> PreviewObjectUserTextWritesInLive(
         string filePath,

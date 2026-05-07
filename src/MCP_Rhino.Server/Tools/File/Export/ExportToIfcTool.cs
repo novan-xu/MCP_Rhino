@@ -16,7 +16,7 @@ public sealed class ExportToIfcTool
         _service = service;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = false, Destructive = true, OpenWorld = true)]
     [Description("Export the saved active Rhino document to IFC through RhinoDoc.WriteFile. This is live-only and depends on Rhino's IFC export support.")]
     public OperationResponse<FileExportResponse> ExportToIfc(string filePath, string outputPath, List<Guid>? selectedObjectIds = null, bool overwriteExisting = true, Dictionary<string, string>? formatOptions = null)
     {

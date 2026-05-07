@@ -21,7 +21,7 @@ namespace MCP_Rhino.Server.Infrastructure.Plugin;
 public sealed class McpRhinoPlugin : PlugIn
 {
     internal const string PluginIdText = "7A3FC2F0-24A8-4B79-BE58-5A08CFB0D10A";
-    internal const string PipeName = "mcp_rhino";
+    internal const string PipeName = McpPipeNames.DeveloperDebugPipeName;
     internal static readonly Guid PluginId = new(PluginIdText);
 
     public static McpRhinoPlugin? Instance { get; private set; }
@@ -70,7 +70,8 @@ public sealed class McpRhinoPlugin : PlugIn
 
             RhinoDoc.CloseDocument += OnCloseDocumentForCompanion;
 
-            RhinoApp.WriteLine($"MCP_Rhino plugin loaded. Named pipe ready: \\\\.\\pipe\\{PipeName}");
+            RhinoApp.WriteLine($"MCP_Rhino plugin loaded. Developer debug pipe requested: \\\\.\\pipe\\{PipeName}");
+            RhinoApp.WriteLine($"MCP_Rhino panel pipes are process-scoped for Rhino PID {Environment.ProcessId}.");
             return LoadReturnCode.Success;
         }
         catch (Exception ex)
@@ -215,7 +216,7 @@ public sealed class McpRhinoPlugin : PlugIn
             StopCompanion(serial);
         }
 
-        string pipeName = $"mcp_rhino_{serial}";
+        string pipeName = McpPipeNames.ForPanelBoundDocument(serial);
         StartBoundPipeServer(pipeName, serial);
 
         var spec = new CompanionLaunchSpec(

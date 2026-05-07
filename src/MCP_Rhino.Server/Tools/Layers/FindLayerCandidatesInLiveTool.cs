@@ -17,7 +17,7 @@ public sealed class FindLayerCandidatesInLiveTool
         _filterService = filterService;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("在当前 Rhino 活动文档中按名称或路径片段搜索图层。需要该文件在 Rhino 会话中处于活动状态；否则返回 LIVE_RHINO_REQUIRED。")]
     public OperationResponse<IReadOnlyList<RhinoLayerCandidate>> FindLayerCandidatesInLive(
         string filePath,

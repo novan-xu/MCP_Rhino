@@ -17,7 +17,7 @@ public sealed class DeleteObjectsTool
         _skill = skill;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = false, Destructive = true, OpenWorld = false)]
     [Description("删除 Rhino 对象，并覆盖写回原文件。")]
     public OperationResponse<GeometryModificationResponse> DeleteObjects(
         string filePath,

@@ -17,7 +17,7 @@ public sealed class GetMassPropertiesInLiveTool
         _service = service;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("Read live mass properties from the active Rhino document. Supports Length, Area, Volume, and Auto selection by geometry type.")]
     public OperationResponse<GetMassPropertiesInLiveResponse> GetMassPropertiesInLive(
         string filePath,

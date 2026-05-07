@@ -16,7 +16,7 @@ public sealed class ApplyDrawingExportStyleTool
         _service = service;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = false, Destructive = false, OpenWorld = false)]
     [Description("Apply temporary object styling for drawing export from a captured drawing export snapshot. This is live-only and must be restored with RestoreDrawingExportState.")]
     public OperationResponse<DrawingExportStateResponse> ApplyDrawingExportStyle(
         string filePath,

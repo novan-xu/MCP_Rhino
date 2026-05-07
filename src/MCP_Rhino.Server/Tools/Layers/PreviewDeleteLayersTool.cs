@@ -16,7 +16,7 @@ public sealed class PreviewDeleteLayersTool
         _service = service;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("Preview layer deletion impact against the active Rhino document without changing it.")]
     public OperationResponse<LayerDeletionPreviewResponse> PreviewDeleteLayers(string filePath, List<string> fullPaths)
     {

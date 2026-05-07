@@ -17,7 +17,7 @@ public sealed class ApplyObjectEditsTool
         _applySkill = applySkill;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = false, Destructive = false, OpenWorld = false)]
     [Description("执行 Rhino 物体批量编辑。支持 user text、图层、显示颜色修改，并直接覆盖原文件。")]
     public OperationResponse<ObjectEditExecutionResponse> ApplyObjectEdits(
         string filePath,

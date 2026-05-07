@@ -23,6 +23,7 @@
 - Tool 中禁止堆积大段 Rhino 文件读写逻辑。
 - 命名统一使用 `*Tool` 后缀。
 - **执行模式约束**：所有 Tool 只能依赖 Live 适配接口获取当前 Rhino 文档真值；不得提供磁盘文件读取或写入兜底。详见「执行模式指南」章节。
+- **MCP 安全注解约束**：每个方法级 `[McpServerTool]` 必须显式声明 `ReadOnly`、`Destructive`、`OpenWorld`。详见「MCP Tool Safety Annotation Guidelines」章节。
 
 ### 4. Skills/
 - 放置固定流程的复合能力。
@@ -55,7 +56,7 @@
 - 这里回答"具体如何和外部技术打交道"。
 
 - **Rhino 适配组织**：`Infrastructure/Rhino/` 承载 RhinoCommon 适配；所有与文档状态有关的适配器以 `Live*` 前缀命名。历史保留的 `Rhino/Live/` 子目录可继续作为分组使用，但项目执行模式只有 Live 一种。
-- **`Plugin/` 子目录**：放置 Rhino `.rhp` 宿主入口（`MCP_Rhino.RhinoPlugin.cs`、`McpNamedPipeServer.cs` 等）。在 `OnLoad` 里启动 **Named Pipe MCP server**（管道 `\\.\pipe\mcp_rhino`），承载 MCP 协议帧；Client 端经独立的 `MCP_Rhino.Bridge` 项目提供的 stdio-to-pipe 桥接 exe 连入。MCP server 的默认部署形态即由此承载。
+- **`Plugin/` 子目录**：放置 Rhino `.rhp` 宿主入口（`MCP_Rhino.RhinoPlugin.cs`、`McpNamedPipeServer.cs` 等）。在 `OnLoad` 里尝试启动 **Developer Debug Named Pipe MCP server**（固定管道 `\\.\pipe\mcp_rhino`），承载测试 / smoke / 外部调试 MCP 协议帧；Client 端经独立的 `MCP_Rhino.Bridge` 项目提供的 stdio-to-pipe 桥接 exe 连入。多 Rhino 进程并行时，固定 debug 管道只能由一个进程拥有；其它 Rhino 进程不得因此加载失败，仍必须能启动自己的 process-scoped panel-bound 管道。
 - `CLI/` 放置面向开发者 / 终端的命令行适配实现（例如 `DeveloperCommandHandler`），作为外部入口到 Application / Agent 层的薄适配层；`Program.cs` 只负责解析并委托给这里。
 
 ### 9. Contracts/
@@ -78,6 +79,16 @@
 - Rhino 适配（`RhinoDoc` 在线）/ IO / Logging / Config 实现 → `Infrastructure/`
 - 请求/响应/消息结构 → `Contracts/`
 - LLM 指令模板 → `Prompts/`
+
+## MCP Tool Safety Annotation Guidelines
+
+Every future method-level `[McpServerTool]` must use explicit named safety annotations. Do not rely on `ModelContextProtocol` defaults.
+
+- Read / Filter / Get / Find / Inspect / Measure / Intersect / Resolve / Preview tools must be annotated as `ReadOnly = true, Destructive = false, OpenWorld = false`.
+- Mutation tools that only change the current live Rhino document must be annotated as `ReadOnly = false, OpenWorld = false`, with `Destructive` set to the actual behavior. Create / transform / edit / set operations are normally `Destructive = false`; delete / replace / purge operations are normally `Destructive = true`.
+- Export, logging, external-reference, or any tool that writes to caller-provided filesystem paths or external state must set `OpenWorld = true`. If it can overwrite or remove external output, set `Destructive = true`.
+- Never mark a mutation or export tool as read-only just to bypass Codex or another MCP client's approval behavior. If a destructive tool needs approval UX, solve that in the panel/client flow.
+- When adding, renaming, or removing an MCP tool, update `Project_Test/260506_TEST_mcp-tool-safety-annotations/DeveloperCommandHandler.McpToolSafetyAnnotationsSmokeTest.cs` and run `mcp-tool-safety-annotations-smoke-test`. The smoke must fail if any method-level `[McpServerTool]` is missing explicit `ReadOnly`, `Destructive`, or `OpenWorld` metadata.
 
 ## 执行模式指南（Live Only）
 
@@ -121,15 +132,19 @@ Rhino 侧的能力只跑一种模式：经 RhinoCommon 操作运行中的 `Rhino
 - 触发场景：外部 MCP client 或 smoke 经 `MCP_Rhino.Bridge.exe` 默认参数连接 `\\.\pipe\mcp_rhino`。
 - 用途：快速验证新 tool / skill / agent 的 live Rhino 行为、回归既有能力、调试外部 MCP client 配置。
 - 约束：目标文档必须是当前 `RhinoDoc.ActiveDoc`，且请求 `FilePath` 必须与 `ActiveDoc.Path` 匹配；否则沿用 `NO_ACTIVE_DOCUMENT` / `ACTIVE_DOC_UNSAVED` / `FILE_NOT_ACTIVE`。
-- 这条路径是正式保留的开发入口，但不是最终多文档用户体验路径；多文档用户体验应走 panel-bound per-doc server。
+- 这条路径是正式保留的开发入口，但不是最终多文档 / 多 Rhino 进程用户体验路径；多文档、多 Rhino 进程用户体验必须走 panel-bound per-doc server。
+- `mcp_rhino` 是单 owner debug pipe：同一台机器上只能有一个 Rhino 进程拥有它。第二个 Rhino 进程如果遇到 `All pipe instances are busy`，必须只禁用本进程的 debug pipe 并继续提供 panel-bound 管道，不能进入无限错误循环，也不能阻止插件加载。
 - 新能力的 capability smoke 可以优先走该路径或专属 Rhino smoke command 验证业务能力；panel smoke 只验证 panel / bound accessor / CC / per-doc pipe 生命周期。
 
 ### Panel-bound execution mode（Per-Document）
 
 Live Only 是默认模式，绑定到 `RhinoDoc.ActiveDoc`。本子节描述 panel 启用的 per-doc 绑定变体。
 
-- 触发场景：Rhino 内由 chat panel 启动的 per-doc MCP server 实例（`\\.\pipe\mcp_rhino_<RuntimeSerialNumber>`）。
+- 触发场景：Rhino 内由 chat panel / companion 启动的 per-doc MCP server 实例（`\\.\pipe\mcp_rhino_<ProcessId>_<RuntimeSerialNumber>`）。
 - 实现：`Infrastructure/Rhino/Live/BoundLiveRhinoDocumentAccessor` 实现 `ILiveRhinoDocumentAccessor`，所有 `RhinoDoc` 解析都来自 `RhinoDoc.FromRuntimeSerialNumber(boundSerial)`，不走 `ActiveDoc`。
+- Pipe 命名必须同时包含 Rhino 进程 id 与 `RuntimeSerialNumber`。`RuntimeSerialNumber` 只保证在单个 Rhino 进程内稳定，不保证跨 Rhino 进程唯一；禁止恢复为 `mcp_rhino_<RuntimeSerialNumber>` 这类跨进程可碰撞命名。
+- Panel / companion 生成的临时 MCP config 目录也必须按 pipe name 隔离，不能只按 `RuntimeSerialNumber` 隔离。
+- Panel / companion 启动 Claude / Codex / bridge 等 LLM 子进程时，进程工作目录必须使用按 pipe name 隔离的临时目录；禁止把 `.3dm` 所在目录作为 CLI working directory。绑定文档路径只能作为 prompt / MCP tool 参数传递，不能作为本地文件工具、project workspace、session persistence 或 fallback 读取的入口。
 - 约束：
   - 绑定 doc 必须存在（`FromRuntimeSerialNumber` 非 null）→ 否则返回 `DOCUMENT_CLOSED`。
   - 绑定 doc 必须已落盘（`doc.Path` 非空）→ 否则沿用 `ACTIVE_DOC_UNSAVED`。

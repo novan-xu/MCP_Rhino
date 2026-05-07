@@ -24,7 +24,7 @@ internal static class CompanionProcessLauncher
         var startInfo = new ProcessStartInfo
         {
             FileName = spec.CompanionExecutablePath,
-            UseShellExecute = false,
+            UseShellExecute = true,
             CreateNoWindow = false,
             WorkingDirectory = Path.GetDirectoryName(spec.CompanionExecutablePath) ?? Environment.CurrentDirectory
         };

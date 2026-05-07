@@ -16,7 +16,7 @@ public sealed class MeasureAnglesInLiveTool
         _service = service;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("Measure live angles using three points, two vectors, or two curve tangents. Supports temporary geometry specs where applicable.")]
     public OperationResponse<MeasureAnglesInLiveResponse> MeasureAnglesInLive(string filePath, List<MeasureAngleEntryRequest> entries)
     {

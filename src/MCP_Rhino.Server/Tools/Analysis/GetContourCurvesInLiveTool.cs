@@ -16,7 +16,7 @@ public sealed class GetContourCurvesInLiveTool
         _service = service;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("Create live contour-curve previews from surfaces or breps in the active Rhino document. ObjectId only.")]
     public OperationResponse<GetContourCurvesInLiveResponse> GetContourCurvesInLive(string filePath, List<GeometryContourEntryRequest> entries)
     {

@@ -58,6 +58,11 @@ public sealed partial class DeveloperCommandHandler
     partial void RegisterStandardFourPointSurfaceRebuildHandlers();
     partial void RegisterSurfaceFrontBackFlipHandlers();
     partial void RegisterDrawingExportHandlers();
+    partial void RegisterRhinoChatSaveSafetyHandlers();
+    partial void RegisterMultiRhinoPanelPipeHandlers();
+    partial void RegisterLlmPanelCliSwitchingHandlers();
+    partial void RegisterMcpToolSafetyAnnotationHandlers();
+    partial void RegisterRhinoChatFileLockSafetyHandlers();
 
     partial void RegisterExtensionHandlers()
     {
@@ -75,6 +80,11 @@ public sealed partial class DeveloperCommandHandler
         RegisterStandardFourPointSurfaceRebuildHandlers();
         RegisterSurfaceFrontBackFlipHandlers();
         RegisterDrawingExportHandlers();
+        RegisterRhinoChatSaveSafetyHandlers();
+        RegisterMultiRhinoPanelPipeHandlers();
+        RegisterLlmPanelCliSwitchingHandlers();
+        RegisterMcpToolSafetyAnnotationHandlers();
+        RegisterRhinoChatFileLockSafetyHandlers();
     }
 
     public DeveloperCommandHandler(

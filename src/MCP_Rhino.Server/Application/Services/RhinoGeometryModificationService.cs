@@ -203,7 +203,7 @@ public sealed class RhinoGeometryModificationService
             foreach (GeometryReplacementSpec spec in specs)
             {
                 RhinoObjectInfo target = targetLookup[spec.ObjectId];
-                OperationResponse<ObjectEditOperationResult> mutateResult = _mutator.Replace(target, spec);
+                OperationResponse<ObjectEditOperationResult> mutateResult = _mutator.Replace(document, target, spec);
                 results.Add(ToOperationResult(target, mutateResult));
             }
 
@@ -346,7 +346,7 @@ public sealed class RhinoGeometryModificationService
             foreach ((Guid objectId, List<ControlPointEditSpec> objectSpecs) in groupedSpecs)
             {
                 RhinoObjectInfo target = targetLookup[objectId];
-                OperationResponse<ObjectEditOperationResult> mutateResult = _mutator.EditControlPoints(target, objectSpecs);
+                OperationResponse<ObjectEditOperationResult> mutateResult = _mutator.EditControlPoints(document, target, objectSpecs);
                 results.Add(ToOperationResult(target, mutateResult));
             }
 
@@ -455,7 +455,7 @@ public sealed class RhinoGeometryModificationService
 
             foreach (RhinoObjectInfo objectInfo in selection.Objects)
             {
-                OperationResponse<ObjectEditOperationResult> mutateResult = _mutator.Transform(objectInfo, transform);
+                OperationResponse<ObjectEditOperationResult> mutateResult = _mutator.Transform(document, objectInfo, transform);
                 results.Add(ToOperationResult(objectInfo, mutateResult));
             }
 
@@ -539,7 +539,7 @@ public sealed class RhinoGeometryModificationService
 
             foreach (RhinoObjectInfo objectInfo in selection.Objects)
             {
-                OperationResponse<ObjectEditOperationResult> mutateResult = _mutator.Delete(objectInfo);
+                OperationResponse<ObjectEditOperationResult> mutateResult = _mutator.Delete(document, objectInfo);
                 results.Add(ToOperationResult(objectInfo, mutateResult));
             }
 

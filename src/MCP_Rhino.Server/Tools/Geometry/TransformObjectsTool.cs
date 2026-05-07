@@ -18,7 +18,7 @@ public sealed class TransformObjectsTool
         _skill = skill;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = false, Destructive = false, OpenWorld = false)]
     [Description("对 Rhino 对象执行 Translate / Rotate / UniformScale 变换，并覆盖写回原文件。")]
     public OperationResponse<GeometryModificationResponse> TransformObjects(
         string filePath,

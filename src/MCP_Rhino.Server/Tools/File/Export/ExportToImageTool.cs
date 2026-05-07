@@ -16,7 +16,7 @@ public sealed class ExportToImageTool
         _service = service;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = false, Destructive = true, OpenWorld = true)]
     [Description("Capture a named Rhino view to an image file (.jpg/.png/.bmp/.tiff). This is live-only and reads the current viewport state without mutating the document.")]
     public OperationResponse<FileExportResponse> ExportToImage(
         string filePath,

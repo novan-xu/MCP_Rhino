@@ -14,7 +14,7 @@ public sealed class FilterObjectsByLayerTool
         _layerObjectFilterSkill = layerObjectFilterSkill;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("按图层筛查 Rhino 物体。支持通过 layerQuery 查找候选图层；如存在歧义，请提供 confirmedLayerFullPath。")]
     public string FilterObjectsByLayer(string filePath, string layerQuery, string? confirmedLayerFullPath = null)
     {

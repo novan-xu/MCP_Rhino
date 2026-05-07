@@ -16,7 +16,7 @@ public sealed class ExportToPdfTool
         _service = service;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = false, Destructive = true, OpenWorld = true)]
     [Description("Capture a named Rhino view to PDF via Rhino FilePdf. This is live-only and preserves the active document path.")]
     public OperationResponse<FileExportResponse> ExportToPdf(
         string filePath,

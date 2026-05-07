@@ -17,7 +17,11 @@ public sealed class ServerBootstrap : IDisposable
 
     public void Start(string pipeName)
     {
-        _pipeServer = new McpNamedPipeServer(pipeName, CreateConnectionHost);
+        _pipeServer = new McpNamedPipeServer(
+            pipeName,
+            CreateConnectionHost,
+            stopOnPipeCreateFailure: true,
+            pipeCreateFailureHint: "If another Rhino instance owns this debug pipe, this Rhino instance can still use process-scoped panel pipes.");
         _pipeServer.Start();
     }
 
@@ -30,7 +34,11 @@ public sealed class ServerBootstrap : IDisposable
                 return;
             }
 
-            var pipeServer = new McpNamedPipeServer(pipeName, BoundHostFactory.For(runtimeSerialNumber));
+            var pipeServer = new McpNamedPipeServer(
+                pipeName,
+                BoundHostFactory.For(runtimeSerialNumber),
+                stopOnPipeCreateFailure: true,
+                pipeCreateFailureHint: "This panel-bound pipe did not start. Check for stale clients or unexpected pipe-name collisions.");
             pipeServer.Start();
             _boundPipeServers.Add(pipeName, pipeServer);
         }

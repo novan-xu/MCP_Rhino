@@ -5,7 +5,7 @@ namespace MCP_Rhino.Server.Infrastructure.Plugin.Panel;
 
 public sealed class PanelChatSessionService : IPanelChatSession
 {
-    private const string DisallowedTools = "Bash,Edit,Read,Write,Grep,Glob,WebFetch,WebSearch,TodoWrite,Task,NotebookEdit";
+    private const string DisallowedTools = "Bash,Edit,Read,Write,Grep,Glob,WebFetch,WebSearch,TodoWrite,Task,NotebookEdit,Monitor,TaskOutput,TaskStop,CronCreate,CronDelete,CronList,EnterPlanMode,ExitPlanMode,EnterWorktree,ExitWorktree,PushNotification,RemoteTrigger,AskUserQuestion";
 
     private readonly string? _bridgeExecutablePath;
     private readonly IClaudeCodeProcess _claudeCodeProcess;
@@ -68,7 +68,7 @@ public sealed class PanelChatSessionService : IPanelChatSession
         }
 
         string configPath = McpConfigBuilder.WriteConfig(RuntimeSerialNumber, _bridgeExecutablePath, PipeName);
-        string workingDirectory = Path.GetDirectoryName(DocumentPath) ?? Environment.CurrentDirectory;
+        string workingDirectory = PanelChatWorkspace.GetWorkingDirectory(PipeName);
 
         var arguments = new List<string>
         {
@@ -76,6 +76,11 @@ public sealed class PanelChatSessionService : IPanelChatSession
             "--output-format=stream-json",
             "--input-format=stream-json",
             "--verbose",
+            "--no-session-persistence",
+            "--setting-sources",
+            "user",
+            "--tools",
+            string.Empty,
             "--mcp-config",
             configPath,
             "--strict-mcp-config",
@@ -121,7 +126,7 @@ public sealed class PanelChatSessionService : IPanelChatSession
     {
         IsInputEnabled = false;
         _claudeCodeProcess.Stop();
-        McpConfigBuilder.DeleteTempDirectory(RuntimeSerialNumber);
+        McpConfigBuilder.DeleteTempDirectory(RuntimeSerialNumber, PipeName);
     }
 
     public void Dispose()
@@ -183,6 +188,8 @@ public sealed class PanelChatSessionService : IPanelChatSession
             "Use the Rhino MCP tools directly for this bound document.",
             "When a Rhino MCP tool has a filePath parameter, always pass the bound Rhino document path shown above.",
             "Do not ask the user for the .3dm path for this panel session.",
+            "Do not use local shell commands or direct .3dm file reads as a fallback; if a Rhino MCP tool fails, report the MCP failure.",
+            "Do not open, read, write, monitor, index, or otherwise touch the bound .3dm file through local file tools.",
             "The panel-bound MCP server resolves tool calls by the bound Rhino runtime serial number; it does not follow RhinoDoc.ActiveDoc.",
             "The filePath argument exists for tool schema compatibility and is ignored for routing by the panel-bound server.",
             "Do not try to operate on any other open Rhino document from this panel.",

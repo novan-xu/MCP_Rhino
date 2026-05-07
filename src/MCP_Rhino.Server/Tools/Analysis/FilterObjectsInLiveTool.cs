@@ -18,7 +18,7 @@ public sealed class FilterObjectsInLiveTool
         _filterService = filterService;
     }
 
-    [McpServerTool]
+    [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("针对当前 Rhino 活动文档按图层/类型/用户属性等条件筛选物体。需要文件在 Rhino 会话中处于活动状态；否则返回 LIVE_RHINO_REQUIRED。离线筛选请用 filter-objects。")]
     public OperationResponse<RhinoObjectFilterResult> FilterObjectsInLive(
         string filePath,
