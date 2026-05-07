@@ -77,6 +77,28 @@
   - **README.md（可选）**：说明运行命令、预期输出、依赖的 Rhino / MCP 环境。
 - 测试文件夹需在对应 EXET 文档的「关联产物」与「测试记录」章节被显式引用，形成 `PLAN → TEST → EXET` 的闭环。
 - 测试产物默认保留在仓库中，用于回归复查；若确认某份测试已被正式集成测试覆盖且不再需要独立留档，可在 EXET 文档中标注后整体删除该测试文件夹。
+- When construction work changes the MCP server, Rhino plugin host, bridge compatibility, tool registration, panel/session routing, or runtime prompt injection, the TEST / EXET record must include both Debug and Release plugin validation. Prefer `dotnet build .\MCP_Rhino.sln -c Debug` and `dotnet build .\MCP_Rhino.sln -c Release`; a narrower Server project build is acceptable only when the EXET explains why solution-level validation was unnecessary.
+
+## 完成产物归档指南
+
+- 在项目根目录维护 `Project_Archive/`，并按产物类型分为：
+  - `Project_Archive/Project_Plan/`
+  - `Project_Archive/Project_Exet/`
+  - `Project_Archive/Project_Test/`
+- 当某个能力已经成功执行，且距离对应 EXET 文档中的执行日期已经超过三天，可将对应三件套从活动目录移动到归档目录。
+- 归档时必须同时移动同一 `YYMMDD` 与 `<capability-name>` 的三份产物：
+  - `Project_Plan/YYMMDD_PLAN_<capability-name>.md` → `Project_Archive/Project_Plan/YYMMDD_PLAN_<capability-name>.md`
+  - `Project_Exet/YYMMDD_EXET_<capability-name>.md` → `Project_Archive/Project_Exet/YYMMDD_EXET_<capability-name>.md`
+  - `Project_Test/YYMMDD_TEST_<capability-name>/` → `Project_Archive/Project_Test/YYMMDD_TEST_<capability-name>/`
+- 保留原始文件名 / 文件夹名，不因归档改名。
+- 不归档以下内容：
+  - 尚未执行或缺少 EXET 的计划
+  - 执行失败、结论未闭环、仍有阻塞遗留项的能力
+  - 三天内仍可能继续复检或修订的近期能力
+  - 缺少匹配 PLAN / EXET / TEST 任一产物的孤立文件
+  - `README.md` 等目录说明文件
+- 归档后的 EXET 内部链接可以保留为历史路径；只有在该文档被重新编辑时才需要顺手修正为归档路径。
+- 当前 `MCP_Rhino.Server` 会编译活动 `Project_Test/**/*.cs` 与已归档 `Project_Archive/Project_Test/**/*.cs` 中的 smoke 注册代码，以保证历史 Rhino smoke command / CLI slug 在移动到归档后仍可构建。不要把生产实现代码放进这两个测试根目录。
 
 ## Live Smoke CLI 入口约定
 

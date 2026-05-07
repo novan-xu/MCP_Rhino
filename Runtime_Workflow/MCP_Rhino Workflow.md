@@ -22,6 +22,19 @@ When adding a new rule file, decide by intent: *how to build* goes to `Project_G
 
 ## Runtime Steps
 
+### Current MCP Runtime Shape
+
+- Rhino-facing runtime capabilities are Live Only. They operate on the currently running Rhino 8 document through the loaded `MCP_Rhino.Server.rhp` plugin; do not fall back to direct `.3dm` disk reads.
+- External MCP clients connect through `MCP_Rhino.Bridge.exe` over stdio.
+- Bridge default mode connects to the single-owner Developer Debug Control Path: `\\.\pipe\mcp_rhino`, resolved against `RhinoDoc.ActiveDoc`.
+- `bin/Debug/net8.0/MCP_Rhino.Server.rhp` is the bridge-pipe-only plugin used for the old external-client/test route. It starts the debug pipe but does not provide `_Mcpchat`, Companion, or panel-bound pipes.
+- `bin/Release/net8.0/MCP_Rhino.Server.rhp` is the chat-capable plugin. It keeps the same debug bridge pipe and also enables `_Mcpchat`, Companion, and panel-bound pipes.
+- `_Mcpchat` opens the standalone `MCP_Rhino.Companion` by default. The companion is bound to one saved Rhino document and connects through a process-scoped pipe named `\\.\pipe\mcp_rhino_<ProcessId>_<RuntimeSerialNumber>`.
+- If the standalone companion cannot be launched, the Rhino-hosted fallback panel may use the same panel-bound execution semantics.
+- In bound mode, `FilePath` is treated as prompt context only; the server rewrites it to the bound document path. In global debug mode, `FilePath` must match `RhinoDoc.ActiveDoc.Path`.
+- Panel-launched LLM sessions receive the runtime-only policy bundle from `src/MCP_Rhino.Server/Prompts/Runtime/McpRhinoRuntimePolicyBundle.md`; they do not inherit repository construction rules from `AGENTS.md`.
+- Repository-workspace / test-route sessions do not receive this panel runtime policy as injected prompt context. They run from the repository workspace and must follow `AGENTS.md`, `Runtime_Workflow/`, and `Project_Guides/` instead.
+
 ### 1. Assess
 
 Before execution, assess:

@@ -76,6 +76,14 @@ Follow `Project_Guides/` and:
 - follow naming and execution-mode constraints
 - use the required `PLAN -> EXET -> TEST` chain
 
+## Project Cleanup And Archive Rule
+
+- Keep active construction artifacts in `Project_Plan/`, `Project_Exet/`, and `Project_Test/`.
+- When a project plan has been successfully executed and more than three days have elapsed since the EXET execution date, the matching PLAN, EXET, and TEST artifacts may be archived under `Project_Archive/Project_Plan/`, `Project_Archive/Project_Exet/`, and `Project_Archive/Project_Test/`.
+- Archive all three matching artifacts together and preserve their original names.
+- Do not archive incomplete, failed, current, unmatched, or still-active work.
+- Follow `Project_Guides/MCP_Rhino Plan Log.md` for the detailed archive contract.
+
 ## Hard Constraints
 
 - Do not maintain a second conflicting rule set inside this file.

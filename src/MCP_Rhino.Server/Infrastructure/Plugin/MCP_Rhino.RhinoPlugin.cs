@@ -23,6 +23,11 @@ public sealed class McpRhinoPlugin : PlugIn
     internal const string PluginIdText = "7A3FC2F0-24A8-4B79-BE58-5A08CFB0D10A";
     internal const string PipeName = McpPipeNames.DeveloperDebugPipeName;
     internal static readonly Guid PluginId = new(PluginIdText);
+#if MCP_RHINO_BRIDGE_PIPE_ONLY
+    internal static bool IsBridgePipeOnlyBuild => true;
+#else
+    internal static bool IsBridgePipeOnlyBuild => false;
+#endif
 
     public static McpRhinoPlugin? Instance { get; private set; }
 
@@ -68,10 +73,20 @@ public sealed class McpRhinoPlugin : PlugIn
                 ?? throw new InvalidOperationException("Failed to create ServerBootstrap instance.");
             _bootstrapType.GetMethod("Start")!.Invoke(_serverHandle, new object[] { PipeName });
 
-            RhinoDoc.CloseDocument += OnCloseDocumentForCompanion;
+            if (!IsBridgePipeOnlyBuild)
+            {
+                RhinoDoc.CloseDocument += OnCloseDocumentForCompanion;
+            }
 
             RhinoApp.WriteLine($"MCP_Rhino plugin loaded. Developer debug pipe requested: \\\\.\\pipe\\{PipeName}");
-            RhinoApp.WriteLine($"MCP_Rhino panel pipes are process-scoped for Rhino PID {Environment.ProcessId}.");
+            if (IsBridgePipeOnlyBuild)
+            {
+                RhinoApp.WriteLine("MCP_Rhino Debug bridge-only plugin loaded. Chat panel, Companion, and panel-bound pipes are disabled in this build.");
+            }
+            else
+            {
+                RhinoApp.WriteLine($"MCP_Rhino panel pipes are process-scoped for Rhino PID {Environment.ProcessId}.");
+            }
             return LoadReturnCode.Success;
         }
         catch (Exception ex)
@@ -108,6 +123,11 @@ public sealed class McpRhinoPlugin : PlugIn
 
     internal void StartBoundPipeServer(string pipeName, uint runtimeSerialNumber)
     {
+        if (IsBridgePipeOnlyBuild)
+        {
+            throw new InvalidOperationException("Debug bridge-only plugin does not start panel-bound MCP pipes. Use the Release plugin for chat panel sessions.");
+        }
+
         if (_bootstrapType is null || _serverHandle is null)
         {
             throw new InvalidOperationException("Server bootstrap is not available.");
@@ -170,6 +190,12 @@ public sealed class McpRhinoPlugin : PlugIn
 
     internal bool TryShowChatPanel(RhinoDoc document)
     {
+        if (IsBridgePipeOnlyBuild)
+        {
+            RhinoApp.WriteLine("This Debug plugin is bridge-pipe-only. Use MCP_Rhino.Bridge.exe with \\\\.\\pipe\\mcp_rhino, or load the Release plugin for _Mcpchat.");
+            return false;
+        }
+
         if (TryShowCompanion(document))
         {
             return true;

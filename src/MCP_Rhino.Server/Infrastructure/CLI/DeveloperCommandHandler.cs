@@ -63,6 +63,8 @@ public sealed partial class DeveloperCommandHandler
     partial void RegisterLlmPanelCliSwitchingHandlers();
     partial void RegisterMcpToolSafetyAnnotationHandlers();
     partial void RegisterRhinoChatFileLockSafetyHandlers();
+    partial void RegisterPanelRuntimePolicyHandlers();
+    partial void RegisterDebugBridgeOnlyPluginHandlers();
 
     partial void RegisterExtensionHandlers()
     {
@@ -85,6 +87,8 @@ public sealed partial class DeveloperCommandHandler
         RegisterLlmPanelCliSwitchingHandlers();
         RegisterMcpToolSafetyAnnotationHandlers();
         RegisterRhinoChatFileLockSafetyHandlers();
+        RegisterPanelRuntimePolicyHandlers();
+        RegisterDebugBridgeOnlyPluginHandlers();
     }
 
     public DeveloperCommandHandler(

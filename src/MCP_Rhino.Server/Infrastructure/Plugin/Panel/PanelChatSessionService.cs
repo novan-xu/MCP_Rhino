@@ -178,7 +178,7 @@ public sealed class PanelChatSessionService : IPanelChatSession
 
     private string BuildPanelBoundSystemPrompt()
     {
-        return string.Join(
+        string boundDocumentPrompt = string.Join(
             Environment.NewLine,
             "You are running inside the MCP_Rhino Rhino panel.",
             "This Claude Code session is bound to exactly one saved Rhino document.",
@@ -195,5 +195,10 @@ public sealed class PanelChatSessionService : IPanelChatSession
             "Do not try to operate on any other open Rhino document from this panel.",
             "If the user says this file, current file, active model, the model, or similar, they mean the bound Rhino document.",
             "Before destructive mutations, inspect or preview as appropriate, then apply changes only to the bound document.");
+
+        return boundDocumentPrompt
+            + Environment.NewLine
+            + Environment.NewLine
+            + RuntimePolicyPrompt.Load();
     }
 }

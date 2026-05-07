@@ -52,6 +52,9 @@ project.nuget.cache
 # =========================
 # Project-specific generated artifacts
 # =========================
+.tmp-build/
+artifacts/
+_validation/
 _validation/file-safeguard-build/
 _validation/geometry-smoke-test/
 _validation/online-mutation-refactor/

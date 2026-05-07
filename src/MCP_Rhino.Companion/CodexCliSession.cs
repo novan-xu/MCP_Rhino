@@ -706,7 +706,7 @@ public sealed class CodexCliSession : IAgentSession
 
     private string BuildBoundDocumentPrompt()
     {
-        return string.Join(
+        string boundDocumentPrompt = string.Join(
             Environment.NewLine,
             "[System context - MCP_Rhino Companion bound session]",
             "You are running in MCP_Rhino Companion via the Codex CLI.",
@@ -721,6 +721,11 @@ public sealed class CodexCliSession : IAgentSession
             "The panel-bound MCP server resolves tool calls by the bound Rhino runtime serial number; it does not follow RhinoDoc.ActiveDoc.",
             "Do not try to operate on any other open Rhino document from this companion window.",
             "Before destructive mutations, inspect or preview as appropriate, then apply changes only to the bound document.");
+
+        return boundDocumentPrompt
+            + Environment.NewLine
+            + Environment.NewLine
+            + RuntimePolicyPrompt.Load();
     }
 
     private void Emit(CompanionUiEvent uiEvent)

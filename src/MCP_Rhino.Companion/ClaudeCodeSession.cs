@@ -304,7 +304,7 @@ public sealed class ClaudeCodeSession : IAgentSession
 
     private string BuildBoundDocumentPrompt()
     {
-        return string.Join(
+        string boundDocumentPrompt = string.Join(
             Environment.NewLine,
             "You are running in MCP_Rhino Companion.",
             "This Claude Code session is bound to exactly one saved Rhino document.",
@@ -321,6 +321,11 @@ public sealed class ClaudeCodeSession : IAgentSession
             "Do not try to operate on any other open Rhino document from this companion window.",
             "If the user says this file, current file, active model, the model, or similar, they mean the bound Rhino document.",
             "Before destructive mutations, inspect or preview as appropriate, then apply changes only to the bound document.");
+
+        return boundDocumentPrompt
+            + Environment.NewLine
+            + Environment.NewLine
+            + RuntimePolicyPrompt.Load();
     }
 
     private void Emit(CompanionUiEvent uiEvent)

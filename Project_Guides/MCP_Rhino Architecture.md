@@ -57,6 +57,10 @@
 
 - **Rhino 适配组织**：`Infrastructure/Rhino/` 承载 RhinoCommon 适配；所有与文档状态有关的适配器以 `Live*` 前缀命名。历史保留的 `Rhino/Live/` 子目录可继续作为分组使用，但项目执行模式只有 Live 一种。
 - **`Plugin/` 子目录**：放置 Rhino `.rhp` 宿主入口（`MCP_Rhino.RhinoPlugin.cs`、`McpNamedPipeServer.cs` 等）。在 `OnLoad` 里尝试启动 **Developer Debug Named Pipe MCP server**（固定管道 `\\.\pipe\mcp_rhino`），承载测试 / smoke / 外部调试 MCP 协议帧；Client 端经独立的 `MCP_Rhino.Bridge` 项目提供的 stdio-to-pipe 桥接 exe 连入。多 Rhino 进程并行时，固定 debug 管道只能由一个进程拥有；其它 Rhino 进程不得因此加载失败，仍必须能启动自己的 process-scoped panel-bound 管道。
+- **Plugin build-mode contract**：`Debug` and `Release` both build `MCP_Rhino.Server.rhp`, but they intentionally expose different Rhino UI surfaces. `Debug` defines `MCP_RHINO_BRIDGE_PIPE_ONLY` and preserves the old bridge-pipe-only plugin shape: it starts only the Developer Debug Control Path (`\\.\pipe\mcp_rhino`) and must not launch Companion, Rhino-hosted chat panel, or panel-bound per-document pipes. `Release` remains the chat-capable plugin: it keeps the same debug pipe and also enables `_Mcpchat` / Companion / panel-bound pipes. The MCP tool registration and protocol surface must stay shared across both configurations.
+- **MCP update validation rule**：Any construction work that changes the MCP server, plugin host, bridge compatibility, tool registration, panel/session routing, or runtime prompt injection must compile the Debug plugin as well as the Release plugin. The validation record must include `dotnet build .\MCP_Rhino.sln -c Debug` and `dotnet build .\MCP_Rhino.sln -c Release`, or a narrower Debug/Release project build with a stated reason. If the tool surface changes, run the MCP tool safety smoke in both configurations.
+- **`Plugin/Panel/` 子目录**：放置 Rhino 内 fallback chat panel、per-document panel dispatcher、panel chat session glue。默认 `_Mcpchat` 优先启动独立 Companion；只有 Companion 不可用时才使用 Rhino-hosted fallback panel。
+- **`Plugin/Companion/` 子目录**：放置从 Rhino plugin 启动独立 Companion 进程的薄适配（launch spec、process launcher、session handle 等）。这里只负责 Rhino 侧启动与生命周期衔接，不承载 LLM session 业务。
 - `CLI/` 放置面向开发者 / 终端的命令行适配实现（例如 `DeveloperCommandHandler`），作为外部入口到 Application / Agent 层的薄适配层；`Program.cs` 只负责解析并委托给这里。
 
 ### 9. Contracts/
@@ -68,6 +72,8 @@
 - 放置 Agent / Skill 使用的提示词模板。
 - 长 prompt 不要硬编码在 C# 类中。
 - 可使用 `.md`、`.txt`、`.yaml` 等文本文件组织。
+- `Prompts/Runtime/McpRhinoRuntimePolicyBundle.md` 是 chat panel / Companion 注入给 LLM 的 runtime-only policy bundle；它只约束运行时 Rhino / 外部文件任务，不承载能力构建规则。
+- 该 runtime policy bundle 只允许由 chat panel / Companion prompt 路径加载；仓库工作区 / test route 仍使用 `AGENTS.md`、`Runtime_Workflow/`、`Project_Guides/`，不得把 panel runtime policy 当作仓库级规则注入。
 
 ## 新功能归属判断表
 
@@ -134,6 +140,8 @@ Rhino 侧的能力只跑一种模式：经 RhinoCommon 操作运行中的 `Rhino
 - 约束：目标文档必须是当前 `RhinoDoc.ActiveDoc`，且请求 `FilePath` 必须与 `ActiveDoc.Path` 匹配；否则沿用 `NO_ACTIVE_DOCUMENT` / `ACTIVE_DOC_UNSAVED` / `FILE_NOT_ACTIVE`。
 - 这条路径是正式保留的开发入口，但不是最终多文档 / 多 Rhino 进程用户体验路径；多文档、多 Rhino 进程用户体验必须走 panel-bound per-doc server。
 - `mcp_rhino` 是单 owner debug pipe：同一台机器上只能有一个 Rhino 进程拥有它。第二个 Rhino 进程如果遇到 `All pipe instances are busy`，必须只禁用本进程的 debug pipe 并继续提供 panel-bound 管道，不能进入无限错误循环，也不能阻止插件加载。
+- `bin/Debug/net8.0/MCP_Rhino.Server.rhp` is the preferred plugin for bridge-only external MCP client testing. It must keep this debug pipe path working and must reject chat panel / panel-bound startup.
+- `bin/Release/net8.0/MCP_Rhino.Server.rhp` must remain compatible with the same bridge path while also supporting `_Mcpchat` and panel-bound execution.
 - 新能力的 capability smoke 可以优先走该路径或专属 Rhino smoke command 验证业务能力；panel smoke 只验证 panel / bound accessor / CC / per-doc pipe 生命周期。
 
 ### Panel-bound execution mode（Per-Document）
@@ -168,6 +176,7 @@ Live Only 是默认模式，绑定到 `RhinoDoc.ActiveDoc`。本子节描述 pan
 
 - 主 Server 项目（`MCP_Rhino.Server`，产出 `.rhp`）保持单项目分层的 DDD 目录结构；当业务复杂度显著上升时再考虑拆 `Application.Core` / `Infrastructure` 等子项目。
 - **例外：`MCP_Rhino.Bridge` 为独立 csproj**，承载 stdio-to-named-pipe 桥接能力（详见 §8 Plugin/ 子目录）。它只依赖 BCL 的 `System.IO.Pipes`，不引 RhinoCommon，不承担业务逻辑；不适合放进 `Infrastructure/` 下，因为它是 MCP Client 直接 spawn 的最小 exe，对部署可移动性有独立诉求。后续若有其他类似"对外 thin shim"项目，可建立 `src/` 下的兄弟 csproj，但禁止反向依赖主 Server 项目的业务层。
+- **例外：`MCP_Rhino.Companion` 为独立 WPF / WebView2 csproj**，承载 `_Mcpchat` 默认打开的 standalone chat UI。它由 Rhino plugin 启动，绑定到单个已保存 Rhino 文档，使用 process-scoped panel pipe 和 `MCP_Rhino.Bridge` 接入 MCP；它不引 RhinoCommon，不直接读写 `.3dm`，不替代 Server 内的 Tool / Skill / Agent 层。
 - 任何新增功能都必须先判断归属，再决定目录位置。
 - 如果某个 Tool 开始承担复杂流程，应考虑将流程下沉到 `Application/` 或升级为 `Skill`。
 - 如果某个 Skill 开始出现目标判断与动态策略，应考虑升级为 `Agent`。

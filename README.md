@@ -4,8 +4,9 @@
 
 ## 项目形态
 
-- [src/MCP_Rhino.Server/](src/MCP_Rhino.Server/) —— 主工程，构建产出 `MCP_Rhino.Server.rhp`（Rhino 插件）。插件加载后会尝试启动固定 debug/test Named Pipe（`\\.\pipe\mcp_rhino`），并为 `_Mcpchat` 启动 process-scoped panel pipes（`\\.\pipe\mcp_rhino_<ProcessId>_<RuntimeSerialNumber>`）。
+- [src/MCP_Rhino.Server/](src/MCP_Rhino.Server/) —— 主工程，构建产出 `MCP_Rhino.Server.rhp`（Rhino 插件）。`Debug` 产物保留旧的 bridge-pipe-only 插件形态，只启动固定 debug/test Named Pipe（`\\.\pipe\mcp_rhino`）；`Release` 产物是 chat-capable 插件，同样保留 debug pipe，并为 `_Mcpchat` 启动 process-scoped panel pipes（`\\.\pipe\mcp_rhino_<ProcessId>_<RuntimeSerialNumber>`）。
 - [src/MCP_Rhino.Bridge/](src/MCP_Rhino.Bridge/) —— 独立 `.exe`，承担 **stdio ↔ Named Pipe** 桥接，给 MCP Client 直接 spawn。
+- [src/MCP_Rhino.Companion/](src/MCP_Rhino.Companion/) —— 独立 WPF / WebView2 chat UI，`_Mcpchat` 默认启动它，并绑定到当前已保存 Rhino 文档的 per-doc pipe。
 
 能力矩阵（当前已落地的 MCP Tool 分类）：几何创建 / 几何修改 / 对象编辑 / 对象与文档级 UserString / 图层管理 / 对象筛查 / 几何分析。详见 [src/MCP_Rhino.Server/Tools/](src/MCP_Rhino.Server/Tools/) 下各子目录。
 
@@ -16,17 +17,27 @@
 - Rhino 8（默认安装路径 `C:\Program Files\Rhino 8\`）
 - 任一 MCP Client：Claude Desktop / Claude Code / Cursor / VS Code MCP 扩展 / Cline / Continue 等
 
-### Step 1 —— 构建两个产物
+### Step 1 —— 构建产物
 
 ```powershell
 dotnet build src\MCP_Rhino.Server\MCP_Rhino.Server.csproj -c Release
 dotnet build src\MCP_Rhino.Bridge\MCP_Rhino.Bridge.csproj -c Release
+dotnet build src\MCP_Rhino.Companion\MCP_Rhino.Companion.csproj -c Release
 ```
 
 构建产出：
 
 - `src\MCP_Rhino.Server\bin\Release\net8.0\MCP_Rhino.Server.rhp`
 - `src\MCP_Rhino.Bridge\bin\Release\net8.0\MCP_Rhino.Bridge.exe`
+- `src\MCP_Rhino.Companion\bin\Release\net8.0-windows\MCP_Rhino.Companion.exe`
+
+需要旧的 bridge-pipe-only Rhino 插件时，也构建 Debug：
+
+```powershell
+dotnet build src\MCP_Rhino.Server\MCP_Rhino.Server.csproj -c Debug
+```
+
+Debug 输出 `src\MCP_Rhino.Server\bin\Debug\net8.0\MCP_Rhino.Server.rhp`，只用于 `MCP_Rhino.Bridge.exe` + `\\.\pipe\mcp_rhino` 的外部 MCP client / test route；它不会打开 `_Mcpchat`、Companion 或 panel-bound pipes。Release 输出仍用于 chat panel / Companion。
 
 > Rhino 如果装在非默认路径，需要先改 [src/MCP_Rhino.Server/MCP_Rhino.Server.csproj](src/MCP_Rhino.Server/MCP_Rhino.Server.csproj) 里 `RhinoCommon` 的 `HintPath`。
 
@@ -56,7 +67,7 @@ Rhino 里 `_Open` 目标文件并 `_Save` 过（必须已落盘，否则所有�
 }
 ```
 
-**Claude Code** —— 推荐在**仓库根**放一个 `.mcp.json`。最省事的做法：把 [Project_Test/260422_TEST_mcp-client-integration/samples/claude_code.mcp.json](Project_Test/260422_TEST_mcp-client-integration/samples/claude_code.mcp.json) 拷到 `<repo>/.mcp.json`，把 `{{BRIDGE_EXE_ABSOLUTE_PATH}}` 替换成本机 `MCP_Rhino.Bridge.exe` 的绝对路径（路径里的反斜杠要写成 `\\`）。首次启动 Claude Code 会提示 `Enable mcp-rhino?`，点同意即生效。`.mcp.json` 已被 [.gitignore](.gitignore) 忽略，每人在自己机器上写自己的路径即可。
+**Claude Code** —— 推荐在**仓库根**放一个 `.mcp.json`。最省事的做法：把 [Project_Archive/Project_Test/260422_TEST_mcp-client-integration/samples/claude_code.mcp.json](Project_Archive/Project_Test/260422_TEST_mcp-client-integration/samples/claude_code.mcp.json) 拷到 `<repo>/.mcp.json`，把 `{{BRIDGE_EXE_ABSOLUTE_PATH}}` 替换成本机 `MCP_Rhino.Bridge.exe` 的绝对路径（路径里的反斜杠要写成 `\\`）。首次启动 Claude Code 会提示 `Enable mcp-rhino?`，点同意即生效。`.mcp.json` 已被 [.gitignore](.gitignore) 忽略，每人在自己机器上写自己的路径即可。
 
 > ⚠️ **不要用 `claude mcp add mcp-rhino ...` 的默认形式**——默认是 `local` scope，只写到 `~/.claude.json` 的 `projects[<path>].mcpServers`；实测 VSCode 里的 Claude Code 扩展不会把这里的条目注入到会话中（`/mcp` 会报 `No MCP servers configured`）。要走 CLI，必须显式加 `--scope user`：
 >
@@ -78,7 +89,7 @@ MCP_Rhino pipe client connected: \\.\pipe\mcp_rhino
 
 ### Step 5 —— 开始聊天
 
-在客户端的**对话框**里用自然语言发指令。**不是**在 Rhino 里输指令——Rhino 只负责执行。
+推荐在 Rhino 里运行 `_Mcpchat`，它会打开绑定到当前已保存文档的 standalone Companion。也可以在外部 MCP Client 的对话框里用自然语言发指令；外部 client 默认走 `\\.\pipe\mcp_rhino` debug/test 入口。
 
 第一句建议显式告诉 LLM 当前文档路径，避免它猜出错误 `filePath`：
 
@@ -110,19 +121,35 @@ McpNamedPipeServer  (inside Rhino .rhp)
 RhinoDoc.ActiveDoc   ← 你在 Rhino 视口里看到结果
 ```
 
+`_Mcpchat` / Companion 路径使用 per-document pipe：
+
+```text
+Rhino _Mcpchat
+        ▼
+MCP_Rhino.Companion.exe
+        │    launches Claude Code / Codex CLI with MCP config
+        ▼
+MCP_Rhino.Bridge.exe --pipe mcp_rhino_<ProcessId>_<RuntimeSerialNumber>
+        │    named pipe
+        ▼
+Bound MCP server inside Rhino .rhp
+        ▼
+RhinoDoc.FromRuntimeSerialNumber(...)
+```
+
 每次写入被 `BeginUndoRecord` / `EndUndoRecord` 包裹，所以"一次 MCP tool 调用 = 一条 Undo 条目"。
 
 ## 架构与指南
 
-- [Project_Guides/MCP_Rhino Architecture.md](Project_Guides/MCP_Rhino%20Architecture.md) —— 目录归属、在线/离线执行模式、命名指南。
+- [Project_Guides/MCP_Rhino Architecture.md](Project_Guides/MCP_Rhino%20Architecture.md) —— 目录归属、Live Only 执行模式、命名指南。
 - [Project_Guides/MCP_Rhino Plan Log.md](Project_Guides/MCP_Rhino%20Plan%20Log.md) —— 每次能力演进必须产出 Plan / Exet / Test 三件套的命名与结构。
 
 ## 出问题时去哪看
 
 | 症状 | 去哪看 |
 | --- | --- |
-| 客户端连不上 | [Project_Test/260422_TEST_mcp-client-integration/README.md](Project_Test/260422_TEST_mcp-client-integration/README.md) 排错表 |
-| Bridge 握手排查 | [Project_Test/260422_TEST_mcp-client-integration/samples/handshake_probe.ps1](Project_Test/260422_TEST_mcp-client-integration/samples/handshake_probe.ps1)（不依赖任何 MCP Client 的探针） |
+| 客户端连不上 | [Project_Archive/Project_Test/260422_TEST_mcp-client-integration/README.md](Project_Archive/Project_Test/260422_TEST_mcp-client-integration/README.md) 排错表 |
+| Bridge 握手排查 | [Project_Archive/Project_Test/260422_TEST_mcp-client-integration/samples/handshake_probe.ps1](Project_Archive/Project_Test/260422_TEST_mcp-client-integration/samples/handshake_probe.ps1)（不依赖任何 MCP Client 的探针） |
 | 某个能力的执行细节 | 对应 `Project_Exet/YYMMDD_EXET_<capability>.md` |
 | 某个能力的设计背景 | 对应 `Project_Plan/YYMMDD_PLAN_<capability>.md` |
 
