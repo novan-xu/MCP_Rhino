@@ -19,7 +19,7 @@ public sealed class ObjectSelectionSkill
     {
         if (string.IsNullOrWhiteSpace(request.FilePath))
         {
-            return OperationResponse<RhinoObjectFilterResult>.Fail("错误：filePath 不能为空。");
+            return OperationResponse<RhinoObjectFilterResult>.Fail("FilePath cannot be empty.");
         }
 
         var resolvedRequest = new FilterObjectsRequest
@@ -54,7 +54,7 @@ public sealed class ObjectSelectionSkill
 
                 if (candidateResult.Data.Count == 0)
                 {
-                    ambiguityMessages.Add($"未找到与 [{layerQuery}] 匹配的图层。");
+                    ambiguityMessages.Add($"No layer matched [{layerQuery}].");
                     continue;
                 }
 
@@ -77,12 +77,12 @@ public sealed class ObjectSelectionSkill
             if (ambiguityMessages.Count > 0)
             {
                 var builder = new StringBuilder();
-                builder.AppendLine("检测到 layer 条件存在歧义或缺失确认，请先确认目标图层：");
+                builder.AppendLine("Layer criteria are ambiguous or missing confirmation. Confirm the target layers first:");
                 foreach (string message in ambiguityMessages)
                 {
                     builder.AppendLine(message);
                 }
-                builder.AppendLine("请提供 confirmedLayerFullPaths 后重新执行对象编辑。\n");
+                builder.AppendLine("Retry with confirmedLayerFullPaths.");
                 return OperationResponse<RhinoObjectFilterResult>.Fail(builder.ToString());
             }
 

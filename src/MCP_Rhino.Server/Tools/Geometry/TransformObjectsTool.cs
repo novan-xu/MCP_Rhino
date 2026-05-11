@@ -19,7 +19,7 @@ public sealed class TransformObjectsTool
     }
 
     [McpServerTool(ReadOnly = false, Destructive = false, OpenWorld = false)]
-    [Description("对 Rhino 对象执行 Translate / Rotate / UniformScale 变换，并覆盖写回原文件。")]
+    [Description("Apply Translate, Rotate, or UniformScale transforms to objects in the current live Rhino document. Uses one Rhino undo record and does not read or write external files.")]
     public OperationResponse<GeometryModificationResponse> TransformObjects(
         string filePath,
         GeometryTransformSpec transform,

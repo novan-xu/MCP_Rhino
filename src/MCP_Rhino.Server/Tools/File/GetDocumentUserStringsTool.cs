@@ -17,7 +17,7 @@ public sealed class GetDocumentUserStringsTool
     }
 
     [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
-    [Description("读取当前 Rhino 文档的全部文档级 user string。")]
+    [Description("Read all document-level user strings from the current live Rhino document.")]
     public OperationResponse<DocumentUserStringReadResponse> GetDocumentUserStrings(string filePath)
     {
         return _service.Read(new DocumentUserStringReadRequest

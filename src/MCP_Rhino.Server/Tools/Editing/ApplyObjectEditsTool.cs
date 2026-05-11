@@ -18,7 +18,7 @@ public sealed class ApplyObjectEditsTool
     }
 
     [McpServerTool(ReadOnly = false, Destructive = false, OpenWorld = false)]
-    [Description("执行 Rhino 物体批量编辑。支持 user text、图层、显示颜色修改，并直接覆盖原文件。")]
+    [Description("Apply batch object edits in the current live Rhino document, including user text, layer, and display color changes. Uses one Rhino undo record and does not read or write external files.")]
     public OperationResponse<ObjectEditExecutionResponse> ApplyObjectEdits(
         string filePath,
         List<ObjectEditOperationRequest> operations,

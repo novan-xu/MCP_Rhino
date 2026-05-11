@@ -11,7 +11,10 @@ public abstract class LiveRhinoDocumentAccessorBase : ILiveRhinoDocumentAccessor
 {
     private static readonly TimeSpan MainThreadTimeout = TimeSpan.FromSeconds(10);
 
-    public OperationResponse<T> Execute<T>(string filePath, Func<RhinoDoc, OperationResponse<T>> work)
+    public OperationResponse<T> Execute<T>(
+        string filePath,
+        Func<RhinoDoc, OperationResponse<T>> work,
+        TimeSpan? timeout = null)
     {
         return InvokeOnMainThread(() =>
         {
@@ -22,28 +25,43 @@ public abstract class LiveRhinoDocumentAccessorBase : ILiveRhinoDocumentAccessor
             }
 
             return work(document.Data);
-        });
+        }, timeout ?? MainThreadTimeout);
     }
 
     public OperationResponse<T> ExecuteWithUndo<T>(
         string filePath,
         string undoDescription,
-        Func<RhinoDoc, OperationResponse<(bool Mutated, T Result)>> work)
+        Func<RhinoDoc, OperationResponse<(bool Mutated, T Result)>> work,
+        TimeSpan? timeout = null)
     {
         return Execute(filePath, document =>
         {
+            uint currentUndoRecordBefore = document.CurrentUndoRecordSerialNumber;
             uint undoRecord = document.BeginUndoRecord(undoDescription);
             bool closed = false;
 
             try
             {
-                OperationResponse<(bool Mutated, T Result)> response = work(document);
+                OperationResponse<(bool Mutated, T Result)> response;
+                try
+                {
+                    response = work(document);
+                }
+                catch (Exception ex)
+                {
+                    CloseUndoRecord(document, undoRecord);
+                    closed = true;
+                    OperationResponse rollback = RollBackFailedUndoRecord(document, currentUndoRecordBefore);
+                    return OperationResponse<T>.Fail(ComposeFailureWithRollbackStatus(ex.Message, rollback));
+                }
+
                 CloseUndoRecord(document, undoRecord);
                 closed = true;
 
                 if (!response.Success)
                 {
-                    return OperationResponse<T>.Fail(response.Message);
+                    OperationResponse rollback = RollBackFailedUndoRecord(document, currentUndoRecordBefore);
+                    return OperationResponse<T>.Fail(ComposeFailureWithRollbackStatus(response.Message, rollback));
                 }
 
                 (bool Mutated, T Result) payload = response.Data;
@@ -56,7 +74,7 @@ public abstract class LiveRhinoDocumentAccessorBase : ILiveRhinoDocumentAccessor
                     CloseUndoRecord(document, undoRecord);
                 }
             }
-        });
+        }, timeout);
     }
 
     public abstract bool TryGetActiveDocumentState(string filePath, out bool hasUnsavedChanges);
@@ -73,6 +91,41 @@ public abstract class LiveRhinoDocumentAccessorBase : ILiveRhinoDocumentAccessor
         document.EndUndoRecord(undoRecord);
     }
 
+    private static OperationResponse RollBackFailedUndoRecord(RhinoDoc document, uint currentUndoRecordBefore)
+    {
+        if (document.CurrentUndoRecordSerialNumber == currentUndoRecordBefore)
+        {
+            return OperationResponse.Ok();
+        }
+
+        try
+        {
+            if (document.Undo())
+            {
+                document.Views.Redraw();
+                return OperationResponse.Ok("ROLLBACK_APPLIED");
+            }
+
+            return OperationResponse.Fail("ROLLBACK_FAILED: failed to undo the failed MCP mutation; the live document may contain partial changes.");
+        }
+        catch (Exception ex)
+        {
+            return OperationResponse.Fail($"ROLLBACK_FAILED: {ex.Message}");
+        }
+    }
+
+    private static string ComposeFailureWithRollbackStatus(string message, OperationResponse rollback)
+    {
+        if (rollback.Success)
+        {
+            return message;
+        }
+
+        return string.IsNullOrWhiteSpace(message)
+            ? rollback.Message
+            : $"{message} {rollback.Message}";
+    }
+
     protected static bool PathsEqual(string left, string right)
     {
         string normalizedLeft = Path.GetFullPath(left);
@@ -80,7 +133,9 @@ public abstract class LiveRhinoDocumentAccessorBase : ILiveRhinoDocumentAccessor
         return string.Equals(normalizedLeft, normalizedRight, StringComparison.OrdinalIgnoreCase);
     }
 
-    protected static OperationResponse<T> InvokeOnMainThread<T>(Func<OperationResponse<T>> work)
+    protected static OperationResponse<T> InvokeOnMainThread<T>(
+        Func<OperationResponse<T>> work,
+        TimeSpan? timeout = null)
     {
         if (!RhinoApp.InvokeRequired)
         {
@@ -107,7 +162,7 @@ public abstract class LiveRhinoDocumentAccessorBase : ILiveRhinoDocumentAccessor
             }
         }));
 
-        if (!signal.Wait(MainThreadTimeout))
+        if (!signal.Wait(timeout ?? MainThreadTimeout))
         {
             return OperationResponse<T>.Fail("RHINO_MAIN_THREAD_BUSY");
         }

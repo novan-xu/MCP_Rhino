@@ -17,7 +17,7 @@ public sealed class PreviewEditControlPointsTool
     }
 
     [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
-    [Description("预览 NurbsCurve / NurbsSurface 的控制点编辑结果，不落盘。")]
+    [Description("Preview NurbsCurve or NurbsSurface control point edits in the current live Rhino document without mutating the document.")]
     public OperationResponse<GeometryModificationPreviewResponse> PreviewEditControlPoints(
         string filePath,
         List<ControlPointEditEntryRequest> entries)

@@ -17,7 +17,7 @@ public sealed class SetDocumentUserStringsTool
     }
 
     [McpServerTool(ReadOnly = false, Destructive = false, OpenWorld = false)]
-    [Description("批量写入当前 Rhino 文档的文档级 user string。每条 entry 可指定 Section（可空）、Key、Value。")]
+    [Description("Set document-level user strings in the current live Rhino document by optional section, key, and value.")]
     public OperationResponse<DocumentUserStringMutationResponse> SetDocumentUserStrings(
         string filePath,
         List<DocumentUserStringEntryRequest> entries)

@@ -17,7 +17,7 @@ public sealed class PreviewObjectUserTextWritesTool
     }
 
     [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
-    [Description("预览按对象批量写入 Rhino user text。每条 entry 直接指定 ObjectId、Key、Value，可承接其他工具/技能/外部端口产出的对象级信息。")]
+    [Description("Preview object user text writes for explicit ObjectIds in the current live Rhino document without mutating the document.")]
     public OperationResponse<ObjectEditPreviewResponse> PreviewObjectUserTextWrites(
         string filePath,
         List<ObjectScopedUserTextEntryRequest> entries)

@@ -4,12 +4,12 @@ namespace MCP_Rhino.Server.Contracts.Requests;
 
 public sealed class ObjectScopedUserTextEntryRequest
 {
-    [Description("目标对象的 GUID。")]
+    [Description("Target object GUID.")]
     public Guid ObjectId { get; set; }
 
-    [Description("要写入的 user text key。")]
+    [Description("User text key to write.")]
     public string Key { get; set; } = string.Empty;
 
-    [Description("要写入的 user text value。可来自其他工具/技能/外部端口产出的对象级信息。")]
+    [Description("User text value to write. This may come from another tool, skill, or external object-level data source.")]
     public string Value { get; set; } = string.Empty;
 }

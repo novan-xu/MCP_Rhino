@@ -7,12 +7,16 @@ namespace MCP_Rhino.Server.Application.Interfaces;
 
 public interface ILiveRhinoDocumentAccessor
 {
-    OperationResponse<T> Execute<T>(string filePath, Func<RhinoDoc, OperationResponse<T>> work);
+    OperationResponse<T> Execute<T>(
+        string filePath,
+        Func<RhinoDoc, OperationResponse<T>> work,
+        TimeSpan? timeout = null);
 
     OperationResponse<T> ExecuteWithUndo<T>(
         string filePath,
         string undoDescription,
-        Func<RhinoDoc, OperationResponse<(bool Mutated, T Result)>> work);
+        Func<RhinoDoc, OperationResponse<(bool Mutated, T Result)>> work,
+        TimeSpan? timeout = null);
 
     bool TryGetActiveDocumentState(string filePath, out bool hasUnsavedChanges);
 }

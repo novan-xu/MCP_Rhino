@@ -17,7 +17,7 @@ public sealed class GetObjectUserStringsTool
     }
 
     [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
-    [Description("按 ObjectId 列表读取 Rhino 对象的全部 user string，并返回每个对象的图层、名称与 user string 列表。")]
+    [Description("Read all object user strings for explicit ObjectIds in the current live Rhino document, including each object's layer and name.")]
     public OperationResponse<ObjectUserTextReadResponse> GetObjectUserStrings(
         string filePath,
         List<Guid> objectIds)

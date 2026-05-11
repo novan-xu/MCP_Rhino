@@ -18,6 +18,8 @@ public static class DependencyInjection
         services.AddSingleton<ILiveRhinoDocumentAccessor, LiveRhinoDocumentAccessor>();
         services.AddSingleton<ILiveRhinoDocumentAccessorFactory, LiveRhinoDocumentAccessorFactory>();
         services.AddSingleton<ILiveGeometryBuilder, LiveRhinoGeometryBuilder>();
+        services.AddSingleton<ILiveGeneralPrimitiveBuilder, LiveGeneralPrimitiveBuilder>();
+        services.AddSingleton<ILiveCurveDerivedGeometryOperator, LiveCurveDerivedGeometryOperator>();
         services.AddSingleton<ILiveObjectEditValidator, LiveRhinoObjectEditValidator>();
         services.AddSingleton<ILiveGeometryValidator, LiveRhinoGeometryValidator>();
         services.AddSingleton<IObjectEditOperationApplier, LiveRhinoObjectEditOperationApplier>();
@@ -44,6 +46,16 @@ public static class DependencyInjection
         services.AddSingleton<ILiveSurfaceFrontBackFlipService, LiveSurfaceFrontBackFlipService>();
         services.AddSingleton<ILiveDrawingViewManager, LiveDrawingViewManager>();
         services.AddSingleton<ILiveDrawingExportStateOperator, LiveDrawingExportStateOperator>();
+        services.AddSingleton<ILiveArchitecturalGeometryBuilder, LiveArchitecturalGeometryBuilder>();
+        services.AddSingleton<ILiveBooleanOperator, LiveBooleanOperator>();
+        services.AddSingleton<ILiveBlockDefinitionOperator, LiveBlockDefinitionOperator>();
+        services.AddSingleton<ILiveBlockInspector, LiveBlockInspector>();
+        services.AddSingleton<ILiveBlockLifecycleOperator, LiveBlockLifecycleOperator>();
+        services.AddSingleton<ILiveRhinoDocumentStateOperator, LiveRhinoDocumentStateOperator>();
+        services.AddSingleton<ILiveRhinoSelectionOperator, LiveRhinoSelectionOperator>();
+        services.AddSingleton<ILiveRhinoViewportCapture, LiveRhinoViewportCapture>();
+        services.AddSingleton<ILiveRhinoMaterialOperator, LiveRhinoMaterialOperator>();
+        services.AddSingleton<ILiveSubDModelingOperator, LiveSubDModelingOperator>();
         return services;
     }
 
@@ -52,6 +64,8 @@ public static class DependencyInjection
         services.AddSingleton<ILiveRhinoDocumentAccessor, NullLiveRhinoDocumentAccessor>();
         services.AddSingleton<ILiveRhinoDocumentAccessorFactory, LiveRhinoDocumentAccessorFactory>();
         services.AddSingleton<ILiveGeometryBuilder, LiveRhinoGeometryBuilder>();
+        services.AddSingleton<ILiveGeneralPrimitiveBuilder, LiveGeneralPrimitiveBuilder>();
+        services.AddSingleton<ILiveCurveDerivedGeometryOperator, LiveCurveDerivedGeometryOperator>();
         services.AddSingleton<ILiveObjectEditValidator, LiveRhinoObjectEditValidator>();
         services.AddSingleton<ILiveGeometryValidator, LiveRhinoGeometryValidator>();
         services.AddSingleton<IObjectEditOperationApplier, LiveRhinoObjectEditOperationApplier>();
@@ -78,6 +92,16 @@ public static class DependencyInjection
         services.AddSingleton<ILiveSurfaceFrontBackFlipService, LiveSurfaceFrontBackFlipService>();
         services.AddSingleton<ILiveDrawingViewManager, LiveDrawingViewManager>();
         services.AddSingleton<ILiveDrawingExportStateOperator, LiveDrawingExportStateOperator>();
+        services.AddSingleton<ILiveArchitecturalGeometryBuilder, LiveArchitecturalGeometryBuilder>();
+        services.AddSingleton<ILiveBooleanOperator, LiveBooleanOperator>();
+        services.AddSingleton<ILiveBlockDefinitionOperator, LiveBlockDefinitionOperator>();
+        services.AddSingleton<ILiveBlockInspector, LiveBlockInspector>();
+        services.AddSingleton<ILiveBlockLifecycleOperator, LiveBlockLifecycleOperator>();
+        services.AddSingleton<ILiveRhinoDocumentStateOperator, LiveRhinoDocumentStateOperator>();
+        services.AddSingleton<ILiveRhinoSelectionOperator, LiveRhinoSelectionOperator>();
+        services.AddSingleton<ILiveRhinoViewportCapture, LiveRhinoViewportCapture>();
+        services.AddSingleton<ILiveRhinoMaterialOperator, LiveRhinoMaterialOperator>();
+        services.AddSingleton<ILiveSubDModelingOperator, LiveSubDModelingOperator>();
         return services;
     }
 
@@ -89,7 +113,10 @@ public static class DependencyInjection
         services.AddSingleton<IEditResultFormatter, PassThroughEditResultFormatter>();
         services.AddSingleton<RhinoObjectFilterService>();
         services.AddSingleton<RhinoObjectEditingService>();
+        services.AddSingleton<RhinoObjectAttributeRecipeService>();
         services.AddSingleton<RhinoGeometryCreationService>();
+        services.AddSingleton<RhinoGeneralPrimitiveCreationService>();
+        services.AddSingleton<RhinoCurveDerivedGeometryService>();
         services.AddSingleton<RhinoGeometryModificationService>();
         services.AddSingleton<RhinoObjectUserTextService>();
         services.AddSingleton<RhinoDocumentUserStringService>();
@@ -101,6 +128,24 @@ public static class DependencyInjection
         services.AddSingleton<IDrawingExportSnapshotStore, DrawingExportSnapshotStore>();
         services.AddSingleton<RhinoDrawingExportService>();
         services.AddSingleton<RhinoExternalReferenceService>();
+        services.AddSingleton<RhinoArchitecturalPrimitiveService>();
+        services.AddSingleton<RhinoArchitecturalBooleanService>();
+        services.AddSingleton<RhinoBlockDefinitionService>();
+        services.AddSingleton<RhinoBlockInspectionService>();
+        services.AddSingleton<RhinoBlockLifecycleService>();
+        services.AddSingleton<RhinoDocumentStateService>();
+        services.AddSingleton<RhinoSelectionService>();
+        services.AddSingleton<RhinoViewportCaptureService>();
+        services.AddSingleton<ReferenceImageVisualQaCaptureService>();
+        services.AddSingleton<RhinoMaterialService>();
+        services.AddSingleton<RhinoSubDModelingService>();
+        services.AddSingleton<ProceduralTextureImageService>();
+        services.AddSingleton<ReferenceImageModelingBriefService>();
+        services.AddSingleton<ReferenceImagePrimitiveDecompositionService>();
+        services.AddSingleton<ReferenceImageProductGeometryPlanningService>();
+        services.AddSingleton<ReferenceImageDetailRefinementPlanningService>();
+        services.AddSingleton<ReferenceImageMaterialPlanningService>();
+        services.AddSingleton<ReferenceImageIterationDecisionService>();
         services.AddSingleton<ICurveEditOrchestrator, CurveEditOrchestrator>();
         services.AddSingleton<ISurfaceEditOrchestrator, SurfaceEditOrchestrator>();
         services.AddSingleton<ISurfaceBoundaryPointOrderer, SurfaceBoundaryPointOrderer>();

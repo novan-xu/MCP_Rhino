@@ -15,6 +15,7 @@ public sealed class RhinoDrawingExportService
     private const double DefaultFitMarginPercent = 10d;
     private const double DefaultImageDpi = 96d;
     private const double DefaultPdfDpi = 300d;
+    private static readonly TimeSpan ExportTimeout = TimeSpan.FromSeconds(120);
     private static readonly FileExportImageSize DefaultImageSize = new() { Width = 1920, Height = 1080 };
     private static readonly FileExportPageSize DefaultPdfPageSize = new() { WidthMm = 420d, HeightMm = 297d };
 
@@ -220,7 +221,7 @@ public sealed class RhinoDrawingExportService
             return OperationResponse<DrawingExportPackageResponse>.Fail(outputValidation.Message);
         }
 
-        return _documentAccessor.ExecuteWithUndo(request.FilePath, "MCP: ExportDrawingPackage", document =>
+        OperationResponse<DrawingExportPackageResponse> response = _documentAccessor.ExecuteWithUndo(request.FilePath, "MCP: ExportDrawingPackage", document =>
         {
             OperationResponse<DrawingLayerScopeResult> scope = _viewManager.ResolveLayerScope(
                 document,
@@ -324,7 +325,7 @@ public sealed class RhinoDrawingExportService
                 return OperationResponse<(bool Mutated, DrawingExportPackageResponse Result)>.Fail(failureMessage);
             }
 
-            var response = new DrawingExportPackageResponse
+            var packageResponse = new DrawingExportPackageResponse
             {
                 Status = DrawingExportResponseStatus.Completed,
                 FilePath = request.FilePath,
@@ -337,9 +338,13 @@ public sealed class RhinoDrawingExportService
             };
 
             return OperationResponse<(bool Mutated, DrawingExportPackageResponse Result)>.Ok(
-                (true, response),
+                (true, packageResponse),
                 restoreSucceeded ? "Drawing package exported." : "Drawing package exported with restore warnings.");
-        });
+        }, ExportTimeout);
+
+        return !response.Success && string.Equals(response.Message, "RHINO_MAIN_THREAD_BUSY", StringComparison.Ordinal)
+            ? OperationResponse<DrawingExportPackageResponse>.Fail("EXPORT_COMMAND_TIMEOUT")
+            : response;
     }
 
     private static OperationResponse<(bool Mutated, DrawingExportPackageResponse Result)> CreatePackageFailure(string message)

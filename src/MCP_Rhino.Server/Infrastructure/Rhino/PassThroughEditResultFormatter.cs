@@ -10,11 +10,11 @@ public sealed class PassThroughEditResultFormatter : IEditResultFormatter
     {
         var builder = new StringBuilder();
         builder.AppendLine("# Rhino Object Edit Preview");
-        builder.AppendLine($"- 文件: {response.FilePath}");
-        builder.AppendLine($"- 匹配对象数: {response.MatchedObjectCount}");
-        builder.AppendLine($"- 预览对象数: {response.PreviewObjectCount}");
-        builder.AppendLine($"- 操作数: {response.OperationCount}");
-        builder.AppendLine($"- 条件摘要: {response.CriteriaSummary}");
+        builder.AppendLine($"- File: {response.FilePath}");
+        builder.AppendLine($"- Matched objects: {response.MatchedObjectCount}");
+        builder.AppendLine($"- Previewed objects: {response.PreviewObjectCount}");
+        builder.AppendLine($"- Operation count: {response.OperationCount}");
+        builder.AppendLine($"- Criteria summary: {response.CriteriaSummary}");
         AppendWarnings(builder, response.Warnings);
         AppendResults(builder, response.ObjectResults);
         return builder.ToString();
@@ -24,12 +24,12 @@ public sealed class PassThroughEditResultFormatter : IEditResultFormatter
     {
         var builder = new StringBuilder();
         builder.AppendLine("# Rhino Object Edit Execution");
-        builder.AppendLine($"- 文件: {response.FilePath}");
-        builder.AppendLine($"- 匹配对象数: {response.MatchedObjectCount}");
-        builder.AppendLine($"- 成功修改数: {response.UpdatedObjectCount}");
-        builder.AppendLine($"- 失败数: {response.FailedObjectCount}");
-        builder.AppendLine($"- 操作数: {response.OperationCount}");
-        builder.AppendLine($"- 条件摘要: {response.CriteriaSummary}");
+        builder.AppendLine($"- File: {response.FilePath}");
+        builder.AppendLine($"- Matched objects: {response.MatchedObjectCount}");
+        builder.AppendLine($"- Successful edits: {response.UpdatedObjectCount}");
+        builder.AppendLine($"- Failed edits: {response.FailedObjectCount}");
+        builder.AppendLine($"- Operation count: {response.OperationCount}");
+        builder.AppendLine($"- Criteria summary: {response.CriteriaSummary}");
         AppendWarnings(builder, response.Warnings);
         AppendResults(builder, response.ObjectResults);
         return builder.ToString();
@@ -39,20 +39,20 @@ public sealed class PassThroughEditResultFormatter : IEditResultFormatter
     {
         var builder = new StringBuilder();
         builder.AppendLine("# Rhino Geometry Creation");
-        builder.AppendLine($"- 文件: {response.FilePath}");
-        builder.AppendLine($"- 请求数量: {response.RequestedCount}");
-        builder.AppendLine($"- 创建数量: {response.CreatedCount}");
+        builder.AppendLine($"- File: {response.FilePath}");
+        builder.AppendLine($"- Requested count: {response.RequestedCount}");
+        builder.AppendLine($"- Created count: {response.CreatedCount}");
         AppendWarnings(builder, response.Warnings);
 
         if (response.CreatedObjects.Count == 0)
         {
             builder.AppendLine();
-            builder.AppendLine("没有创建对象可展示。");
+            builder.AppendLine("No created objects to display.");
             return builder.ToString();
         }
 
         builder.AppendLine();
-        builder.AppendLine("创建结果:");
+        builder.AppendLine("Created objects:");
         foreach (GeometryCreatedObjectResponse createdObject in response.CreatedObjects)
         {
             builder.AppendLine($"- {createdObject.ObjectId} | Primitive={createdObject.Primitive} | Layer={createdObject.LayerFullPath}");
@@ -65,12 +65,12 @@ public sealed class PassThroughEditResultFormatter : IEditResultFormatter
     {
         var builder = new StringBuilder();
         builder.AppendLine("# Rhino Geometry Modification");
-        builder.AppendLine($"- 文件: {response.FilePath}");
-        builder.AppendLine($"- 匹配对象数: {response.MatchedObjectCount}");
-        builder.AppendLine($"- 成功修改数: {response.UpdatedObjectCount}");
-        builder.AppendLine($"- 失败数: {response.FailedObjectCount}");
-        builder.AppendLine($"- 操作数: {response.OperationCount}");
-        builder.AppendLine($"- 条件摘要: {response.CriteriaSummary}");
+        builder.AppendLine($"- File: {response.FilePath}");
+        builder.AppendLine($"- Matched objects: {response.MatchedObjectCount}");
+        builder.AppendLine($"- Successful edits: {response.UpdatedObjectCount}");
+        builder.AppendLine($"- Failed edits: {response.FailedObjectCount}");
+        builder.AppendLine($"- Operation count: {response.OperationCount}");
+        builder.AppendLine($"- Criteria summary: {response.CriteriaSummary}");
         AppendWarnings(builder, response.Warnings);
         AppendResults(builder, response.ObjectResults);
         return builder.ToString();
@@ -80,11 +80,11 @@ public sealed class PassThroughEditResultFormatter : IEditResultFormatter
     {
         var builder = new StringBuilder();
         builder.AppendLine("# Rhino Geometry Modification Preview");
-        builder.AppendLine($"- 文件: {response.FilePath}");
-        builder.AppendLine($"- 匹配对象数: {response.MatchedObjectCount}");
-        builder.AppendLine($"- 预览对象数: {response.PreviewObjectCount}");
-        builder.AppendLine($"- 操作数: {response.OperationCount}");
-        builder.AppendLine($"- 条件摘要: {response.CriteriaSummary}");
+        builder.AppendLine($"- File: {response.FilePath}");
+        builder.AppendLine($"- Matched objects: {response.MatchedObjectCount}");
+        builder.AppendLine($"- Previewed objects: {response.PreviewObjectCount}");
+        builder.AppendLine($"- Operation count: {response.OperationCount}");
+        builder.AppendLine($"- Criteria summary: {response.CriteriaSummary}");
         AppendWarnings(builder, response.Warnings);
         AppendResults(builder, response.ObjectResults);
         return builder.ToString();
@@ -110,12 +110,12 @@ public sealed class PassThroughEditResultFormatter : IEditResultFormatter
         if (results.Count == 0)
         {
             builder.AppendLine();
-            builder.AppendLine("没有对象结果可展示。");
+            builder.AppendLine("No object results to display.");
             return;
         }
 
         builder.AppendLine();
-        builder.AppendLine("对象结果预览:");
+        builder.AppendLine("Object result preview:");
         foreach (ObjectEditOperationResult result in results)
         {
             builder.AppendLine($"- {result.ObjectId} | Success={result.Success} | Layer={result.LayerFullPath}");

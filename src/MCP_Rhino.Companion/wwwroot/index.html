@@ -48,10 +48,11 @@
       <div class="chip-row above-input" id="attachmentChips" hidden></div>
 
       <div class="composer-box" id="composerBox">
+        <input id="attachmentInput" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
         <button class="composer-attach" id="attachButton" type="button" title="Attach file">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12l-8.5 8.5a5 5 0 0 1-7-7L14 5a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L15 8"/></svg>
         </button>
-        <textarea class="composer-input" id="composerInput" rows="1" placeholder="Ask, build, modify… (⏎ send · ⇧⏎ newline · drop files)"></textarea>
+        <textarea class="composer-input" id="composerInput" rows="1" placeholder="Ask, build, modify… (⏎ send · ⇧⏎ newline · drop images)"></textarea>
         <button class="composer-send" id="sendButton" type="button" title="Send">
           <svg id="sendIcon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l14-7-5 16-3-7-6-2z"/></svg>
         </button>
@@ -61,7 +62,7 @@
         <kbd class="rh-kbd">⏎</kbd><span>send</span>
         <kbd class="rh-kbd">⇧⏎</kbd><span>newline</span>
         <span class="spacer"></span>
-        <span>drop files anywhere</span>
+        <span>drop images anywhere</span>
       </div>
     </div>
 
@@ -86,7 +87,7 @@
     <div class="drag-overlay" id="dragOverlay">
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent)"><path d="M21 12l-8.5 8.5a5 5 0 0 1-7-7L14 5a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L15 8"/></svg>
       <div class="drag-title">drop to attach</div>
-      <div class="drag-detail">images, .3dm, .gh, .py, .txt</div>
+      <div class="drag-detail">PNG, JPEG, WebP images</div>
     </div>
 
     <div class="settings-overlay" id="settingsOverlay">

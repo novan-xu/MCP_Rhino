@@ -2,15 +2,19 @@ extern alias rhinocommon;
 
 using System.Diagnostics;
 using System.Drawing;
+using System.Globalization;
+using System.Reflection;
 using MCP_Rhino.Server.Application.Interfaces;
 using MCP_Rhino.Server.Contracts.Responses;
 using MCP_Rhino.Server.Domain.Enums;
 using MCP_Rhino.Server.Domain.Models;
+using ArchivableDictionary = rhinocommon::Rhino.Collections.ArchivableDictionary;
+using FileDwgWriteOptions = rhinocommon::Rhino.FileIO.FileDwgWriteOptions;
 using FilePdf = rhinocommon::Rhino.FileIO.FilePdf;
-using FileWriteOptions = rhinocommon::Rhino.FileIO.FileWriteOptions;
+using FileStlWriteOptions = rhinocommon::Rhino.FileIO.FileStlWriteOptions;
+using RhinoApp = rhinocommon::Rhino.RhinoApp;
 using RhinoObject = rhinocommon::Rhino.DocObjects.RhinoObject;
 using RhinoView = rhinocommon::Rhino.Display.RhinoView;
-using ViewCapture = rhinocommon::Rhino.Display.ViewCapture;
 using ViewCaptureSettings = rhinocommon::Rhino.Display.ViewCaptureSettings;
 using ViewTypeFilter = rhinocommon::Rhino.Display.ViewTypeFilter;
 using ViewInfo = rhinocommon::Rhino.DocObjects.ViewInfo;
@@ -24,7 +28,7 @@ public sealed class LiveRhinoFileExporter : ILiveFileExporter
     {
         return spec.Format switch
         {
-            FileExportFormat.Dwg or FileExportFormat.Dxf or FileExportFormat.Ifc or FileExportFormat.Stl => ExportWithWriteFile(document, spec),
+            FileExportFormat.Dwg or FileExportFormat.Dxf or FileExportFormat.Ifc or FileExportFormat.Stl => ExportExternalFile(document, spec),
             FileExportFormat.Jpg or FileExportFormat.Png or FileExportFormat.Bmp or FileExportFormat.Tiff => OperatingSystem.IsWindows()
                 ? ExportImage(document, spec)
                 : OperationResponse<FileExportExecutionResult>.Fail("Image export requires Windows."),
@@ -33,25 +37,25 @@ public sealed class LiveRhinoFileExporter : ILiveFileExporter
         };
     }
 
-    private static OperationResponse<FileExportExecutionResult> ExportWithWriteFile(RhinoDoc document, FileExportSpec spec)
+    private static OperationResponse<FileExportExecutionResult> ExportExternalFile(RhinoDoc document, FileExportSpec spec)
     {
         var stopwatch = Stopwatch.StartNew();
         var warnings = new List<ObjectEditWarning>();
         AddOverwriteWarning(spec.OutputPath, warnings);
-        AddFormatOptionWarning(spec, warnings);
 
         List<Guid> previousSelectedIds = document.Objects.GetSelectedObjects(true, true)
             .Select(item => item.Id)
             .ToList();
 
         bool selectionTemporarilyChanged = false;
+        IReadOnlyList<Guid> matchedObjectIds = Array.Empty<Guid>();
 
         try
         {
             int exportedObjectCount;
             if (spec.SelectedObjectIds.Count > 0)
             {
-                List<Guid> matchedObjectIds = ResolveExistingObjectIds(document, spec.SelectedObjectIds, out int missingCount);
+                matchedObjectIds = ResolveExistingObjectIds(document, spec.SelectedObjectIds, out int missingCount);
                 if (matchedObjectIds.Count == 0)
                 {
                     return OperationResponse<FileExportExecutionResult>.Fail("No selectedObjectIds matched objects in the live document.");
@@ -76,22 +80,39 @@ public sealed class LiveRhinoFileExporter : ILiveFileExporter
                 exportedObjectCount = CountLiveObjects(document);
             }
 
-            var options = new FileWriteOptions
-            {
-                UpdateDocumentPath = false,
-                WriteSelectedObjectsOnly = spec.SelectedObjectIds.Count > 0,
-                SuppressDialogBoxes = true,
-                WriteUserData = true
-            };
+            ArchivableDictionary options = CreateExternalExportOptions(spec, warnings);
+            bool wrote = spec.SelectedObjectIds.Count > 0
+                ? document.ExportSelected(spec.OutputPath, options)
+                : document.Export(spec.OutputPath, options);
 
-            bool wrote = document.WriteFile(spec.OutputPath, options);
             if (!wrote)
             {
-                return OperationResponse<FileExportExecutionResult>.Fail($"WriteFile export failed for [{spec.OutputPath}].");
+                warnings.Add(new ObjectEditWarning
+                {
+                    Code = "CODE_DRIVEN_EXPORT_FAILED",
+                    Message = "RhinoDoc.Export/ExportSelected returned false."
+                });
+            }
+
+            if (!HasNonEmptyOutput(spec.OutputPath))
+            {
+                OperationResponse scripted = TryScriptedExportFallback(document, spec, matchedObjectIds, warnings);
+                if (!scripted.Success)
+                {
+                    return OperationResponse<FileExportExecutionResult>.Fail(CreateExternalExportFailureMessage(spec, scripted.Message));
+                }
             }
 
             stopwatch.Stop();
-            return OperationResponse<FileExportExecutionResult>.Ok(CreateResult(spec.OutputPath, exportedObjectCount, stopwatch.ElapsedMilliseconds, warnings));
+            OperationResponse<FileExportExecutionResult> result = CreateValidatedResult(
+                spec.OutputPath,
+                exportedObjectCount,
+                stopwatch.ElapsedMilliseconds,
+                warnings,
+                $"{spec.Format} export");
+            return result.Success
+                ? result
+                : OperationResponse<FileExportExecutionResult>.Fail(CreateExternalExportFailureMessage(spec, result.Message));
         }
         catch (Exception ex)
         {
@@ -143,28 +164,26 @@ public sealed class LiveRhinoFileExporter : ILiveFileExporter
 
         try
         {
-            var capture = new ViewCapture
+            double dpi = spec.DotsPerInch ?? 96d;
+            OperationResponse<RhinoCapturedBitmap> captured = RhinoViewBitmapCapture.Capture(
+                resolvedView.View,
+                new Size(spec.ImageSizePx.Width, spec.ImageSizePx.Height),
+                dpi,
+                !spec.BackgroundTransparent);
+            if (!captured.Success || captured.Data is null)
             {
-                Width = spec.ImageSizePx.Width,
-                Height = spec.ImageSizePx.Height,
-                TransparentBackground = spec.BackgroundTransparent,
-                DrawGrid = false,
-                DrawAxes = false,
-                DrawGridAxes = false
-            };
-
-            using Bitmap? bitmap = capture.CaptureToBitmap(resolvedView.View);
-            if (bitmap is null)
-            {
-                return OperationResponse<FileExportExecutionResult>.Fail($"Image capture failed for view [{resolvedView.View.MainViewport.Name}].");
+                return OperationResponse<FileExportExecutionResult>.Fail($"Image export failed: {captured.Message}");
             }
 
-            float dpi = (float)(spec.DotsPerInch ?? 96d);
-            bitmap.SetResolution(dpi, dpi);
-            bitmap.Save(spec.OutputPath);
+            using RhinoCapturedBitmap bitmap = captured.Data;
+            OperationResponse saved = bitmap.Save(spec.OutputPath, dpi);
+            if (!saved.Success)
+            {
+                return OperationResponse<FileExportExecutionResult>.Fail($"Image export failed: {saved.Message}");
+            }
 
             stopwatch.Stop();
-            return OperationResponse<FileExportExecutionResult>.Ok(CreateResult(spec.OutputPath, CountLiveObjects(document), stopwatch.ElapsedMilliseconds, warnings));
+            return CreateValidatedResult(spec.OutputPath, CountLiveObjects(document), stopwatch.ElapsedMilliseconds, warnings, "Image export");
         }
         catch (Exception ex)
         {
@@ -206,11 +225,16 @@ public sealed class LiveRhinoFileExporter : ILiveFileExporter
             settings.MatchViewportAspectRatio();
 
             FilePdf pdf = FilePdf.Create();
-            pdf.AddPage(settings);
+            int pageIndex = pdf.AddPage(settings);
+            if (pageIndex < 0)
+            {
+                return OperationResponse<FileExportExecutionResult>.Fail("PDF export failed: FilePdf.AddPage did not add a page.");
+            }
+
             pdf.Write(spec.OutputPath);
 
             stopwatch.Stop();
-            return OperationResponse<FileExportExecutionResult>.Ok(CreateResult(spec.OutputPath, CountLiveObjects(document), stopwatch.ElapsedMilliseconds, warnings));
+            return CreateValidatedResult(spec.OutputPath, CountLiveObjects(document), stopwatch.ElapsedMilliseconds, warnings, "PDF export");
         }
         catch (Exception ex)
         {
@@ -327,6 +351,297 @@ public sealed class LiveRhinoFileExporter : ILiveFileExporter
         }
 
         return count;
+    }
+
+    private static ArchivableDictionary CreateExternalExportOptions(
+        FileExportSpec spec,
+        ICollection<ObjectEditWarning> warnings)
+    {
+        return spec.Format switch
+        {
+            FileExportFormat.Dwg or FileExportFormat.Dxf => CreateTypedOptionsDictionary(
+                new FileDwgWriteOptions(),
+                spec,
+                warnings,
+                new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    "Version",
+                    "UseLWPolylines",
+                    "Flatten",
+                    "FullLayerPath",
+                    "ExportSurfacesAs",
+                    "ExportMeshesAs",
+                    "ExportSplinesAs"
+                }),
+            FileExportFormat.Stl => CreateTypedOptionsDictionary(
+                new FileStlWriteOptions(),
+                spec,
+                warnings,
+                new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    "BinaryFile",
+                    "ExportOpenObjects"
+                }),
+            FileExportFormat.Ifc => CreateIfcOptionsDictionary(spec, warnings),
+            _ => new ArchivableDictionary()
+        };
+    }
+
+    private static ArchivableDictionary CreateTypedOptionsDictionary(
+        object typedOptions,
+        FileExportSpec spec,
+        ICollection<ObjectEditWarning> warnings,
+        IReadOnlySet<string> supportedOptionNames)
+    {
+        var applied = new List<string>();
+        foreach ((string key, string value) in spec.FormatOptions)
+        {
+            if (!supportedOptionNames.Contains(key))
+            {
+                warnings.Add(new ObjectEditWarning
+                {
+                    Code = "FORMAT_OPTION_NOT_SUPPORTED",
+                    Message = $"{spec.Format} formatOptions key [{key}] is not mapped by this exporter."
+                });
+                continue;
+            }
+
+            if (TryApplyOptionProperty(typedOptions, key, value, out string error))
+            {
+                applied.Add(key);
+                continue;
+            }
+
+            warnings.Add(new ObjectEditWarning
+            {
+                Code = "FORMAT_OPTION_NOT_APPLIED",
+                Message = $"{spec.Format} formatOptions key [{key}] was not applied. {error}"
+            });
+        }
+
+        if (applied.Count > 0)
+        {
+            warnings.Add(new ObjectEditWarning
+            {
+                Code = "FORMAT_OPTIONS_APPLIED",
+                Message = $"{spec.Format} formatOptions applied: {string.Join(", ", applied)}."
+            });
+        }
+
+        MethodInfo? toDictionary = typedOptions.GetType().GetMethod(
+            "ToDictionary",
+            BindingFlags.Public | BindingFlags.Instance,
+            binder: null,
+            types: Type.EmptyTypes,
+            modifiers: null);
+        if (toDictionary is null)
+        {
+            warnings.Add(new ObjectEditWarning
+            {
+                Code = "FORMAT_OPTIONS_DICTIONARY_UNAVAILABLE",
+                Message = $"{typedOptions.GetType().Name}.ToDictionary() was not available; using an empty export options dictionary."
+            });
+            return new ArchivableDictionary();
+        }
+
+        object? dictionary = toDictionary.Invoke(typedOptions, null);
+        if (dictionary is ArchivableDictionary archivableDictionary)
+        {
+            return archivableDictionary;
+        }
+
+        warnings.Add(new ObjectEditWarning
+        {
+            Code = "FORMAT_OPTIONS_DICTIONARY_UNAVAILABLE",
+            Message = $"{typedOptions.GetType().Name}.ToDictionary() did not return an ArchivableDictionary; using an empty export options dictionary."
+        });
+        return new ArchivableDictionary();
+    }
+
+    private static ArchivableDictionary CreateIfcOptionsDictionary(
+        FileExportSpec spec,
+        ICollection<ObjectEditWarning> warnings)
+    {
+        foreach (string key in spec.FormatOptions.Keys)
+        {
+            warnings.Add(new ObjectEditWarning
+            {
+                Code = "IFC_FORMAT_OPTION_NOT_MAPPED",
+                Message = $"IFC formatOptions key [{key}] is not mapped because this RhinoCommon build exposes no FileIfcWriteOptions type."
+            });
+        }
+
+        return new ArchivableDictionary();
+    }
+
+    private static bool TryApplyOptionProperty(object target, string propertyName, string value, out string error)
+    {
+        PropertyInfo? property = target.GetType().GetProperty(
+            propertyName,
+            BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+        if (property is null)
+        {
+            error = "The typed RhinoCommon options object has no matching writable property.";
+            return false;
+        }
+
+        if (!property.CanWrite)
+        {
+            error = "The matching RhinoCommon options property is read-only.";
+            return false;
+        }
+
+        if (!TryConvertOptionValue(value, property.PropertyType, out object? converted, out error))
+        {
+            return false;
+        }
+
+        property.SetValue(target, converted);
+        return true;
+    }
+
+    private static bool TryConvertOptionValue(
+        string value,
+        Type targetType,
+        out object? converted,
+        out string error)
+    {
+        Type concreteType = Nullable.GetUnderlyingType(targetType) ?? targetType;
+        try
+        {
+            if (concreteType == typeof(string))
+            {
+                converted = value;
+                error = string.Empty;
+                return true;
+            }
+
+            if (concreteType == typeof(bool))
+            {
+                if (bool.TryParse(value, out bool boolValue))
+                {
+                    converted = boolValue;
+                    error = string.Empty;
+                    return true;
+                }
+
+                if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int intBool))
+                {
+                    converted = intBool != 0;
+                    error = string.Empty;
+                    return true;
+                }
+            }
+
+            if (concreteType.IsEnum)
+            {
+                converted = Enum.Parse(concreteType, value, ignoreCase: true);
+                error = string.Empty;
+                return true;
+            }
+
+            converted = Convert.ChangeType(value, concreteType, CultureInfo.InvariantCulture);
+            error = string.Empty;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            converted = null;
+            error = $"Value [{value}] could not be converted to {concreteType.Name}: {ex.Message}";
+            return false;
+        }
+    }
+
+    private static OperationResponse TryScriptedExportFallback(
+        RhinoDoc document,
+        FileExportSpec spec,
+        IReadOnlyList<Guid> matchedObjectIds,
+        ICollection<ObjectEditWarning> warnings)
+    {
+        if (matchedObjectIds.Count == 0)
+        {
+            return OperationResponse.Fail("Scripted export fallback requires an explicit selectedObjectIds scope.");
+        }
+
+        if (spec.Format is not (FileExportFormat.Dwg or FileExportFormat.Dxf or FileExportFormat.Stl or FileExportFormat.Ifc))
+        {
+            return OperationResponse.Fail("Scripted export fallback is not supported for this format.");
+        }
+
+        TryDeleteEmptyOutput(spec.OutputPath);
+        string command = $"_-Export \"{EscapeRhinoCommandPath(spec.OutputPath)}\" _Enter _Enter _Enter";
+        bool ran = RhinoApp.RunScript(command, echo: false);
+        if (!ran)
+        {
+            return OperationResponse.Fail("Rhino scripted export fallback returned false.");
+        }
+
+        if (!HasNonEmptyOutput(spec.OutputPath))
+        {
+            return OperationResponse.Fail("Rhino scripted export fallback did not produce a non-empty output file.");
+        }
+
+        warnings.Add(new ObjectEditWarning
+        {
+            Code = "SCRIPTED_EXPORT_FALLBACK_USED",
+            Message = "RhinoDoc.Export/ExportSelected did not produce output; a non-interactive Rhino _-Export fallback produced the file."
+        });
+        return OperationResponse.Ok();
+    }
+
+    private static string CreateExternalExportFailureMessage(FileExportSpec spec, string detail)
+    {
+        if (spec.Format == FileExportFormat.Ifc)
+        {
+            return $"IFC_EXPORT_UNAVAILABLE: Rhino did not produce a non-empty IFC file. Confirm that IFC export support is installed and enabled for this Rhino host. {detail}";
+        }
+
+        return $"{spec.Format} export failed: {detail}";
+    }
+
+    private static bool HasNonEmptyOutput(string outputPath)
+    {
+        return File.Exists(outputPath) && new FileInfo(outputPath).Length > 0L;
+    }
+
+    private static OperationResponse<FileExportExecutionResult> CreateValidatedResult(
+        string outputPath,
+        int exportedObjectCount,
+        long durationMs,
+        IReadOnlyList<ObjectEditWarning> warnings,
+        string operationName)
+    {
+        if (!File.Exists(outputPath))
+        {
+            return OperationResponse<FileExportExecutionResult>.Fail($"{operationName} completed but output file was not created: {outputPath}");
+        }
+
+        long sizeBytes = new FileInfo(outputPath).Length;
+        if (sizeBytes <= 0L)
+        {
+            return OperationResponse<FileExportExecutionResult>.Fail($"{operationName} completed but output file was empty: {outputPath}");
+        }
+
+        return OperationResponse<FileExportExecutionResult>.Ok(CreateResult(outputPath, exportedObjectCount, durationMs, warnings));
+    }
+
+    private static string EscapeRhinoCommandPath(string outputPath)
+    {
+        return outputPath.Replace("\"", "\\\"", StringComparison.Ordinal);
+    }
+
+    private static void TryDeleteEmptyOutput(string outputPath)
+    {
+        try
+        {
+            if (File.Exists(outputPath) && new FileInfo(outputPath).Length == 0L)
+            {
+                File.Delete(outputPath);
+            }
+        }
+        catch
+        {
+        }
     }
 
     private static FileExportExecutionResult CreateResult(

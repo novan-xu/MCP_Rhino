@@ -139,14 +139,16 @@ public partial class MainWindow : Window
                     break;
 
                 case "send":
-                    if (_session is not null
-                        && root.TryGetProperty("text", out JsonElement textProperty))
+                    if (_session is not null)
                     {
-                        string? text = textProperty.GetString();
-                        if (!string.IsNullOrWhiteSpace(text))
+                        if (!CompanionUserMessage.TryReadFromJson(root, out CompanionUserMessage message, out string error))
                         {
-                            await _session.SendUserMessageAsync(text, CancellationToken.None).ConfigureAwait(true);
+                            PostEvent(CompanionUiEvent.Diagnostic(error));
+                            PostEvent(CompanionUiEvent.Input(true));
+                            break;
                         }
+
+                        await _session.SendUserMessageAsync(message, CancellationToken.None).ConfigureAwait(true);
                     }
                     break;
 
@@ -188,7 +190,7 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             PostEvent(CompanionUiEvent.Diagnostic("Companion host error: " + ex.Message));
-            PostEvent(CompanionUiEvent.Input(false));
+            PostEvent(CompanionUiEvent.Input(true));
         }
     }
 

@@ -85,6 +85,7 @@ public sealed class ServerBootstrap : IDisposable
         builder.Services
             .AddMcpServer()
             .AddRhinoTools()
+            .AddRhinoResources()
             .WithStreamServerTransport(input, output);
 
         return builder.Build();

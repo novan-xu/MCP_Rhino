@@ -1,7 +1,6 @@
 using System.Text;
 using MCP_Rhino.Server.Application.Services;
 using MCP_Rhino.Server.Contracts.Requests;
-using MCP_Rhino.Server.Domain.Models;
 
 namespace MCP_Rhino.Server.Skills.Inspection;
 
@@ -18,7 +17,7 @@ public sealed class CompositeObjectFilterSkill
     {
         if (string.IsNullOrWhiteSpace(request.FilePath))
         {
-            return "错误：filePath 不能为空。";
+            return "FilePath cannot be empty.";
         }
 
         var resolvedRequest = new FilterObjectsRequest
@@ -53,7 +52,7 @@ public sealed class CompositeObjectFilterSkill
 
                 if (candidateResult.Data.Count == 0)
                 {
-                    ambiguityMessages.Add($"未找到与 [{layerQuery}] 匹配的图层。");
+                    ambiguityMessages.Add($"No layer matched [{layerQuery}].");
                     continue;
                 }
 
@@ -76,12 +75,12 @@ public sealed class CompositeObjectFilterSkill
             if (ambiguityMessages.Count > 0)
             {
                 var builder = new StringBuilder();
-                builder.AppendLine("检测到 layer 条件存在歧义或缺失确认，请先确认目标图层：");
+                builder.AppendLine("Layer criteria are ambiguous or missing confirmation. Confirm the target layers first:");
                 foreach (string message in ambiguityMessages)
                 {
                     builder.AppendLine(message);
                 }
-                builder.AppendLine("请提供 confirmedLayerFullPaths 后重新执行组合筛查。\n");
+                builder.AppendLine("Retry with confirmedLayerFullPaths.");
                 return builder.ToString();
             }
 

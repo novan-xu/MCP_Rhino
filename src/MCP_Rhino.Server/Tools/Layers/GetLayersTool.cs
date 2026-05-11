@@ -17,7 +17,7 @@ public sealed class GetLayersTool
     }
 
     [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
-    [Description("Read all layers from a Rhino .3dm file, including object counts and layer properties.")]
+    [Description("Read all layers from the current live Rhino document, including object counts and layer properties.")]
     public OperationResponse<LayerReadResponse> GetLayers(string filePath)
     {
         return _service.Get(new GetLayersRequest

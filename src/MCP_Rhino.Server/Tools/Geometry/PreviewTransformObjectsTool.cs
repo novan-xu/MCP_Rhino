@@ -19,7 +19,7 @@ public sealed class PreviewTransformObjectsTool
     }
 
     [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
-    [Description("预览 Rhino 对象的几何变换，不落盘。")]
+    [Description("Preview Rhino object transforms in the current live document without mutating the document.")]
     public OperationResponse<GeometryModificationPreviewResponse> PreviewTransformObjects(
         string filePath,
         GeometryTransformSpec transform,

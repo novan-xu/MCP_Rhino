@@ -10,6 +10,7 @@ public sealed class RhinoFileExportService
 {
     private const double DefaultImageDpi = 96d;
     private const double DefaultPdfDpi = 300d;
+    private static readonly TimeSpan ExportTimeout = TimeSpan.FromSeconds(120);
     private static readonly FileExportImageSize DefaultImageSize = new() { Width = 1920, Height = 1080 };
     private static readonly FileExportPageSize DefaultPdfPageSize = new() { WidthMm = 420d, HeightMm = 297d };
 
@@ -103,7 +104,7 @@ public sealed class RhinoFileExportService
         }
 
         FileExportSpec validatedSpec = validation.Data;
-        return _documentAccessor.Execute(filePath, document =>
+        OperationResponse<FileExportResponse> response = _documentAccessor.Execute(filePath, document =>
         {
             if (PathsEqual(document.Path, validatedSpec.OutputPath))
             {
@@ -116,7 +117,7 @@ public sealed class RhinoFileExportService
                 return OperationResponse<FileExportResponse>.Fail(exported.Message);
             }
 
-            var response = new FileExportResponse
+            var fileResponse = new FileExportResponse
             {
                 FilePath = filePath,
                 OutputPath = validatedSpec.OutputPath,
@@ -127,8 +128,12 @@ public sealed class RhinoFileExportService
                 Warnings = exported.Data.Warnings
             };
 
-            return OperationResponse<FileExportResponse>.Ok(response, "File export completed.");
-        });
+            return OperationResponse<FileExportResponse>.Ok(fileResponse, "File export completed.");
+        }, ExportTimeout);
+
+        return !response.Success && string.Equals(response.Message, "RHINO_MAIN_THREAD_BUSY", StringComparison.Ordinal)
+            ? OperationResponse<FileExportResponse>.Fail("EXPORT_COMMAND_TIMEOUT")
+            : response;
     }
 
     private static FileExportSpec CreateWriteFileSpec(

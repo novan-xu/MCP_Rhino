@@ -17,7 +17,7 @@ public sealed class PreviewReplaceGeometryTool
     }
 
     [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
-    [Description("预览按 ObjectId 替换几何的结果，不落盘。")]
+    [Description("Preview geometry replacement by ObjectId in the current live Rhino document without mutating the document.")]
     public OperationResponse<GeometryModificationPreviewResponse> PreviewReplaceGeometry(
         string filePath,
         List<GeometryReplacementEntryRequest> entries)

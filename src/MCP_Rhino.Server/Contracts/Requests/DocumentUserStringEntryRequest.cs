@@ -4,12 +4,12 @@ namespace MCP_Rhino.Server.Contracts.Requests;
 
 public sealed class DocumentUserStringEntryRequest
 {
-    [Description("可选的 section 名称。配合 Entry 使用，可定位到具有命名空间的文档级 user string。")]
+    [Description("Optional document user string section name. Use with Key to address namespaced document user strings.")]
     public string? Section { get; set; }
 
-    [Description("user string 的 key 或 entry 名称。当未提供 Section 时，作为顶层 key；当提供 Section 时，作为该 section 下的 entry。")]
+    [Description("Document user string key or entry name. Without Section, this is a top-level key; with Section, this is the entry under that section.")]
     public string Key { get; set; } = string.Empty;
 
-    [Description("要写入的 user string value。删除场景下可忽略。")]
+    [Description("Document user string value to write. This is ignored for delete requests.")]
     public string Value { get; set; } = string.Empty;
 }

@@ -1,7 +1,9 @@
 using System.ComponentModel;
-using ModelContextProtocol.Server;
 using MCP_Rhino.Server.Application.Services;
 using MCP_Rhino.Server.Contracts.Requests;
+using MCP_Rhino.Server.Contracts.Responses;
+using MCP_Rhino.Server.Domain.Models;
+using ModelContextProtocol.Server;
 
 namespace MCP_Rhino.Server.Tools.Layers;
 
@@ -16,16 +18,17 @@ public sealed class FindLayerCandidatesTool
     }
 
     [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
-    [Description("根据图层名称或层级路径查找 Rhino 文件中的匹配图层候选，用于后续筛查时确认目标图层。")]
-    public string FindLayerCandidates(string filePath, string layerQuery, bool exactMatch = false)
+    [Description("Find live Rhino layer candidates by name or full-path fragment so later calls can use confirmedLayerFullPaths without ambiguity.")]
+    public OperationResponse<IReadOnlyList<RhinoLayerCandidate>> FindLayerCandidates(
+        string filePath,
+        string layerQuery,
+        bool exactMatch = false)
     {
-        var result = _filterService.FindLayerCandidates(new FindLayerCandidatesRequest
+        return _filterService.FindLayerCandidates(new FindLayerCandidatesRequest
         {
             FilePath = filePath,
             LayerQuery = layerQuery,
             ExactMatch = exactMatch
         });
-
-        return _filterService.FormatLayerCandidates(layerQuery, result.Success ? result.Data : null, result.Message);
     }
 }

@@ -18,7 +18,7 @@ public sealed class DeleteObjectsTool
     }
 
     [McpServerTool(ReadOnly = false, Destructive = true, OpenWorld = false)]
-    [Description("删除 Rhino 对象，并覆盖写回原文件。")]
+    [Description("Delete objects from the current live Rhino document by confirmed ObjectIds or filter criteria. Uses one Rhino undo record and does not read or write external files.")]
     public OperationResponse<GeometryModificationResponse> DeleteObjects(
         string filePath,
         List<Guid>? confirmedObjectIds = null,

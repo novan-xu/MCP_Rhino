@@ -1,5 +1,6 @@
 using MCP_Rhino.Server.Agents.Editing;
 using MCP_Rhino.Server.Agents.Inspection;
+using MCP_Rhino.Server.Agents.Modeling;
 using MCP_Rhino.Server.Application.Interfaces;
 using MCP_Rhino.Server.Application.Services;
 using MCP_Rhino.Server.Application.Services.Analysis;
@@ -17,12 +18,19 @@ public sealed partial class DeveloperCommandHandler
     private readonly RhinoObjectUserTextService _userTextService;
     private readonly RhinoDocumentUserStringService _documentUserStringService;
     private readonly RhinoLayerManagementService _layerManagementService;
+    private readonly RhinoDocumentStateService _documentStateService;
+    private readonly RhinoSelectionService _selectionService;
+    private readonly RhinoViewportCaptureService _viewportCaptureService;
+    private readonly ReferenceImageVisualQaCaptureService _referenceImageVisualQaCaptureService;
+    private readonly RhinoMaterialService _rhinoMaterialService;
     private readonly LayerObjectFilterSkill _layerSkill;
     private readonly ObjectTypeFilterSkill _typeSkill;
     private readonly UserAttributeObjectFilterSkill _userAttributeSkill;
     private readonly RhinoObjectFilterAgent _filterAgent;
     private readonly RhinoObjectEditingAgent _editingAgent;
+    private readonly ReferenceImageObjectModelingAgent _referenceImageObjectModelingAgent;
     private readonly GeometryCreationSkill _geometryCreationSkill;
+    private readonly RhinoCurveDerivedGeometryService _curveDerivedGeometryService;
     private readonly GeometryModificationSkill _geometryModificationSkill;
     private readonly StandardFourPointSurfaceRebuildSkill _standardFourPointSurfaceRebuildSkill;
     private readonly ILiveRhinoDocumentAccessor _liveRhinoDocumentAccessor;
@@ -39,6 +47,17 @@ public sealed partial class DeveloperCommandHandler
     private readonly RhinoFileExportService _fileExportService;
     private readonly RhinoDrawingExportService _drawingExportService;
     private readonly RhinoExternalReferenceService _externalReferenceService;
+    private readonly ArchitecturalPrimitiveCreationSkill _architecturalPrimitiveCreationSkill;
+    private readonly ArchitecturalBooleanSkill _architecturalBooleanSkill;
+    private readonly ReferenceImageModelBriefSkill _referenceImageModelBriefSkill;
+    private readonly ReferenceImagePrimitiveDecompositionSkill _referenceImagePrimitiveDecompositionSkill;
+    private readonly ReferenceImageInitialMassingSkill _referenceImageInitialMassingSkill;
+    private readonly ReferenceImageDetailRefinementSkill _referenceImageDetailRefinementSkill;
+    private readonly ReferenceImageMaterialPlanningSkill _referenceImageMaterialPlanningSkill;
+    private readonly ReferenceImageIterationDecisionSkill _referenceImageIterationDecisionSkill;
+    private readonly RhinoBlockDefinitionService _rhinoBlockDefinitionService;
+    private readonly RhinoBlockInspectionService _rhinoBlockInspectionService;
+    private readonly BlockLifecycleSkill _blockLifecycleSkill;
     private readonly Dictionary<string, Func<string[], bool>> _extensionHandlers = new(StringComparer.OrdinalIgnoreCase);
 
     // Optional hooks for Project_Test partials to register capability-specific smoke
@@ -65,6 +84,29 @@ public sealed partial class DeveloperCommandHandler
     partial void RegisterRhinoChatFileLockSafetyHandlers();
     partial void RegisterPanelRuntimePolicyHandlers();
     partial void RegisterDebugBridgeOnlyPluginHandlers();
+    partial void RegisterArchitecturalModelingPrimitivesHandlers();
+    partial void RegisterBlockCapabilitiesHandlers();
+    partial void RegisterMcpSurfaceStructureGovernanceHandlers();
+    partial void RegisterDocumentVisualStateToolsHandlers();
+    partial void RegisterGeneralPrimitiveCreationToolsHandlers();
+    partial void RegisterCurveDerivedGeometryToolsHandlers();
+    partial void RegisterRhinoReferenceResourcesHandlers();
+    partial void RegisterMcpToolOverlapCleanupHandlers();
+    partial void RegisterReviewFindingsFixHandlers();
+    partial void RegisterRuntimeTextNormalizationHandlers();
+    partial void RegisterBulkAttributeRecipesHandlers();
+    partial void RegisterSelectionScopedAnalysisRecipeHandlers();
+    partial void RegisterReferenceImageVisualQaHandlers();
+    partial void RegisterReferenceImageObjectModelingToolsHandlers();
+    partial void RegisterReferenceImageObjectModelingSkillsHandlers();
+    partial void RegisterReferenceImageObjectModelingAgentHandlers();
+    partial void RegisterFileExportReliabilityHandlers();
+    partial void RegisterModelingSurfaceCleanupHandlers();
+    partial void RegisterMaterialTextureCapabilityHandlers();
+    partial void RegisterReferenceImageAgentAccessAndBriefingHandlers();
+    partial void RegisterReferenceImageAccurateProductModelingHandlers();
+    partial void RegisterSubDModelingToolsHandlers();
+    partial void RegisterCompanionImageAttachmentsHandlers();
 
     partial void RegisterExtensionHandlers()
     {
@@ -89,6 +131,29 @@ public sealed partial class DeveloperCommandHandler
         RegisterRhinoChatFileLockSafetyHandlers();
         RegisterPanelRuntimePolicyHandlers();
         RegisterDebugBridgeOnlyPluginHandlers();
+        RegisterArchitecturalModelingPrimitivesHandlers();
+        RegisterBlockCapabilitiesHandlers();
+        RegisterMcpSurfaceStructureGovernanceHandlers();
+        RegisterDocumentVisualStateToolsHandlers();
+        RegisterGeneralPrimitiveCreationToolsHandlers();
+        RegisterCurveDerivedGeometryToolsHandlers();
+        RegisterRhinoReferenceResourcesHandlers();
+        RegisterMcpToolOverlapCleanupHandlers();
+        RegisterReviewFindingsFixHandlers();
+        RegisterRuntimeTextNormalizationHandlers();
+        RegisterBulkAttributeRecipesHandlers();
+        RegisterSelectionScopedAnalysisRecipeHandlers();
+        RegisterReferenceImageVisualQaHandlers();
+        RegisterReferenceImageObjectModelingToolsHandlers();
+        RegisterReferenceImageObjectModelingSkillsHandlers();
+        RegisterReferenceImageObjectModelingAgentHandlers();
+        RegisterFileExportReliabilityHandlers();
+        RegisterModelingSurfaceCleanupHandlers();
+        RegisterMaterialTextureCapabilityHandlers();
+        RegisterReferenceImageAgentAccessAndBriefingHandlers();
+        RegisterReferenceImageAccurateProductModelingHandlers();
+        RegisterSubDModelingToolsHandlers();
+        RegisterCompanionImageAttachmentsHandlers();
     }
 
     public DeveloperCommandHandler(
@@ -97,12 +162,19 @@ public sealed partial class DeveloperCommandHandler
         RhinoObjectUserTextService userTextService,
         RhinoDocumentUserStringService documentUserStringService,
         RhinoLayerManagementService layerManagementService,
+        RhinoDocumentStateService documentStateService,
+        RhinoSelectionService selectionService,
+        RhinoViewportCaptureService viewportCaptureService,
+        ReferenceImageVisualQaCaptureService referenceImageVisualQaCaptureService,
+        RhinoMaterialService rhinoMaterialService,
         LayerObjectFilterSkill layerSkill,
         ObjectTypeFilterSkill typeSkill,
         UserAttributeObjectFilterSkill userAttributeSkill,
         RhinoObjectFilterAgent filterAgent,
         RhinoObjectEditingAgent editingAgent,
+        ReferenceImageObjectModelingAgent referenceImageObjectModelingAgent,
         GeometryCreationSkill geometryCreationSkill,
+        RhinoCurveDerivedGeometryService curveDerivedGeometryService,
         GeometryModificationSkill geometryModificationSkill,
         StandardFourPointSurfaceRebuildSkill standardFourPointSurfaceRebuildSkill,
         ILiveRhinoDocumentAccessor liveRhinoDocumentAccessor,
@@ -118,19 +190,37 @@ public sealed partial class DeveloperCommandHandler
         RhinoGeometryIntersectionService geometryIntersectionService,
         RhinoFileExportService fileExportService,
         RhinoDrawingExportService drawingExportService,
-        RhinoExternalReferenceService externalReferenceService)
+        RhinoExternalReferenceService externalReferenceService,
+        ArchitecturalPrimitiveCreationSkill architecturalPrimitiveCreationSkill,
+        ArchitecturalBooleanSkill architecturalBooleanSkill,
+        ReferenceImageModelBriefSkill referenceImageModelBriefSkill,
+        ReferenceImagePrimitiveDecompositionSkill referenceImagePrimitiveDecompositionSkill,
+        ReferenceImageInitialMassingSkill referenceImageInitialMassingSkill,
+        ReferenceImageDetailRefinementSkill referenceImageDetailRefinementSkill,
+        ReferenceImageMaterialPlanningSkill referenceImageMaterialPlanningSkill,
+        ReferenceImageIterationDecisionSkill referenceImageIterationDecisionSkill,
+        RhinoBlockDefinitionService rhinoBlockDefinitionService,
+        RhinoBlockInspectionService rhinoBlockInspectionService,
+        BlockLifecycleSkill blockLifecycleSkill)
     {
         _filterService = filterService;
         _editingService = editingService;
         _userTextService = userTextService;
         _documentUserStringService = documentUserStringService;
         _layerManagementService = layerManagementService;
+        _documentStateService = documentStateService;
+        _selectionService = selectionService;
+        _viewportCaptureService = viewportCaptureService;
+        _referenceImageVisualQaCaptureService = referenceImageVisualQaCaptureService;
+        _rhinoMaterialService = rhinoMaterialService;
         _layerSkill = layerSkill;
         _typeSkill = typeSkill;
         _userAttributeSkill = userAttributeSkill;
         _filterAgent = filterAgent;
         _editingAgent = editingAgent;
+        _referenceImageObjectModelingAgent = referenceImageObjectModelingAgent;
         _geometryCreationSkill = geometryCreationSkill;
+        _curveDerivedGeometryService = curveDerivedGeometryService;
         _geometryModificationSkill = geometryModificationSkill;
         _standardFourPointSurfaceRebuildSkill = standardFourPointSurfaceRebuildSkill;
         _liveRhinoDocumentAccessor = liveRhinoDocumentAccessor;
@@ -147,6 +237,17 @@ public sealed partial class DeveloperCommandHandler
         _fileExportService = fileExportService;
         _drawingExportService = drawingExportService;
         _externalReferenceService = externalReferenceService;
+        _architecturalPrimitiveCreationSkill = architecturalPrimitiveCreationSkill;
+        _architecturalBooleanSkill = architecturalBooleanSkill;
+        _referenceImageModelBriefSkill = referenceImageModelBriefSkill;
+        _referenceImagePrimitiveDecompositionSkill = referenceImagePrimitiveDecompositionSkill;
+        _referenceImageInitialMassingSkill = referenceImageInitialMassingSkill;
+        _referenceImageDetailRefinementSkill = referenceImageDetailRefinementSkill;
+        _referenceImageMaterialPlanningSkill = referenceImageMaterialPlanningSkill;
+        _referenceImageIterationDecisionSkill = referenceImageIterationDecisionSkill;
+        _rhinoBlockDefinitionService = rhinoBlockDefinitionService;
+        _rhinoBlockInspectionService = rhinoBlockInspectionService;
+        _blockLifecycleSkill = blockLifecycleSkill;
         RegisterExtensionHandlers();
     }
 
@@ -182,7 +283,7 @@ public sealed partial class DeveloperCommandHandler
     {
         if (args.Length < 3)
         {
-            Console.WriteLine("用法: dotnet run --project src/MCP_Rhino.Server -- find-layer-candidates <3dm文件路径> <layerQuery> [exactMatch]");
+            Console.WriteLine("Usage: dotnet run --project src/MCP_Rhino.Server -- find-layer-candidates <active-3dm-file-path> <layerQuery> [exactMatch]");
             return true;
         }
 
@@ -205,7 +306,7 @@ public sealed partial class DeveloperCommandHandler
     {
         if (args.Length < 3)
         {
-            Console.WriteLine("用法: dotnet run --project src/MCP_Rhino.Server -- filter-objects-by-layer <3dm文件路径> <layerQuery> [confirmedLayerFullPath]");
+            Console.WriteLine("Usage: dotnet run --project src/MCP_Rhino.Server -- filter-objects-by-layer <active-3dm-file-path> <layerQuery> [confirmedLayerFullPath]");
             return true;
         }
 
@@ -218,7 +319,7 @@ public sealed partial class DeveloperCommandHandler
     {
         if (args.Length < 3)
         {
-            Console.WriteLine("用法: dotnet run --project src/MCP_Rhino.Server -- filter-objects-by-type <3dm文件路径> <type1,type2,...>");
+            Console.WriteLine("Usage: dotnet run --project src/MCP_Rhino.Server -- filter-objects-by-type <active-3dm-file-path> <type1,type2,...>");
             return true;
         }
 
@@ -230,7 +331,7 @@ public sealed partial class DeveloperCommandHandler
     {
         if (args.Length < 3)
         {
-            Console.WriteLine("用法: dotnet run --project src/MCP_Rhino.Server -- filter-objects-by-user-attributes <3dm文件路径> <attrSpec> [attrMode]");
+            Console.WriteLine("Usage: dotnet run --project src/MCP_Rhino.Server -- filter-objects-by-user-attributes <active-3dm-file-path> <attrSpec> [attrMode]");
             return true;
         }
 
@@ -246,7 +347,7 @@ public sealed partial class DeveloperCommandHandler
     {
         if (args.Length < 2)
         {
-            Console.WriteLine("用法: dotnet run --project src/MCP_Rhino.Server -- filter-objects-agent <3dm文件路径> [layers=...] [layerpaths=...] [types=...] [attrs=...] [mode=all|any] [attrmode=all|any]");
+            Console.WriteLine("Usage: dotnet run --project src/MCP_Rhino.Server -- filter-objects-agent <active-3dm-file-path> [layers=...] [layerpaths=...] [types=...] [attrs=...] [mode=all|any] [attrmode=all|any]");
             return true;
         }
 
@@ -292,7 +393,7 @@ public sealed partial class DeveloperCommandHandler
     {
         if (args.Length < 3)
         {
-            Console.WriteLine("用法: dotnet run --project src/MCP_Rhino.Server -- preview-object-edits <3dm文件路径> <editSpec> [layers=...] [layerpaths=...] [types=...] [attrs=...] [mode=all|any] [attrmode=all|any]。editSpec 支持 set-user:key=value、remove-user:key、set-layer:fullPath、set-color:r,g,b");
+            Console.WriteLine("Usage: dotnet run --project src/MCP_Rhino.Server -- preview-object-edits <active-3dm-file-path> <editSpec> [layers=...] [layerpaths=...] [types=...] [attrs=...] [mode=all|any] [attrmode=all|any]. editSpec supports set-user:key=value, remove-user:key, set-layer:fullPath, set-color:r,g,b");
             return true;
         }
 
@@ -306,7 +407,7 @@ public sealed partial class DeveloperCommandHandler
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"对象编辑预览参数解析失败: {ex.Message}");
+            Console.WriteLine($"Object edit preview argument parsing failed: {ex.Message}");
         }
 
         return true;
@@ -316,7 +417,7 @@ public sealed partial class DeveloperCommandHandler
     {
         if (args.Length < 3)
         {
-            Console.WriteLine("用法: dotnet run --project src/MCP_Rhino.Server -- apply-object-edits <3dm文件路径> <editSpec> [layers=...] [layerpaths=...] [types=...] [attrs=...] [mode=all|any] [attrmode=all|any]。editSpec 支持 set-user:key=value、remove-user:key、set-layer:fullPath、set-color:r,g,b");
+            Console.WriteLine("Usage: dotnet run --project src/MCP_Rhino.Server -- apply-object-edits <active-3dm-file-path> <editSpec> [layers=...] [layerpaths=...] [types=...] [attrs=...] [mode=all|any] [attrmode=all|any]. editSpec supports set-user:key=value, remove-user:key, set-layer:fullPath, set-color:r,g,b");
             return true;
         }
 
@@ -330,7 +431,7 @@ public sealed partial class DeveloperCommandHandler
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"对象编辑执行参数解析失败: {ex.Message}");
+            Console.WriteLine($"Object edit apply argument parsing failed: {ex.Message}");
         }
 
         return true;
@@ -340,7 +441,7 @@ public sealed partial class DeveloperCommandHandler
     {
         if (args.Length < 3)
         {
-            Console.WriteLine("用法: dotnet run --project src/MCP_Rhino.Server -- preview-object-user-text-writes <3dm文件路径> <entrySpec>。entrySpec 格式: objectId|key=value;objectId|key=value");
+            Console.WriteLine("Usage: dotnet run --project src/MCP_Rhino.Server -- preview-object-user-text-writes <active-3dm-file-path> <entrySpec>. entrySpec format: objectId|key=value;objectId|key=value");
             return true;
         }
 
@@ -354,7 +455,7 @@ public sealed partial class DeveloperCommandHandler
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"对象级 user text 预览参数解析失败: {ex.Message}");
+            Console.WriteLine($"Object user text preview argument parsing failed: {ex.Message}");
         }
 
         return true;
@@ -364,7 +465,7 @@ public sealed partial class DeveloperCommandHandler
     {
         if (args.Length < 3)
         {
-            Console.WriteLine("用法: dotnet run --project src/MCP_Rhino.Server -- apply-object-user-text-writes <3dm文件路径> <entrySpec>。entrySpec 格式: objectId|key=value;objectId|key=value");
+            Console.WriteLine("Usage: dotnet run --project src/MCP_Rhino.Server -- apply-object-user-text-writes <active-3dm-file-path> <entrySpec>. entrySpec format: objectId|key=value;objectId|key=value");
             return true;
         }
 
@@ -378,7 +479,7 @@ public sealed partial class DeveloperCommandHandler
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"对象级 user text 执行参数解析失败: {ex.Message}");
+            Console.WriteLine($"Object user text apply argument parsing failed: {ex.Message}");
         }
 
         return true;
@@ -388,7 +489,7 @@ public sealed partial class DeveloperCommandHandler
     {
         if (args.Length < 3)
         {
-            Console.WriteLine("用法: dotnet run --project src/MCP_Rhino.Server -- get-object-user-strings <3dm文件路径> <guid1,guid2,...>");
+            Console.WriteLine("Usage: dotnet run --project src/MCP_Rhino.Server -- get-object-user-strings <active-3dm-file-path> <guid1,guid2,...>");
             return true;
         }
 
@@ -407,7 +508,7 @@ public sealed partial class DeveloperCommandHandler
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"对象级 user string 读取参数解析失败: {ex.Message}");
+            Console.WriteLine($"Object user string read argument parsing failed: {ex.Message}");
         }
 
         return true;
@@ -417,7 +518,7 @@ public sealed partial class DeveloperCommandHandler
     {
         if (args.Length < 3)
         {
-            Console.WriteLine("用法: dotnet run --project src/MCP_Rhino.Server -- delete-object-user-text <3dm文件路径> <entrySpec>。entrySpec 格式: objectId|key;objectId|key");
+            Console.WriteLine("Usage: dotnet run --project src/MCP_Rhino.Server -- delete-object-user-text <active-3dm-file-path> <entrySpec>. entrySpec format: objectId|key;objectId|key");
             return true;
         }
 
@@ -436,7 +537,7 @@ public sealed partial class DeveloperCommandHandler
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"对象级 user text 删除参数解析失败: {ex.Message}");
+            Console.WriteLine($"Object user text delete argument parsing failed: {ex.Message}");
         }
 
         return true;
@@ -446,7 +547,7 @@ public sealed partial class DeveloperCommandHandler
     {
         if (args.Length < 2)
         {
-            Console.WriteLine("用法: dotnet run --project src/MCP_Rhino.Server -- get-document-user-strings <3dm文件路径>");
+            Console.WriteLine("Usage: dotnet run --project src/MCP_Rhino.Server -- get-document-user-strings <active-3dm-file-path>");
             return true;
         }
 
@@ -465,7 +566,7 @@ public sealed partial class DeveloperCommandHandler
     {
         if (args.Length < 3)
         {
-            Console.WriteLine("用法: dotnet run --project src/MCP_Rhino.Server -- set-document-user-strings <3dm文件路径> <entrySpec>。entrySpec 格式: key=value;section|entry=value");
+            Console.WriteLine("Usage: dotnet run --project src/MCP_Rhino.Server -- set-document-user-strings <active-3dm-file-path> <entrySpec>. entrySpec format: key=value;section|entry=value");
             return true;
         }
 
@@ -484,7 +585,7 @@ public sealed partial class DeveloperCommandHandler
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"文档级 user string 写入参数解析失败: {ex.Message}");
+            Console.WriteLine($"Document user string write argument parsing failed: {ex.Message}");
         }
 
         return true;
@@ -494,7 +595,7 @@ public sealed partial class DeveloperCommandHandler
     {
         if (args.Length < 3)
         {
-            Console.WriteLine("用法: dotnet run --project src/MCP_Rhino.Server -- delete-document-user-strings <3dm文件路径> <entrySpec>。entrySpec 格式: key;section|entry");
+            Console.WriteLine("Usage: dotnet run --project src/MCP_Rhino.Server -- delete-document-user-strings <active-3dm-file-path> <entrySpec>. entrySpec format: key;section|entry");
             return true;
         }
 
@@ -513,7 +614,7 @@ public sealed partial class DeveloperCommandHandler
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"文档级 user string 删除参数解析失败: {ex.Message}");
+            Console.WriteLine($"Document user string delete argument parsing failed: {ex.Message}");
         }
 
         return true;

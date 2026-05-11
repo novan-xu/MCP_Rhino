@@ -15,10 +15,11 @@ When adding a new rule file, decide by intent: *how to build* goes to `Project_G
 ## Routing Rules
 
 1. Route tasks autonomously. Do not require the user to name a skill.
-2. Prefer `Tool` for atomic tasks.
-3. Prefer `Skill` for fixed, repeatable multi-step workflows.
-4. Prefer `Agent` for goal-driven tasks with branching, sequencing, or cross-skill orchestration.
-5. If an atomic tool chain and a skill tool can both complete the task, prefer the skill tool.
+2. Prefer MCP `Resource` only for reference-only content that does not inspect, query, export, or mutate the live Rhino document.
+3. Prefer `Tool` for atomic live Rhino tasks.
+4. Prefer `Skill` for fixed, repeatable multi-step workflows.
+5. Prefer `Agent` for goal-driven tasks with branching, sequencing, or cross-skill orchestration.
+6. If an atomic tool chain and a skill tool can both complete the task, prefer the skill tool.
 
 ## Runtime Steps
 
@@ -34,6 +35,7 @@ When adding a new rule file, decide by intent: *how to build* goes to `Project_G
 - In bound mode, `FilePath` is treated as prompt context only; the server rewrites it to the bound document path. In global debug mode, `FilePath` must match `RhinoDoc.ActiveDoc.Path`.
 - Panel-launched LLM sessions receive the runtime-only policy bundle from `src/MCP_Rhino.Server/Prompts/Runtime/McpRhinoRuntimePolicyBundle.md`; they do not inherit repository construction rules from `AGENTS.md`.
 - Repository-workspace / test-route sessions do not receive this panel runtime policy as injected prompt context. They run from the repository workspace and must follow `AGENTS.md`, `Runtime_Workflow/`, and `Project_Guides/` instead.
+- MCP resources, when registered, are reference-only surfaces. They may be used for static RhinoCommon/RhinoScript references, local tool help, or modeling policy text. They must not be used as a substitute for live document reads, previews, mutations, selection state, viewport state, or filesystem export.
 
 ### 1. Assess
 
@@ -41,6 +43,7 @@ Before execution, assess:
 
 - task type
 - current `tool / skill / agent` coverage
+- current reference `resource` coverage, if the task asks for static documentation or guidance
 - execution reliability
 
 Assessment may lead to only one of two branches:
@@ -54,13 +57,15 @@ Do not wait for execution failure before declaring a capability gap.
 
 Choose one path:
 
+- **Resource**: static reference or documentation lookup only. *Examples: read local RhinoCommon reference notes, browse generated tool help, inspect modeling policy text.* If the requested information depends on the current Rhino document, do not use a resource.
 - **Tool**: clear target, clear inputs, few calls, no complex branching. *Examples: read layers, export files, create basic geometry, read attributes or measurements.*
 - **Skill**: fixed workflow, repeated pattern, clear boundary, existing skill coverage. *Examples: filter-then-confirm, preview-then-apply.*
 - **Agent**: dynamic next-step selection, branching, cross-skill coordination. *Examples: audit-then-choose-analysis-path, state-driven branching.*
 
 ## Layer Boundaries
 
-- **Tool**: single capability, directly exposed, minimal orchestration
+- **Resource**: reference-only content; no live Rhino truth, no filesystem writes, no mutation, no preview-of-mutation.
+- **Tool**: single executable or inspectable capability, directly exposed, minimal orchestration
 - **Skill**: reusable workflow built from tools or services
 - **Agent**: goal-driven routing and orchestration. Prefer Skill over Tool; never touch low-level Rhino details directly.
 
@@ -73,6 +78,7 @@ If current capabilities are insufficient, stop and report:
 1. why the task cannot be completed reliably
 2. what capability is missing
 3. which layer it belongs to:
+   - reference-only content -> `Resource`
    - atomic capability -> `Tool`
    - fixed workflow -> `Skill`
    - dynamic orchestration -> `Agent`
@@ -108,6 +114,14 @@ All construction must follow all Markdown guide files under `Project_Guides/`.
   - boundaries
   - non-applicable cases
 
+## Tool And Resource Metadata
+
+- Tool routing metadata is carried by method-level C# `[Description]` attributes. Do not maintain a second hand-written tool catalog for runtime routing.
+- Resource routing metadata is carried by MCP resource names, URIs, and descriptions after resources are registered.
+- Generated inventories are validation output only. Use them to audit coverage, duplicate method names, descriptions, safety annotations, and resource lists; do not treat them as the runtime source of truth.
+- If a client cannot reliably read MCP resources, use a read-only `Tools/Reference` fallback only for the same reference-only content. Do not move live Rhino reads into resources or reference tools.
+- When multiple tools appear to cover the same live-only capability, prefer the canonical structured tool with the shortest stable name. Current examples: use `FilterObjects` for layer/type/user-attribute object filtering, `FindLayerCandidates` for layer disambiguation, `GetLayers` for layer inventory, and `Tools/Blocks` preview/apply tools for block lifecycle.
+
 ## Skill Candidate Suggestion
 
 Use `Runtime_Log/` as the basis for identifying repeated task patterns.
@@ -140,5 +154,5 @@ Do not start planning unless the user explicitly asks to begin.
 Example:
 
 ```json
-{"ts":"2026-04-23T13:36","task":"add spheres on layer X","tools":["CreatePointsTool","GetLayersInLiveTool"]}
+{"ts":"2026-04-23T13:36","task":"add spheres on layer X","tools":["CreatePointsTool","GetLayers"]}
 ```

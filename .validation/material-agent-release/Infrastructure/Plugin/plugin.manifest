@@ -1,0 +1,6 @@
+{
+  "name": "MCP_Rhino",
+  "id": "7A3FC2F0-24A8-4B79-BE58-5A08CFB0D10A",
+  "version": "1.0.0",
+  "description": "Rhino plugin host for MCP_Rhino named-pipe MCP transport."
+}

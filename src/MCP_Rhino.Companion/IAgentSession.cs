@@ -6,7 +6,7 @@ public interface IAgentSession : IDisposable
 
     Task StartAsync(CancellationToken cancellationToken);
 
-    Task SendUserMessageAsync(string text, CancellationToken cancellationToken);
+    Task SendUserMessageAsync(CompanionUserMessage message, CancellationToken cancellationToken);
 
     void Stop();
 }

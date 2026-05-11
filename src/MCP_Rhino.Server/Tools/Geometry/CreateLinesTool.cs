@@ -17,7 +17,7 @@ public sealed class CreateLinesTool
     }
 
     [McpServerTool(ReadOnly = false, Destructive = false, OpenWorld = false)]
-    [Description("在 Rhino .3dm 文件中批量创建线对象。")]
+    [Description("Create batch line curve objects in the current live Rhino document on an existing layer.")]
     public OperationResponse<GeometryCreationResponse> CreateLines(
         string filePath,
         List<LineItemRequest> items,

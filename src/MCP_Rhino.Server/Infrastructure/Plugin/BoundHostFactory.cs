@@ -25,6 +25,7 @@ public static class BoundHostFactory
         builder.Services
             .AddMcpServer()
             .AddRhinoTools()
+            .AddRhinoResources()
             .WithStreamServerTransport(input, output);
 
         return builder.Build();

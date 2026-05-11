@@ -34,7 +34,7 @@ public sealed class LiveRhinoGeometryValidator : ILiveGeometryValidator
     {
         if (string.IsNullOrWhiteSpace(attributes.LayerFullPath))
         {
-            return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("错误：创建几何要求提供 LayerFullPath。");
+            return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("Geometry creation requires LayerFullPath.");
         }
 
         OperationResponse<IReadOnlyList<ObjectEditWarning>> attributeValidation = ValidateAttributes(attributes);
@@ -67,7 +67,7 @@ public sealed class LiveRhinoGeometryValidator : ILiveGeometryValidator
             case GeometryTransformKind.Translate:
                 if (!AllFinite(spec.VectorX, spec.VectorY, spec.VectorZ))
                 {
-                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("错误：Translate 要求提供有限的 VectorX / VectorY / VectorZ。");
+                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("Translate requires finite VectorX, VectorY, and VectorZ values.");
                 }
                 break;
 
@@ -77,29 +77,29 @@ public sealed class LiveRhinoGeometryValidator : ILiveGeometryValidator
                         spec.AxisX, spec.AxisY, spec.AxisZ,
                         spec.AngleRadians))
                 {
-                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("错误：Rotate 要求提供有限的中心点、轴向量与角度。");
+                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("Rotate requires finite center point, axis vector, and angle values.");
                 }
 
                 if (IsZeroVector(spec.AxisX, spec.AxisY, spec.AxisZ))
                 {
-                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("错误：Rotate 的 Axis 向量不能为零。");
+                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("Rotate axis vector cannot be zero.");
                 }
                 break;
 
             case GeometryTransformKind.UniformScale:
                 if (!AllFinite(spec.CenterX, spec.CenterY, spec.CenterZ, spec.ScaleFactor))
                 {
-                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("错误：UniformScale 要求提供有限的中心点与缩放因子。");
+                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("UniformScale requires finite center point and scale factor values.");
                 }
 
                 if (Math.Abs(spec.ScaleFactor) <= NearZeroTolerance)
                 {
-                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("错误：缩放因子不能接近 0。");
+                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("Scale factor cannot be near zero.");
                 }
                 break;
 
             default:
-                return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail($"错误：不支持的变换类型 {spec.Kind}。");
+                return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail($"Unsupported transform kind: {spec.Kind}.");
         }
 
         return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Ok(Array.Empty<ObjectEditWarning>());
@@ -111,7 +111,7 @@ public sealed class LiveRhinoGeometryValidator : ILiveGeometryValidator
     {
         if (spec.ObjectId == Guid.Empty)
         {
-            return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("错误：ReplaceGeometry entry 的 ObjectId 不能为空。");
+            return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("ReplaceGeometry entry ObjectId cannot be empty.");
         }
 
         OperationResponse<IReadOnlyList<ObjectEditWarning>> geometryValidation = ValidateGeometrySpec(spec.Geometry);
@@ -131,7 +131,7 @@ public sealed class LiveRhinoGeometryValidator : ILiveGeometryValidator
         if (!compatible)
         {
             return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail(
-                $"错误：目标对象 [{target.ObjectId}] 的类型 [{target.NormalizedObjectType}] 与新几何 [{spec.Geometry.Primitive}] 不兼容。");
+                $"Target object [{target.ObjectId}] type [{target.NormalizedObjectType}] is incompatible with new geometry [{spec.Geometry.Primitive}].");
         }
 
         return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Ok(geometryValidation.Data!);
@@ -143,24 +143,24 @@ public sealed class LiveRhinoGeometryValidator : ILiveGeometryValidator
     {
         if (spec.ObjectId == Guid.Empty)
         {
-            return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("错误：EditControlPoints entry 的 ObjectId 不能为空。");
+            return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("EditControlPoints entry ObjectId cannot be empty.");
         }
 
         if (!AllFinite(spec.X, spec.Y, spec.Z))
         {
-            return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("错误：控制点坐标必须为有限数值。");
+            return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("Control point coordinates must be finite values.");
         }
 
         if (spec.Weight.HasValue)
         {
             if (!IsFinite(spec.Weight.Value))
             {
-                return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("错误：控制点 weight 必须为有限数值。");
+                return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("Control point weight must be a finite value.");
             }
 
             if (spec.Weight.Value <= NearZeroTolerance)
             {
-                return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("错误：控制点 weight 必须大于 0。");
+                return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("Control point weight must be greater than zero.");
             }
         }
 
@@ -169,31 +169,31 @@ public sealed class LiveRhinoGeometryValidator : ILiveGeometryValidator
             case ControlPointTargetMode.CurveIndex:
                 if (spec.PointIndex is null || spec.PointIndex < 0)
                 {
-                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("错误：CurveIndex 模式要求提供非负的 PointIndex。");
+                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("CurveIndex mode requires a non-negative PointIndex.");
                 }
 
                 if (!string.Equals(target.GeometryTypeName, "NurbsCurve", StringComparison.OrdinalIgnoreCase))
                 {
                     return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail(
-                        $"错误：对象 [{target.ObjectId}] 不是 NurbsCurve，不能执行 CurveIndex 控制点编辑。");
+                        $"Object [{target.ObjectId}] is not a NurbsCurve and cannot use CurveIndex control point editing.");
                 }
                 break;
 
             case ControlPointTargetMode.SurfaceUV:
                 if (spec.UIndex is null || spec.UIndex < 0 || spec.VIndex is null || spec.VIndex < 0)
                 {
-                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("错误：SurfaceUV 模式要求提供非负的 UIndex / VIndex。");
+                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("SurfaceUV mode requires non-negative UIndex and VIndex values.");
                 }
 
                 if (!string.Equals(target.GeometryTypeName, "NurbsSurface", StringComparison.OrdinalIgnoreCase))
                 {
                     return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail(
-                        $"错误：对象 [{target.ObjectId}] 不是 NurbsSurface，不能执行 SurfaceUV 控制点编辑。");
+                        $"Object [{target.ObjectId}] is not a NurbsSurface and cannot use SurfaceUV control point editing.");
                 }
                 break;
 
             default:
-                return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail($"错误：不支持的控制点目标模式 {spec.TargetMode}。");
+                return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail($"Unsupported control point target mode: {spec.TargetMode}.");
         }
 
         return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Ok(Array.Empty<ObjectEditWarning>());
@@ -247,14 +247,14 @@ public sealed class LiveRhinoGeometryValidator : ILiveGeometryValidator
                 || attributes.Color.G is < 0 or > 255
                 || attributes.Color.B is < 0 or > 255))
         {
-            return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("错误：颜色值必须在 0-255 范围内。");
+            return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("Color values must be in the 0-255 range.");
         }
 
         foreach ((string key, _) in attributes.UserText)
         {
             if (string.IsNullOrWhiteSpace(key))
             {
-                return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("错误：UserText key 不能为空。");
+                return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("UserText key cannot be empty.");
             }
         }
 
@@ -269,7 +269,7 @@ public sealed class LiveRhinoGeometryValidator : ILiveGeometryValidator
             GeometryPrimitiveKind.Line => ValidateLine(spec),
             GeometryPrimitiveKind.Arc => ValidateArc(spec),
             GeometryPrimitiveKind.Surface => ValidateSurface(spec),
-            _ => OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail($"错误：不支持的几何类型 {spec.Primitive}。")
+            _ => OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail($"Unsupported geometry type: {spec.Primitive}.")
         };
     }
 
@@ -277,7 +277,7 @@ public sealed class LiveRhinoGeometryValidator : ILiveGeometryValidator
     {
         if (!AllFinite(spec.X, spec.Y, spec.Z))
         {
-            return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("错误：Point 坐标必须为有限数值。");
+            return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("Point coordinates must be finite values.");
         }
 
         return ValidateBBoxWarning(new Point(new Point3d(spec.X, spec.Y, spec.Z)));
@@ -287,7 +287,7 @@ public sealed class LiveRhinoGeometryValidator : ILiveGeometryValidator
     {
         if (!AllFinite(spec.StartX, spec.StartY, spec.StartZ, spec.EndX, spec.EndY, spec.EndZ))
         {
-            return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("错误：Line 的起点和终点必须为有限数值。");
+            return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("Line start and end points must be finite values.");
         }
 
         var line = new Line(
@@ -296,7 +296,7 @@ public sealed class LiveRhinoGeometryValidator : ILiveGeometryValidator
 
         if (line.Length <= NearZeroTolerance)
         {
-            return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("错误：Line 不能为零长度。");
+            return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("Line cannot have zero length.");
         }
 
         return ValidateBBoxWarning(new LineCurve(line));
@@ -312,7 +312,7 @@ public sealed class LiveRhinoGeometryValidator : ILiveGeometryValidator
                         spec.MidX, spec.MidY, spec.MidZ,
                         spec.EndX, spec.EndY, spec.EndZ))
                 {
-                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("错误：三点圆弧要求三组有限点坐标。");
+                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("ThreePoint arc construction requires three finite point coordinates.");
                 }
 
                 var threePointArc = new Arc(
@@ -322,7 +322,7 @@ public sealed class LiveRhinoGeometryValidator : ILiveGeometryValidator
 
                 if (!threePointArc.IsValid)
                 {
-                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("错误：Arc 三点构造失败，可能三点共线或退化。");
+                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("Arc three-point construction failed; points may be collinear or degenerate.");
                 }
 
                 return ValidateBBoxWarning(new ArcCurve(threePointArc));
@@ -333,17 +333,17 @@ public sealed class LiveRhinoGeometryValidator : ILiveGeometryValidator
                         spec.NormalX, spec.NormalY, spec.NormalZ,
                         spec.Radius, spec.StartAngleRadians, spec.EndAngleRadians))
                 {
-                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("错误：圆心半径圆弧要求提供有限的中心、法向、半径与角度。");
+                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("CenterRadius arc construction requires finite center, normal, radius, and angle values.");
                 }
 
                 if (spec.Radius <= NearZeroTolerance)
                 {
-                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("错误：Arc 半径必须大于 0。");
+                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("Arc radius must be greater than zero.");
                 }
 
                 if (IsZeroVector(spec.NormalX, spec.NormalY, spec.NormalZ))
                 {
-                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("错误：Arc 法向量不能为零。");
+                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("Arc normal vector cannot be zero.");
                 }
 
                 var plane = new Plane(
@@ -353,13 +353,13 @@ public sealed class LiveRhinoGeometryValidator : ILiveGeometryValidator
                 var arc = new Arc(circle, new Interval(spec.StartAngleRadians, spec.EndAngleRadians));
                 if (!arc.IsValid)
                 {
-                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("错误：Arc 圆心半径构造失败。");
+                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("Arc center-radius construction failed.");
                 }
 
                 return ValidateBBoxWarning(new ArcCurve(arc));
 
             default:
-                return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail($"错误：不支持的圆弧构造模式 {spec.ArcMode}。");
+                return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail($"Unsupported arc construction mode: {spec.ArcMode}.");
         }
     }
 
@@ -374,7 +374,7 @@ public sealed class LiveRhinoGeometryValidator : ILiveGeometryValidator
                         spec.Corner2X, spec.Corner2Y, spec.Corner2Z,
                         spec.Corner3X, spec.Corner3Y, spec.Corner3Z))
                 {
-                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("错误：四角曲面要求四组有限角点坐标。");
+                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("FourCorners surface construction requires four finite corner point coordinates.");
                 }
 
                 NurbsSurface cornerSurface = NurbsSurface.Create(3, false, 2, 2, 2, 2);
@@ -391,7 +391,7 @@ public sealed class LiveRhinoGeometryValidator : ILiveGeometryValidator
 
                 if (!cornerSurface.IsValid)
                 {
-                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("错误：四角曲面构造失败，可能角点退化。");
+                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("FourCorners surface construction failed; corner points may be degenerate.");
                 }
 
                 return ValidateBBoxWarning(cornerSurface);
@@ -402,17 +402,17 @@ public sealed class LiveRhinoGeometryValidator : ILiveGeometryValidator
                         spec.NormalX, spec.NormalY, spec.NormalZ,
                         spec.ULength, spec.VLength))
                 {
-                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("错误：平面曲面要求提供有限的原点、法向和尺寸。");
+                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("Plane surface construction requires finite origin, normal, and dimension values.");
                 }
 
                 if (IsZeroVector(spec.NormalX, spec.NormalY, spec.NormalZ))
                 {
-                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("错误：平面曲面法向量不能为零。");
+                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("Plane surface normal vector cannot be zero.");
                 }
 
                 if (spec.ULength <= NearZeroTolerance || spec.VLength <= NearZeroTolerance)
                 {
-                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("错误：平面曲面 U / V 尺寸必须大于 0。");
+                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("Plane surface U and V dimensions must be greater than zero.");
                 }
 
                 var planeSurface = new PlaneSurface(
@@ -424,13 +424,13 @@ public sealed class LiveRhinoGeometryValidator : ILiveGeometryValidator
 
                 if (!planeSurface.IsValid)
                 {
-                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("错误：平面曲面构造失败。");
+                    return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail("Plane surface construction failed.");
                 }
 
                 return ValidateBBoxWarning(planeSurface);
 
             default:
-                return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail($"错误：不支持的曲面构造模式 {spec.SurfaceMode}。");
+                return OperationResponse<IReadOnlyList<ObjectEditWarning>>.Fail($"Unsupported surface construction mode: {spec.SurfaceMode}.");
         }
     }
 
@@ -443,7 +443,7 @@ public sealed class LiveRhinoGeometryValidator : ILiveGeometryValidator
             warnings.Add(new ObjectEditWarning
             {
                 Code = "LARGE_BBOX",
-                Message = "几何 bbox 对角线超过 1e12，疑似单位不匹配。"
+                Message = "Geometry bounding box diagonal exceeds 1e12; units may be mismatched."
             });
         }
 

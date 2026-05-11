@@ -17,7 +17,7 @@ public sealed class CreateArcsTool
     }
 
     [McpServerTool(ReadOnly = false, Destructive = false, OpenWorld = false)]
-    [Description("在 Rhino .3dm 文件中批量创建圆弧对象。")]
+    [Description("Create batch arc curve objects in the current live Rhino document on an existing layer.")]
     public OperationResponse<GeometryCreationResponse> CreateArcs(
         string filePath,
         List<ArcItemRequest> items,

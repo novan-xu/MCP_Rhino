@@ -17,7 +17,7 @@ public sealed class EditControlPointsTool
     }
 
     [McpServerTool(ReadOnly = false, Destructive = false, OpenWorld = false)]
-    [Description("按 ObjectId 编辑 NurbsCurve / NurbsSurface 的控制点，并覆盖写回原文件。")]
+    [Description("Edit NurbsCurve or NurbsSurface control points in the current live Rhino document by ObjectId. Uses one Rhino undo record and does not read or write external files.")]
     public OperationResponse<GeometryModificationResponse> EditControlPoints(
         string filePath,
         List<ControlPointEditEntryRequest> entries)

@@ -1,24 +1,26 @@
 using System.ComponentModel;
-using ModelContextProtocol.Server;
 using MCP_Rhino.Server.Contracts.Requests;
+using MCP_Rhino.Server.Contracts.Responses;
 using MCP_Rhino.Server.Domain.Enums;
-using MCP_Rhino.Server.Skills.Inspection;
+using MCP_Rhino.Server.Domain.Models;
+using MCP_Rhino.Server.Skills.Editing;
+using ModelContextProtocol.Server;
 
 namespace MCP_Rhino.Server.Tools.Analysis;
 
 [McpServerToolType]
 public sealed class FilterObjectsTool
 {
-    private readonly CompositeObjectFilterSkill _compositeObjectFilterSkill;
+    private readonly LiveObjectSelectionSkill _objectSelectionSkill;
 
-    public FilterObjectsTool(CompositeObjectFilterSkill compositeObjectFilterSkill)
+    public FilterObjectsTool(LiveObjectSelectionSkill objectSelectionSkill)
     {
-        _compositeObjectFilterSkill = compositeObjectFilterSkill;
+        _objectSelectionSkill = objectSelectionSkill;
     }
 
     [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
-    [Description("按单一条件或任意组合条件筛查 Rhino 物体。当前支持 layer、object type、user attributes，并支持 AND/OR 组合。")]
-    public string FilterObjects(
+    [Description("Filter objects in the current live Rhino document by confirmed layer path, unambiguous layer query, object type, and/or user attributes. Returns structured object metadata; ambiguous layer queries fail with candidate layers so the caller can retry with confirmedLayerFullPaths.")]
+    public OperationResponse<RhinoObjectFilterResult> FilterObjects(
         string filePath,
         List<string>? layerQueries = null,
         List<string>? confirmedLayerFullPaths = null,
@@ -27,7 +29,7 @@ public sealed class FilterObjectsTool
         FilterMatchMode matchMode = FilterMatchMode.All,
         FilterMatchMode userAttributeMatchMode = FilterMatchMode.All)
     {
-        return _compositeObjectFilterSkill.Filter(new FilterObjectsRequest
+        return _objectSelectionSkill.Select(new FilterObjectsRequest
         {
             FilePath = filePath,
             LayerQueries = layerQueries ?? new List<string>(),

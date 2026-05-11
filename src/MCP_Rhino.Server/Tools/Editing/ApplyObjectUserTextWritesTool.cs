@@ -17,7 +17,7 @@ public sealed class ApplyObjectUserTextWritesTool
     }
 
     [McpServerTool(ReadOnly = false, Destructive = false, OpenWorld = false)]
-    [Description("按对象批量写入 Rhino user text。每条 entry 直接指定 ObjectId、Key、Value，可承接其他工具/技能/外部端口产出的对象级信息。")]
+    [Description("Apply object user text writes in the current live Rhino document. Each entry targets one ObjectId, key, and value.")]
     public OperationResponse<ObjectEditExecutionResponse> ApplyObjectUserTextWrites(
         string filePath,
         List<ObjectScopedUserTextEntryRequest> entries)

@@ -52,7 +52,7 @@ public sealed partial class DeveloperCommandHandler
             int separatorIndex = token.IndexOf(':');
             if (separatorIndex <= 0)
             {
-                throw new InvalidOperationException($"无效 editSpec 片段: {token}");
+                throw new InvalidOperationException($"Invalid editSpec fragment: {token}");
             }
 
             string operationName = token[..separatorIndex].Trim().ToLowerInvariant();
@@ -65,7 +65,7 @@ public sealed partial class DeveloperCommandHandler
                     int equalIndex = payload.IndexOf('=');
                     if (equalIndex <= 0)
                     {
-                        throw new InvalidOperationException($"SetUserText 格式应为 set-user:key=value，收到: {token}");
+                        throw new InvalidOperationException($"SetUserText format must be set-user:key=value. Received: {token}");
                     }
 
                     operations.Add(new ObjectEditOperationRequest
@@ -101,7 +101,7 @@ public sealed partial class DeveloperCommandHandler
                         || !int.TryParse(colorParts[1], out int g)
                         || !int.TryParse(colorParts[2], out int b))
                     {
-                        throw new InvalidOperationException($"SetDisplayColor 格式应为 set-color:r,g,b，收到: {token}");
+                        throw new InvalidOperationException($"SetDisplayColor format must be set-color:r,g,b. Received: {token}");
                     }
 
                     operations.Add(new ObjectEditOperationRequest
@@ -117,7 +117,7 @@ public sealed partial class DeveloperCommandHandler
                     break;
 
                 default:
-                    throw new InvalidOperationException($"未知编辑操作: {operationName}");
+                    throw new InvalidOperationException($"Unknown edit operation: {operationName}");
             }
         }
 
@@ -132,19 +132,19 @@ public sealed partial class DeveloperCommandHandler
             int pipeIndex = token.IndexOf('|');
             if (pipeIndex <= 0)
             {
-                throw new InvalidOperationException($"无效 entrySpec 片段: {token}");
+                throw new InvalidOperationException($"Invalid entrySpec fragment: {token}");
             }
 
             if (!Guid.TryParse(token[..pipeIndex], out Guid objectId))
             {
-                throw new InvalidOperationException($"无效 ObjectId: {token[..pipeIndex]}");
+                throw new InvalidOperationException($"Invalid ObjectId: {token[..pipeIndex]}");
             }
 
             string payload = token[(pipeIndex + 1)..].Trim();
             int equalIndex = payload.IndexOf('=');
             if (equalIndex <= 0)
             {
-                throw new InvalidOperationException($"entrySpec 格式应为 objectId|key=value，收到: {token}");
+                throw new InvalidOperationException($"entrySpec format must be objectId|key=value. Received: {token}");
             }
 
             entries.Add(new ObjectScopedUserTextEntryRequest
@@ -166,18 +166,18 @@ public sealed partial class DeveloperCommandHandler
             int pipeIndex = token.IndexOf('|');
             if (pipeIndex <= 0)
             {
-                throw new InvalidOperationException($"无效 entrySpec 片段: {token}。期望 objectId|key");
+                throw new InvalidOperationException($"Invalid entrySpec fragment: {token}. Expected objectId|key");
             }
 
             if (!Guid.TryParse(token[..pipeIndex], out Guid objectId))
             {
-                throw new InvalidOperationException($"无效 ObjectId: {token[..pipeIndex]}");
+                throw new InvalidOperationException($"Invalid ObjectId: {token[..pipeIndex]}");
             }
 
             string key = token[(pipeIndex + 1)..].Trim();
             if (string.IsNullOrWhiteSpace(key))
             {
-                throw new InvalidOperationException($"entrySpec key 不能为空，收到: {token}");
+                throw new InvalidOperationException($"entrySpec key cannot be empty. Received: {token}");
             }
 
             entries.Add(new ObjectScopedUserTextKeyRequest
@@ -198,7 +198,7 @@ public sealed partial class DeveloperCommandHandler
             int equalIndex = token.IndexOf('=');
             if (equalIndex <= 0)
             {
-                throw new InvalidOperationException($"entrySpec 格式应为 key=value 或 section|entry=value，收到: {token}");
+                throw new InvalidOperationException($"entrySpec format must be key=value or section|entry=value. Received: {token}");
             }
 
             string keyPart = token[..equalIndex].Trim();
@@ -224,7 +224,7 @@ public sealed partial class DeveloperCommandHandler
             (string? section, string key) = SplitSectionKey(token.Trim());
             if (string.IsNullOrWhiteSpace(key))
             {
-                throw new InvalidOperationException($"entrySpec key 不能为空，收到: {token}");
+                throw new InvalidOperationException($"entrySpec key cannot be empty. Received: {token}");
             }
 
             entries.Add(new DocumentUserStringEntryRequest
@@ -257,7 +257,7 @@ public sealed partial class DeveloperCommandHandler
         {
             if (!Guid.TryParse(token, out Guid objectId))
             {
-                throw new InvalidOperationException($"无效 ObjectId: {token}");
+                throw new InvalidOperationException($"Invalid ObjectId: {token}");
             }
 
             guids.Add(objectId);

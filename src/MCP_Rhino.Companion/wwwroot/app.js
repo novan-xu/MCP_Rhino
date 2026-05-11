@@ -36,6 +36,7 @@ const composerBox = document.getElementById("composerBox");
 const composerInput = document.getElementById("composerInput");
 const sendButton = document.getElementById("sendButton");
 const attachButton = document.getElementById("attachButton");
+const attachmentInput = document.getElementById("attachmentInput");
 const attachmentChips = document.getElementById("attachmentChips");
 
 const dragOverlay = document.getElementById("dragOverlay");
@@ -91,7 +92,12 @@ const DEFAULT_RATE_PER_MTOK_BY_CLI = {
 
 const toolCards = new Map();
 const attached = [];
+const MAX_ATTACHMENTS = 4;
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+const MAX_TOTAL_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+const IMAGE_MEDIA_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 let busy = false;
+let pendingSend = false;
 // `pinned` now means "force on top of every app". The default is off because
 // the Companion is already owned by the Rhino main window (always-on-top of
 // Rhino, follows minimize / restore).
@@ -576,19 +582,98 @@ function addDiff(diff) {
 
 /* ---------- Attachments ---------- */
 
+function mediaTypeForFile(file) {
+  const declared = String(file.type || "").toLowerCase();
+  if (IMAGE_MEDIA_TYPES.has(declared)) return declared;
+  const name = String(file.name || "").toLowerCase();
+  if (name.endsWith(".png")) return "image/png";
+  if (name.endsWith(".jpg") || name.endsWith(".jpeg")) return "image/jpeg";
+  if (name.endsWith(".webp")) return "image/webp";
+  return declared;
+}
+
+function totalAttachedBytes() {
+  return attached.reduce((sum, file) => sum + Number(file.sizeBytes || 0), 0);
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Unable to read attachment."));
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function readImageAttachment(file) {
+  const mediaType = mediaTypeForFile(file);
+  if (!IMAGE_MEDIA_TYPES.has(mediaType)) {
+    throw new Error(`${file.name || "Attachment"} is not a supported image type.`);
+  }
+  if (!Number.isFinite(file.size) || file.size <= 0) {
+    throw new Error(`${file.name || "Attachment"} is empty.`);
+  }
+  if (file.size > MAX_ATTACHMENT_BYTES) {
+    throw new Error(`${file.name} exceeds the ${formatBytes(MAX_ATTACHMENT_BYTES)} per-image limit.`);
+  }
+  if (totalAttachedBytes() + file.size > MAX_TOTAL_ATTACHMENT_BYTES) {
+    throw new Error(`Attachments exceed the ${formatBytes(MAX_TOTAL_ATTACHMENT_BYTES)} per-message limit.`);
+  }
+
+  const dataUrl = await readFileAsDataUrl(file);
+  const comma = dataUrl.indexOf(",");
+  const base64Data = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+  if (!base64Data) {
+    throw new Error(`${file.name || "Attachment"} did not produce image data.`);
+  }
+
+  return {
+    id: "a-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8),
+    name: file.name || "image",
+    mediaType,
+    kind: "image",
+    sizeBytes: file.size,
+    size: formatBytes(file.size),
+    base64Data,
+  };
+}
+
+async function addAttachmentFiles(fileList) {
+  const files = Array.from(fileList || []);
+  if (files.length === 0) return;
+
+  for (const file of files) {
+    if (attached.length >= MAX_ATTACHMENTS) {
+      addWarn("Attachment rejected", `At most ${MAX_ATTACHMENTS} images can be attached to one message.`);
+      break;
+    }
+
+    try {
+      const attachment = await readImageAttachment(file);
+      attached.push(attachment);
+    } catch (err) {
+      addWarn("Attachment rejected", err && err.message ? err.message : String(err));
+    }
+  }
+
+  refreshAttachmentChips();
+  updateSendButton();
+}
+
 function renderChip(file, withRemove) {
   const isImage = (file.kind === "image") || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(file.name || "");
+  const sizeText = file.size || formatBytes(Number(file.sizeBytes || 0));
   const iconSvg = isImage
     ? `<svg class="chip-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg>`
     : `<svg class="chip-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></svg>`;
   const remove = withRemove
-    ? `<button type="button" class="chip-remove" data-name="${escapeHtml(file.name)}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5l14 14M19 5L5 19"/></svg></button>`
+    ? `<button type="button" class="chip-remove" data-id="${escapeHtml(file.id || file.name)}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5l14 14M19 5L5 19"/></svg></button>`
     : "";
   return `
     <span class="chip">
       ${iconSvg}
       <span class="chip-name">${escapeHtml(file.name)}</span>
-      <span class="chip-size">${escapeHtml(file.size)}</span>
+      <span class="chip-size">${escapeHtml(sizeText)}</span>
       ${remove}
     </span>
   `;
@@ -604,10 +689,11 @@ function refreshAttachmentChips() {
   attachmentChips.innerHTML = attached.map((file) => renderChip(file, true)).join("");
   attachmentChips.querySelectorAll(".chip-remove").forEach((btn) => {
     btn.addEventListener("click", () => {
-      const name = btn.getAttribute("data-name");
-      const idx = attached.findIndex((f) => f.name === name);
+      const id = btn.getAttribute("data-id");
+      const idx = attached.findIndex((f) => (f.id || f.name) === id);
       if (idx >= 0) attached.splice(idx, 1);
       refreshAttachmentChips();
+      updateSendButton();
     });
   });
 }
@@ -641,6 +727,24 @@ function setInputEnabled(enabled) {
   attachButton.disabled = !enabled;
 }
 
+function outgoingAttachments() {
+  return attached.map((file) => ({
+    id: file.id,
+    name: file.name,
+    mediaType: file.mediaType,
+    kind: file.kind,
+    sizeBytes: file.sizeBytes,
+    base64Data: file.base64Data,
+  }));
+}
+
+function clearAcceptedComposer() {
+  composerInput.value = "";
+  attached.length = 0;
+  refreshAttachmentChips();
+  autoGrowComposer();
+}
+
 function send() {
   if (busy) {
     post("stop");
@@ -653,33 +757,18 @@ function send() {
 
   bumpContext(Math.ceil((text || "").length / 4) + attached.length * 500);
 
-  // Attachments render as chips for the user but are not yet uploaded through
-  // the host IPC. The host receives only the text body for now.
-  post("send", { text });
-
-  composerInput.value = "";
-  attached.length = 0;
-  refreshAttachmentChips();
-  autoGrowComposer();
+  pendingSend = true;
+  post("send", { text, attachments: outgoingAttachments() });
 
   busy = true;
+  setInputEnabled(false);
   updateSendButton();
 }
 
 /* ---------- Drag & drop ---------- */
 
 function handleDroppedFiles(fileList) {
-  const files = Array.from(fileList || []).slice(0, 4);
-  if (files.length === 0) return;
-  for (const f of files) {
-    attached.push({
-      name: f.name,
-      size: formatBytes(f.size),
-      kind: (f.type || "").startsWith("image/") ? "image" : "file",
-    });
-  }
-  refreshAttachmentChips();
-  updateSendButton();
+  addAttachmentFiles(fileList);
 }
 
 let dragDepth = 0;
@@ -998,10 +1087,26 @@ function loadHistorySession(id) {
 function openHistory() { renderHistory(); historyOverlay.classList.add("is-open"); }
 function closeHistory() { historyOverlay.classList.remove("is-open"); }
 
+function normalizeEventAttachments(attachments) {
+  if (!Array.isArray(attachments)) return [];
+  return attachments.map((file) => ({
+    id: file.id || file.name || "",
+    name: file.name || "image",
+    mediaType: file.mediaType || "",
+    kind: file.kind || "image",
+    sizeBytes: Number(file.sizeBytes || 0),
+    size: formatBytes(Number(file.sizeBytes || 0)),
+  }));
+}
+
 newChatButton.addEventListener("click", clearTranscript);
 pinButton.addEventListener("click", togglePin);
 attachButton.addEventListener("click", () => {
-  // No native file picker yet — drop is the primary path.
+  attachmentInput.value = "";
+  attachmentInput.click();
+});
+attachmentInput.addEventListener("change", () => {
+  addAttachmentFiles(attachmentInput.files);
 });
 
 settingsButton.addEventListener("click", openSettings);
@@ -1070,17 +1175,20 @@ function handleEvent(event) {
       // reason), reset the send button to its idle state.
       if (event.inputEnabled === true && busy) {
         busy = false;
+        pendingSend = false;
         updateSendButton();
       }
       break;
     case "message": {
       const role = (event.role || "assistant").toLowerCase();
       const text = event.text || "";
+      const attachments = normalizeEventAttachments(event.attachments);
       if (role === "user") {
-        // The composer already echoed the local user message; ignore
-        // duplicate echoes from the host but accept ones that arrive from
-        // outside the composer flow.
-        if (text) addUser(text);
+        if (text || attachments.length) addUser(text, attachments);
+        if (pendingSend) {
+          pendingSend = false;
+          clearAcceptedComposer();
+        }
       } else if (role === "system") {
         addSystem(text);
       } else if (role === "diagnostic") {

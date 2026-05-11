@@ -18,7 +18,7 @@ public sealed class PreviewDeleteObjectsTool
     }
 
     [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
-    [Description("预览 Rhino 对象删除操作，不落盘。")]
+    [Description("Preview Rhino object deletion in the current live document without mutating the document.")]
     public OperationResponse<GeometryModificationPreviewResponse> PreviewDeleteObjects(
         string filePath,
         List<Guid>? confirmedObjectIds = null,

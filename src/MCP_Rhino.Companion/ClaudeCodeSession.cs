@@ -146,12 +146,12 @@ public sealed class ClaudeCodeSession : IAgentSession
         await Task.CompletedTask.ConfigureAwait(false);
     }
 
-    public Task SendUserMessageAsync(string text, CancellationToken cancellationToken)
+    public Task SendUserMessageAsync(CompanionUserMessage message, CancellationToken cancellationToken)
     {
         if (_process is null || _process.HasExited)
         {
             Emit(CompanionUiEvent.Diagnostic("Claude Code was not running; restarting."));
-            return RestartAndSendAsync(text, cancellationToken);
+            return RestartAndSendAsync(message, cancellationToken);
         }
 
         if (!_inputEnabled || _process is null || _process.HasExited)
@@ -160,11 +160,11 @@ public sealed class ClaudeCodeSession : IAgentSession
             return Task.CompletedTask;
         }
 
-        Emit(CompanionUiEvent.Message("user", text));
-        return StreamJsonWriter.WriteUserMessageAsync(_process.StandardInput, text, cancellationToken);
+        Emit(CompanionUiEvent.Message("user", message.Text, message.AttachmentSummaries));
+        return StreamJsonWriter.WriteUserMessageAsync(_process.StandardInput, message, cancellationToken);
     }
 
-    private async Task RestartAndSendAsync(string text, CancellationToken cancellationToken)
+    private async Task RestartAndSendAsync(CompanionUserMessage message, CancellationToken cancellationToken)
     {
         await StartAsync(cancellationToken).ConfigureAwait(false);
         if (!_inputEnabled || _process is null || _process.HasExited)
@@ -173,8 +173,8 @@ public sealed class ClaudeCodeSession : IAgentSession
             return;
         }
 
-        Emit(CompanionUiEvent.Message("user", text));
-        await StreamJsonWriter.WriteUserMessageAsync(_process.StandardInput, text, cancellationToken).ConfigureAwait(false);
+        Emit(CompanionUiEvent.Message("user", message.Text, message.AttachmentSummaries));
+        await StreamJsonWriter.WriteUserMessageAsync(_process.StandardInput, message, cancellationToken).ConfigureAwait(false);
     }
 
     public void Stop()

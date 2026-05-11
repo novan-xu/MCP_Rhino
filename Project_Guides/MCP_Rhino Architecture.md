@@ -15,6 +15,7 @@
 ### 2. Server/
 - `DependencyInjection.cs`：注册内部服务、仓储、基础设施实现。
 - `ToolRegistration.cs`：注册 MCP tool 模块。
+- `ResourceRegistration.cs`：注册 MCP resource 模块。Resources 只能暴露 reference-only 内容；不得读取或修改 live Rhino 文档。
 - `AgentRegistration.cs`：注册 agent / skill 及未来编排组件。
 
 ### 3. Tools/
@@ -22,6 +23,27 @@
 - Tool 负责参数接收、调用 Application/Service、格式化输出。
 - Tool 中禁止堆积大段 Rhino 文件读写逻辑。
 - 命名统一使用 `*Tool` 后缀。
+- Tool family ownership:
+  - `Tools/Analysis`：live document inspection, filtering, resolving, measuring, intersections, metrics, and other read-only document analysis.
+  - `Tools/Geometry`：general geometry creation, transform, delete, replace, and object-level geometry mutations.
+  - `Tools/Geometry/Edit`：editable curve / surface descriptor, preview, and apply operations.
+  - `Tools/Geometry/Rebuild`：surface rebuild and direction correction workflows exposed as atomic MCP tools.
+  - `Tools/Geometry/Architecture`：architectural primitives, architectural booleans, openings, and architecture-specific block insertion tools.
+  - `Tools/Geometry/CurveOps`：future curve-derived construction, curve segmentation, split, offset, pipe, projection, and sweep/loft/extrude operations.
+  - `Tools/Geometry/SubD`：SubD cage preview, bounded SubD creation, soft product / cushion SubD creation, and SubD inspection tools.
+  - `Tools/Selection`：future Rhino UI selection reads and selection-state mutations.
+  - `Tools/Viewport`：future in-band viewport capture and viewport-only inspection. File-based exports stay under `Tools/File/Export`.
+  - `Tools/Reference`：future read-only searchable reference tools only when MCP resources are not reliable across clients.
+  - `Tools/Layers`：layer reads, previews, creates, edits, deletes, and purge operations.
+  - `Tools/Blocks`：block definition / instance inspection and lifecycle tools.
+  - `Tools/File`：document-level metadata and live file operations.
+  - `Tools/File/Export`：external file export tools; these are open-world.
+  - `Tools/File/Reference`：live external-reference state such as worksession attachments and linked block updates.
+  - `Tools/Drawing`：drawing-view setup, drawing export state, styling, and packaged drawing export.
+  - `Tools/Editing`：object attributes, object user text, and generic object edit preview/apply tools.
+  - `Tools/Modeling`：thin externally callable wrappers for goal-level modeling agents. These tools only adapt MCP requests to registered Agents/Skills, own safety annotations and routing descriptions, and must not duplicate orchestration or RhinoCommon logic.
+  - `Tools/Workflow`：repository workflow support tools such as activity logging.
+- Add a new Tool subfolder only when there are multiple related tools and a stable capability boundary. One-off tools should join the nearest existing family.
 - **执行模式约束**：所有 Tool 只能依赖 Live 适配接口获取当前 Rhino 文档真值；不得提供磁盘文件读取或写入兜底。详见「执行模式指南」章节。
 - **MCP 安全注解约束**：每个方法级 `[McpServerTool]` 必须显式声明 `ReadOnly`、`Destructive`、`OpenWorld`。详见「MCP Tool Safety Annotation Guidelines」章节。
 
@@ -68,7 +90,16 @@
 - Contracts 只负责数据交换结构，不承载复杂业务指南。
 - 命名统一使用 `*Request`、`*Response`、`*Message`。
 
-### 10. Prompts/
+### 10. Resources/
+- 放置 MCP resources 使用的 reference-only 内容与 provider。
+- Resource 不属于 Tool / Skill / Agent，不执行 Rhino 操作。
+- Resource 不得读取、检查、修改、导出 live Rhino 文档，也不得包装 mutation preview。
+- Resource 可用于 RhinoCommon / RhinoScript reference、tool help、static modeling policy、generated but non-executing documentation。
+- 命名统一使用 `*Resource` 后缀，注册入口统一通过 `Server/ResourceRegistration.cs`。
+- 如果某项能力需要 live document truth、Undo、selection、viewport state, or filesystem output, it belongs under `Tools/`, not `Resources/`.
+- If MCP resource support is not consistently available in a target client, add a read-only fallback under `Tools/Reference` and keep the resource as the preferred reference surface.
+
+### 11. Prompts/
 - 放置 Agent / Skill 使用的提示词模板。
 - 长 prompt 不要硬编码在 C# 类中。
 - 可使用 `.md`、`.txt`、`.yaml` 等文本文件组织。
@@ -84,7 +115,22 @@
 - 业务模型、值对象、指南 → `Domain/`
 - Rhino 适配（`RhinoDoc` 在线）/ IO / Logging / Config 实现 → `Infrastructure/`
 - 请求/响应/消息结构 → `Contracts/`
+- 静态 / reference-only MCP 内容 → `Resources/`
 - LLM 指令模板 → `Prompts/`
+
+## MCP Surface Governance
+
+- `Server/ToolRegistration.cs` remains the single MCP tool registration entry point and should keep assembly scanning via `WithToolsFromAssembly(...)`.
+- `Server/ResourceRegistration.cs` is the single MCP resource registration entry point and should keep assembly scanning via `WithResourcesFromAssembly(...)` when resources are enabled.
+- Do not introduce a central hand-maintained command dictionary or runtime tool catalog. C# `[Description]` attributes on tool/skill wrapper methods are the routing metadata source.
+- Generated inventories are validation output only. They may be printed by smoke tests or written as release-note artifacts, but they must not become a second runtime registry.
+- Every MCP tool method must have a non-empty `[Description]` describing the operation, expected inputs, and boundaries clearly enough for model routing.
+- MCP tool method names must stay unique across the server surface. If two operations need the same natural verb, make the method names more specific.
+- Do not expose equivalent live-only aliases such as both `Foo` and `FooInLive` after the capability has migrated to Live Only. Keep one canonical MCP method and remove the duplicate wrapper from the tool surface.
+- Do not keep thin single-criterion wrapper tools when a canonical structured tool covers the same criteria with equal or better routing metadata, unless the wrapper owns a stable domain boundary that materially reduces user error.
+- Preview/apply pairs are required when an operation can delete or replace existing Rhino objects, expand beyond explicitly confirmed object ids, produce uncertain result counts, or depend on ambiguous matching.
+- Creation-only tools may be apply-only when they only add new Rhino objects and do not delete, replace, purge, overwrite external files, or mutate selection outside their explicit request.
+- Tool/resource surface changes must keep the inventory smoke passing and must keep the MCP tool safety annotation smoke passing in Debug and Release builds.
 
 ## MCP Tool Safety Annotation Guidelines
 
@@ -95,6 +141,7 @@ Every future method-level `[McpServerTool]` must use explicit named safety annot
 - Export, logging, external-reference, or any tool that writes to caller-provided filesystem paths or external state must set `OpenWorld = true`. If it can overwrite or remove external output, set `Destructive = true`.
 - Never mark a mutation or export tool as read-only just to bypass Codex or another MCP client's approval behavior. If a destructive tool needs approval UX, solve that in the panel/client flow.
 - When adding, renaming, or removing an MCP tool, update `Project_Test/260506_TEST_mcp-tool-safety-annotations/DeveloperCommandHandler.McpToolSafetyAnnotationsSmokeTest.cs` and run `mcp-tool-safety-annotations-smoke-test`. The smoke must fail if any method-level `[McpServerTool]` is missing explicit `ReadOnly`, `Destructive`, or `OpenWorld` metadata.
+- MCP resources have no equivalent mutation-safety annotation in the current SDK surface. Therefore resources in this repository are restricted to reference-only content by architecture rule.
 
 ## 执行模式指南（Live Only）
 

@@ -17,7 +17,7 @@ public sealed class CreateSurfacesTool
     }
 
     [McpServerTool(ReadOnly = false, Destructive = false, OpenWorld = false)]
-    [Description("在 Rhino .3dm 文件中批量创建曲面对象。")]
+    [Description("Create batch surface objects in the current live Rhino document on an existing layer.")]
     public OperationResponse<GeometryCreationResponse> CreateSurfaces(
         string filePath,
         List<SurfaceItemRequest> items,

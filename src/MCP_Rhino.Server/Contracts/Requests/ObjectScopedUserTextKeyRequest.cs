@@ -4,9 +4,9 @@ namespace MCP_Rhino.Server.Contracts.Requests;
 
 public sealed class ObjectScopedUserTextKeyRequest
 {
-    [Description("目标对象的 GUID。")]
+    [Description("Target object GUID.")]
     public Guid ObjectId { get; set; }
 
-    [Description("要删除的 user text key。")]
+    [Description("User text key to delete.")]
     public string Key { get; set; } = string.Empty;
 }

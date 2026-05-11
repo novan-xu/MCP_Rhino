@@ -59,7 +59,7 @@ public sealed class CodexCliSession : IAgentSession
         return Task.CompletedTask;
     }
 
-    public async Task SendUserMessageAsync(string text, CancellationToken cancellationToken)
+    public async Task SendUserMessageAsync(CompanionUserMessage message, CancellationToken cancellationToken)
     {
         if (!_ready || string.IsNullOrWhiteSpace(_executablePath))
         {
@@ -67,7 +67,7 @@ public sealed class CodexCliSession : IAgentSession
             return;
         }
 
-        Emit(CompanionUiEvent.Message("user", text));
+        Emit(CompanionUiEvent.Message("user", message.Text, message.AttachmentSummaries));
         Emit(CompanionUiEvent.Input(false));
         Emit(CompanionUiEvent.SessionStatus("Codex working"));
 
@@ -75,7 +75,19 @@ public sealed class CodexCliSession : IAgentSession
         _currentTurnAssistant.Clear();
 
         string workingDirectory = CompanionWorkspace.GetWorkingDirectory(_options.PipeName);
-        string prompt = BuildPromptWithHistory(text);
+        string prompt = BuildPromptWithHistory(message);
+        CompanionAttachmentFileSet attachmentFiles;
+        try
+        {
+            attachmentFiles = CompanionAttachmentFileSet.WriteImages(message, workingDirectory);
+        }
+        catch (Exception ex)
+        {
+            Emit(CompanionUiEvent.Diagnostic("Failed to prepare image attachments for Codex: " + ex.Message));
+            Emit(CompanionUiEvent.SessionStatus("Codex ready"));
+            Emit(CompanionUiEvent.Input(true));
+            return;
+        }
 
         var arguments = new List<string>
         {
@@ -93,6 +105,12 @@ public sealed class CodexCliSession : IAgentSession
             "-c",
             $"mcp_servers.{McpServerName}.args=[{ToTomlString("--pipe")},{ToTomlString(_options.PipeName)}]"
         };
+
+        foreach (string imagePath in attachmentFiles.ImagePaths)
+        {
+            arguments.Add("-i");
+            arguments.Add(imagePath);
+        }
 
         if (!string.IsNullOrWhiteSpace(_options.ModelId))
         {
@@ -117,6 +135,7 @@ public sealed class CodexCliSession : IAgentSession
             Emit(CompanionUiEvent.Diagnostic("Failed to start codex: " + ex.Message));
             Emit(CompanionUiEvent.SessionStatus("Codex error"));
             Emit(CompanionUiEvent.Input(true));
+            attachmentFiles.Dispose();
             return;
         }
 
@@ -162,9 +181,10 @@ public sealed class CodexCliSession : IAgentSession
             }
 
             try { process.Dispose(); } catch (InvalidOperationException) { }
+            attachmentFiles.Dispose();
 
             // Commit the turn to in-memory history so the next exec sees it.
-            _history.Add(("user", text));
+            _history.Add(("user", message.ToHistoryText()));
             string assistantReply = _currentTurnAssistant.ToString().Trim();
             if (assistantReply.Length > 0)
             {
@@ -666,7 +686,7 @@ public sealed class CodexCliSession : IAgentSession
         return "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
     }
 
-    private string BuildPromptWithHistory(string newUserText)
+    private string BuildPromptWithHistory(CompanionUserMessage newUserMessage)
     {
         var sb = new System.Text.StringBuilder();
         sb.Append(BuildBoundDocumentPrompt());
@@ -686,7 +706,7 @@ public sealed class CodexCliSession : IAgentSession
             sb.AppendLine("[Latest user message]");
         }
 
-        sb.Append(newUserText);
+        sb.Append(newUserMessage.ToHistoryText());
         return sb.ToString();
     }
 

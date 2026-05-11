@@ -17,7 +17,7 @@ public sealed class CreatePointsTool
     }
 
     [McpServerTool(ReadOnly = false, Destructive = false, OpenWorld = false)]
-    [Description("在 Rhino .3dm 文件中批量创建点对象。")]
+    [Description("Create batch point objects in the current live Rhino document on an existing layer.")]
     public OperationResponse<GeometryCreationResponse> CreatePoints(
         string filePath,
         List<PointItemRequest> items,

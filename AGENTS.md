@@ -10,7 +10,7 @@ Do not treat it as the full rule body. Use it to decide which document set to fo
 
 This repository organizes work around three layers:
 
-- existing runtime capabilities: `tool / skill / agent`
+- existing runtime capabilities: `tool / skill / agent`, plus reference-only MCP `resource` content when present
 - capability construction rules: `Project_Guides/`
 - runtime task routing rules: `Runtime_Workflow/`
 
@@ -26,8 +26,9 @@ Your first job is to decide whether the user is asking to:
 Treat the request as a runtime task when the user wants the model to use existing Rhino-facing capabilities to:
 
 - inspect, query, filter, analyze, export, or modify Rhino data
+- read reference-only MCP resources that do not inspect or mutate Rhino data
 - complete a task with current tools
-- choose among existing `tool / skill / agent` paths
+- choose among existing `tool / skill / agent / resource` paths
 
 If the request is a runtime task, immediately follow:
 
@@ -64,7 +65,7 @@ Do not enter construction mode automatically just because the task is hard.
 Follow `Runtime_Workflow/MCP_Rhino Workflow.md` and:
 
 - assess before execution
-- choose `Tool`, `Skill`, or `Agent`
+- choose `Tool`, `Skill`, `Agent`, or reference `Resource` where the runtime workflow allows it
 - prefer `Skill` over an equivalent atomic tool chain
 - stop and report capability gaps instead of forcing execution
 

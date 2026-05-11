@@ -18,7 +18,7 @@ public sealed class PreviewObjectEditsTool
     }
 
     [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
-    [Description("预览 Rhino 物体批量编辑。支持 user text、图层、显示颜色修改，并复用现有筛查条件。")]
+    [Description("Preview batch object edits in the current live Rhino document, including user text, layer, and display color changes, without mutating the document.")]
     public OperationResponse<ObjectEditPreviewResponse> PreviewObjectEdits(
         string filePath,
         List<ObjectEditOperationRequest> operations,

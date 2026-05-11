@@ -18,6 +18,7 @@ public sealed record CompanionUiEvent(
     string? Model = null,
     string? Cli = null,
     IReadOnlyList<string>? Models = null,
+    IReadOnlyList<CompanionAttachmentSummary>? Attachments = null,
     decimal? TotalCostUsd = null,
     bool? InputEnabled = null)
 {
@@ -37,9 +38,12 @@ public sealed record CompanionUiEvent(
             Models: models);
     }
 
-    public static CompanionUiEvent Message(string role, string text)
+    public static CompanionUiEvent Message(
+        string role,
+        string text,
+        IReadOnlyList<CompanionAttachmentSummary>? attachments = null)
     {
-        return new CompanionUiEvent("message", Role: role, Text: text);
+        return new CompanionUiEvent("message", Role: role, Text: text, Attachments: attachments);
     }
 
     public static CompanionUiEvent Thinking(string text)

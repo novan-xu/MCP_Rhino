@@ -10,7 +10,10 @@ public sealed class NullLiveRhinoDocumentAccessor : ILiveRhinoDocumentAccessor
 {
     private const string LiveRhinoRequired = "LIVE_RHINO_REQUIRED";
 
-    public OperationResponse<T> Execute<T>(string filePath, Func<RhinoDoc, OperationResponse<T>> work)
+    public OperationResponse<T> Execute<T>(
+        string filePath,
+        Func<RhinoDoc, OperationResponse<T>> work,
+        TimeSpan? timeout = null)
     {
         return OperationResponse<T>.Fail(LiveRhinoRequired);
     }
@@ -18,7 +21,8 @@ public sealed class NullLiveRhinoDocumentAccessor : ILiveRhinoDocumentAccessor
     public OperationResponse<T> ExecuteWithUndo<T>(
         string filePath,
         string undoDescription,
-        Func<RhinoDoc, OperationResponse<(bool Mutated, T Result)>> work)
+        Func<RhinoDoc, OperationResponse<(bool Mutated, T Result)>> work,
+        TimeSpan? timeout = null)
     {
         return OperationResponse<T>.Fail(LiveRhinoRequired);
     }

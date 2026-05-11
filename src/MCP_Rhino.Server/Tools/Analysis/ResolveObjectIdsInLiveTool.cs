@@ -17,7 +17,7 @@ public sealed class ResolveObjectIdsInLiveTool
     }
 
     [McpServerTool(ReadOnly = true, Destructive = false, OpenWorld = false)]
-    [Description("按 ObjectId 在当前 Rhino 活动文档中解析物体，返回其图层、类型、user attributes 等元数据。需要文件在 Rhino 会话中处于活动状态；否则返回 LIVE_RHINO_REQUIRED。")]
+    [Description("Resolve explicit object ids in the current live Rhino document and return layer, type, name, and user attribute metadata.")]
     public OperationResponse<RhinoObjectFilterResult> ResolveObjectIdsInLive(
         string filePath,
         List<Guid> objectIds)
