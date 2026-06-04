@@ -118,6 +118,7 @@ public sealed partial class DeveloperCommandHandler
             "GetContourCurvesByFilter",
             "GetCurvatureSamplesInLive",
             "GetCurvatureSamplesByFilter",
+            "InspectTakeoffSources",
             "GetCurrentLayerInLive",
             "GetDocumentSummary",
             "GetGeometryFramesInLive",
@@ -157,6 +158,7 @@ public sealed partial class DeveloperCommandHandler
             "PreviewEditControlPoints",
             "PreviewReplaceGeometry",
             "PreviewReferenceImageProductGeometryPlan",
+            "PreviewTakeoffSchedule",
             "PreviewSplitCurves",
             "PreviewSubDCage",
             "PreviewTextureMapping",
@@ -273,7 +275,9 @@ public sealed partial class DeveloperCommandHandler
             "ExportToImage",
             "ExportToPdf",
             "ExportToStl",
-            "GenerateProceduralTextureImage");
+            "GenerateProceduralTextureImage",
+            "ExportTakeoffSchedule",
+            "RunTakeoffSpreadsheetAgent");
 
         return expectations;
     }

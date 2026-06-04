@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using MCP_Rhino.Server.Agents.Editing;
 using MCP_Rhino.Server.Agents.Inspection;
 using MCP_Rhino.Server.Agents.Modeling;
+using MCP_Rhino.Server.Agents.Takeoff;
 using MCP_Rhino.Server.Skills.Editing;
 using MCP_Rhino.Server.Skills.Inspection;
 using MCP_Rhino.Server.Skills.Modeling;
@@ -39,6 +40,7 @@ public static class AgentRegistration
         services.AddSingleton<RhinoObjectFilterAgent>();
         services.AddSingleton<RhinoObjectEditingAgent>();
         services.AddSingleton<ReferenceImageObjectModelingAgent>();
+        services.AddSingleton<TakeoffSpreadsheetAgent>();
         return services;
     }
 }

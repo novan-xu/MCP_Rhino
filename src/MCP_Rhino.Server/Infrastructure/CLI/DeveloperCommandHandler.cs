@@ -1,6 +1,7 @@
 using MCP_Rhino.Server.Agents.Editing;
 using MCP_Rhino.Server.Agents.Inspection;
 using MCP_Rhino.Server.Agents.Modeling;
+using MCP_Rhino.Server.Agents.Takeoff;
 using MCP_Rhino.Server.Application.Interfaces;
 using MCP_Rhino.Server.Application.Services;
 using MCP_Rhino.Server.Application.Services.Analysis;
@@ -58,6 +59,8 @@ public sealed partial class DeveloperCommandHandler
     private readonly RhinoBlockDefinitionService _rhinoBlockDefinitionService;
     private readonly RhinoBlockInspectionService _rhinoBlockInspectionService;
     private readonly BlockLifecycleSkill _blockLifecycleSkill;
+    private readonly RhinoTakeoffScheduleService _takeoffScheduleService;
+    private readonly TakeoffSpreadsheetAgent _takeoffSpreadsheetAgent;
     private readonly Dictionary<string, Func<string[], bool>> _extensionHandlers = new(StringComparer.OrdinalIgnoreCase);
 
     // Optional hooks for Project_Test partials to register capability-specific smoke
@@ -107,6 +110,7 @@ public sealed partial class DeveloperCommandHandler
     partial void RegisterReferenceImageAccurateProductModelingHandlers();
     partial void RegisterSubDModelingToolsHandlers();
     partial void RegisterCompanionImageAttachmentsHandlers();
+    partial void RegisterTakeoffSpreadsheetHandlers();
 
     partial void RegisterExtensionHandlers()
     {
@@ -154,6 +158,7 @@ public sealed partial class DeveloperCommandHandler
         RegisterReferenceImageAccurateProductModelingHandlers();
         RegisterSubDModelingToolsHandlers();
         RegisterCompanionImageAttachmentsHandlers();
+        RegisterTakeoffSpreadsheetHandlers();
     }
 
     public DeveloperCommandHandler(
@@ -201,7 +206,9 @@ public sealed partial class DeveloperCommandHandler
         ReferenceImageIterationDecisionSkill referenceImageIterationDecisionSkill,
         RhinoBlockDefinitionService rhinoBlockDefinitionService,
         RhinoBlockInspectionService rhinoBlockInspectionService,
-        BlockLifecycleSkill blockLifecycleSkill)
+        BlockLifecycleSkill blockLifecycleSkill,
+        RhinoTakeoffScheduleService takeoffScheduleService,
+        TakeoffSpreadsheetAgent takeoffSpreadsheetAgent)
     {
         _filterService = filterService;
         _editingService = editingService;
@@ -248,6 +255,8 @@ public sealed partial class DeveloperCommandHandler
         _rhinoBlockDefinitionService = rhinoBlockDefinitionService;
         _rhinoBlockInspectionService = rhinoBlockInspectionService;
         _blockLifecycleSkill = blockLifecycleSkill;
+        _takeoffScheduleService = takeoffScheduleService;
+        _takeoffSpreadsheetAgent = takeoffSpreadsheetAgent;
         RegisterExtensionHandlers();
     }
 

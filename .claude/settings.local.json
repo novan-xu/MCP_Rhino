@@ -9,5 +9,9 @@
       "Bash(echo \"---EXIT:$?---\")",
       "mcp__mcp-rhino__apply_object_user_text_writes"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "mcp-rhino"
+  ],
+  "enableAllProjectMcpServers": true
 }

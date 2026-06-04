@@ -33,7 +33,7 @@ public sealed partial class DeveloperCommandHandler
         List<ToolInventoryItem> tools = GetToolInventory();
         Dictionary<string, ToolInventoryItem> byName = tools.ToDictionary(item => item.MethodName, StringComparer.Ordinal);
 
-        RequireOverlapCleanup(tools.Count == 128, $"Expected 128 MCP tools after overlap cleanup, bulk attribute recipe, and selection-scoped analysis additions, found {tools.Count}.");
+        RequireOverlapCleanup(tools.Count == 156, $"Expected 156 MCP tools after takeoff spreadsheet additions, found {tools.Count}.");
 
         RequirePresent(byName, "FilterObjects");
         RequirePresent(byName, "GetObjectMetricsByFilter");
@@ -52,6 +52,10 @@ public sealed partial class DeveloperCommandHandler
         RequirePresent(byName, "ApplyCreateBlockDefinitions");
         RequirePresent(byName, "PreviewInsertBlockInstances");
         RequirePresent(byName, "ApplyInsertBlockInstances");
+        RequirePresent(byName, "InspectTakeoffSources");
+        RequirePresent(byName, "PreviewTakeoffSchedule");
+        RequirePresent(byName, "ExportTakeoffSchedule");
+        RequirePresent(byName, "RunTakeoffSpreadsheetAgent");
 
         RequireAbsent(byName,
             "FilterObjectsInLive",
@@ -66,11 +70,11 @@ public sealed partial class DeveloperCommandHandler
             "CreateBlockDefinitions",
             "InsertBlockInstances");
 
-        RequireFamilyCount(tools, "Analysis", 18);
+        RequireFamilyCount(tools, "Analysis", 20);
         RequireFamilyCount(tools, "Layers", 11);
         RequireFamilyCount(tools, "Editing", 8);
         RequireFamilyCount(tools, "File", 3);
-        RequireFamilyCount(tools, "Geometry/Architecture", 12);
+        RequireFamilyCount(tools, "Geometry/Architecture", 11);
         RequireFamilyCount(tools, "Blocks", 14);
 
         MethodInfo filterObjects = byName["FilterObjects"].Method;
@@ -88,7 +92,7 @@ public sealed partial class DeveloperCommandHandler
             "FindLayerCandidates returns a structured OperationResponse list.");
 
         Console.WriteLine("[OK] MCP tool overlap cleanup smoke verified canonical tools and removed duplicate wrappers.");
-        Console.WriteLine("[OK] MCP tool count=128; removed duplicate wrappers=11.");
+        Console.WriteLine("[OK] MCP tool count=156; removed duplicate wrappers=11.");
     }
 
     private static List<ToolInventoryItem> GetToolInventory()
