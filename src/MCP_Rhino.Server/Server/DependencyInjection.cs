@@ -29,6 +29,8 @@ public static class DependencyInjection
         services.AddSingleton<ILiveGeometryCurvatureCalculator, LiveRhinoGeometryCurvatureCalculator>();
         services.AddSingleton<ILiveGeometryIntersectionCalculator, LiveRhinoGeometryIntersectionCalculator>();
         services.AddSingleton<ILiveFileExporter, LiveRhinoFileExporter>();
+        services.AddSingleton<ILivePrintScaleImageExporter, LiveRhinoPrintScaleImageExporter>();
+        services.AddSingleton<ILiveLotVisualizationOperator, LiveLotVisualizationOperator>();
         services.AddSingleton<ILiveExternalReferenceManager, LiveRhinoExternalReferenceManager>();
         services.AddSingleton<IEditableGeometryDescriptorService, LiveEditableGeometryDescriptorService>();
         services.AddSingleton<IGeometryFrameSampler, LiveGeometryFrameSampler>();
@@ -76,6 +78,8 @@ public static class DependencyInjection
         services.AddSingleton<ILiveGeometryCurvatureCalculator, LiveRhinoGeometryCurvatureCalculator>();
         services.AddSingleton<ILiveGeometryIntersectionCalculator, LiveRhinoGeometryIntersectionCalculator>();
         services.AddSingleton<ILiveFileExporter, LiveRhinoFileExporter>();
+        services.AddSingleton<ILivePrintScaleImageExporter, LiveRhinoPrintScaleImageExporter>();
+        services.AddSingleton<ILiveLotVisualizationOperator, LiveLotVisualizationOperator>();
         services.AddSingleton<ILiveExternalReferenceManager, LiveRhinoExternalReferenceManager>();
         services.AddSingleton<IEditableGeometryDescriptorService, LiveEditableGeometryDescriptorService>();
         services.AddSingleton<IGeometryFrameSampler, LiveGeometryFrameSampler>();
@@ -128,6 +132,8 @@ public static class DependencyInjection
         services.AddSingleton<RhinoGeometryCurvatureService>();
         services.AddSingleton<RhinoGeometryIntersectionService>();
         services.AddSingleton<RhinoFileExportService>();
+        services.AddSingleton<RhinoPrintScaleImageExportService>();
+        services.AddSingleton<RhinoLotVisualizationService>();
         services.AddSingleton<IDrawingExportSnapshotStore, DrawingExportSnapshotStore>();
         services.AddSingleton<RhinoDrawingExportService>();
         services.AddSingleton<RhinoExternalReferenceService>();

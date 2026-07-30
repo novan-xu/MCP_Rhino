@@ -4,6 +4,7 @@ using MCP_Rhino.Server.Agents.Inspection;
 using MCP_Rhino.Server.Agents.Modeling;
 using MCP_Rhino.Server.Agents.Takeoff;
 using MCP_Rhino.Server.Skills.Editing;
+using MCP_Rhino.Server.Skills.Drawing;
 using MCP_Rhino.Server.Skills.Inspection;
 using MCP_Rhino.Server.Skills.Modeling;
 
@@ -23,6 +24,7 @@ public static class AgentRegistration
         services.AddSingleton<ObjectEditPreviewSkill>();
         services.AddSingleton<ObjectEditApplySkill>();
         services.AddSingleton<ObjectAttributeRecipeSkill>();
+        services.AddSingleton<LotVisualizationExportSkill>();
         services.AddSingleton<GeometryCreationSkill>();
         services.AddSingleton<GeometryModificationSkill>();
         services.AddSingleton<ArchitecturalPrimitiveCreationSkill>();

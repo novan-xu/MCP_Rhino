@@ -19,5 +19,6 @@ public interface ILiveDrawingViewManager
         DrawingViewPreset preset,
         IReadOnlyList<int> layerIndices,
         IReadOnlyList<string> resolvedLayerFullPaths,
-        double fitMarginPercent);
+        double fitMarginPercent,
+        IReadOnlyList<Guid>? targetObjectIds = null);
 }

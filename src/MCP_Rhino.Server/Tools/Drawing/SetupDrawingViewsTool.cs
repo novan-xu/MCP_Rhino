@@ -23,6 +23,7 @@ public sealed class SetupDrawingViewsTool
         string filePath,
         List<string>? layerQueries = null,
         List<string>? confirmedLayerFullPaths = null,
+        IReadOnlyList<Guid>? objectIds = null,
         DrawingViewPreset preset = DrawingViewPreset.Standard8,
         double? fitMarginPercent = null)
     {
@@ -31,6 +32,7 @@ public sealed class SetupDrawingViewsTool
             FilePath = filePath,
             LayerQueries = layerQueries ?? new List<string>(),
             ConfirmedLayerFullPaths = confirmedLayerFullPaths ?? new List<string>(),
+            ObjectIds = objectIds ?? Array.Empty<Guid>(),
             Preset = preset,
             FitMarginPercent = fitMarginPercent
         });

@@ -70,7 +70,8 @@ public sealed class RhinoDrawingExportService
                 request.Preset,
                 scope.Data.ResolvedLayerIndices,
                 scope.Data.ResolvedLayerFullPaths,
-                request.FitMarginPercent ?? DefaultFitMarginPercent);
+                request.FitMarginPercent ?? DefaultFitMarginPercent,
+                request.ObjectIds);
 
             if (!setup.Success || setup.Data is null)
             {

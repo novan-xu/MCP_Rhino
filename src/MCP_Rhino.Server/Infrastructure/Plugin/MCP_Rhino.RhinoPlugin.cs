@@ -8,10 +8,12 @@ using MCP_Rhino.Server.Infrastructure.CLI;
 using MCP_Rhino.Server.Infrastructure.ClaudeCode;
 using MCP_Rhino.Server.Infrastructure.Plugin.Companion;
 using MCP_Rhino.Server.Infrastructure.Plugin.Panel;
+using MCP_Rhino.Server.Infrastructure.Plugin.Routing;
 using MCP_Rhino.Server.Infrastructure.Runtime;
 using MCP_Rhino.Server.Server;
 using LoadReturnCode = rhinocommon::Rhino.PlugIns.LoadReturnCode;
 using PlugIn = rhinocommon::Rhino.PlugIns.PlugIn;
+using PlugInLoadTime = rhinocommon::Rhino.PlugIns.PlugInLoadTime;
 using RhinoApp = rhinocommon::Rhino.RhinoApp;
 using RhinoDoc = rhinocommon::Rhino.RhinoDoc;
 
@@ -31,10 +33,15 @@ public sealed class McpRhinoPlugin : PlugIn
 
     public static McpRhinoPlugin? Instance { get; private set; }
 
+    public override PlugInLoadTime LoadTime => IsBridgePipeOnlyBuild
+        ? PlugInLoadTime.WhenNeeded
+        : PlugInLoadTime.AtStartup;
+
     private AssemblyLoadContext? _isolatedContext;
     private Type? _bootstrapType;
     private object? _serverHandle;
     private PerDocumentPanelDispatcher? _panelDispatcher;
+    private RoutedDocumentEndpointDispatcher? _routedEndpointDispatcher;
     private string? _pluginDirectory;
     private bool _panelRegistered;
     private readonly Dictionary<uint, CompanionSessionHandle> _companionSessions = new();
@@ -76,6 +83,7 @@ public sealed class McpRhinoPlugin : PlugIn
             if (!IsBridgePipeOnlyBuild)
             {
                 RhinoDoc.CloseDocument += OnCloseDocumentForCompanion;
+                TryStartRoutedEndpointDispatcher();
             }
 
             RhinoApp.WriteLine($"MCP_Rhino plugin loaded. Developer debug pipe requested: \\\\.\\pipe\\{PipeName}");
@@ -101,6 +109,9 @@ public sealed class McpRhinoPlugin : PlugIn
     {
         RhinoDoc.CloseDocument -= OnCloseDocumentForCompanion;
         StopAllCompanions();
+
+        _routedEndpointDispatcher?.Dispose();
+        _routedEndpointDispatcher = null;
 
         _panelDispatcher?.Dispose();
         _panelDispatcher = null;
@@ -144,6 +155,56 @@ public sealed class McpRhinoPlugin : PlugIn
         }
 
         _bootstrapType.GetMethod("StopBoundPipeServer")!.Invoke(_serverHandle, new object[] { pipeName });
+    }
+
+    internal bool StartRoutedPipeServer(string pipeName, uint runtimeSerialNumber, string attestationJson)
+    {
+        if (IsBridgePipeOnlyBuild)
+        {
+            return false;
+        }
+
+        if (_bootstrapType is null || _serverHandle is null)
+        {
+            return false;
+        }
+
+        object? result = _bootstrapType.GetMethod("StartRoutedPipeServer")!.Invoke(
+            _serverHandle,
+            new object[] { pipeName, runtimeSerialNumber, attestationJson });
+        return result is true;
+    }
+
+    internal void UpdateRoutedPipeAttestation(string pipeName, string attestationJson)
+    {
+        if (_bootstrapType is null || _serverHandle is null)
+        {
+            return;
+        }
+
+        _bootstrapType.GetMethod("UpdateRoutedPipeAttestation")!.Invoke(
+            _serverHandle,
+            new object[] { pipeName, attestationJson });
+    }
+
+    internal void StopRoutedPipeServer(string pipeName)
+    {
+        if (_bootstrapType is null || _serverHandle is null)
+        {
+            return;
+        }
+
+        _bootstrapType.GetMethod("StopRoutedPipeServer")!.Invoke(_serverHandle, new object[] { pipeName });
+    }
+
+    internal void StopAllRoutedPipeServers()
+    {
+        if (_bootstrapType is null || _serverHandle is null)
+        {
+            return;
+        }
+
+        _bootstrapType.GetMethod("StopAllRoutedPipeServers")!.Invoke(_serverHandle, Array.Empty<object>());
     }
 
     internal bool RunDeveloperCommand(params string[] args)
@@ -322,6 +383,27 @@ public sealed class McpRhinoPlugin : PlugIn
         catch (Exception ex)
         {
             RhinoApp.WriteLine($"MCP_Rhino Claude Code panel dispatcher failed to start: {ex}");
+        }
+    }
+
+    private void TryStartRoutedEndpointDispatcher()
+    {
+        if (_routedEndpointDispatcher is not null || IsBridgePipeOnlyBuild)
+        {
+            return;
+        }
+
+        try
+        {
+            _routedEndpointDispatcher = new RoutedDocumentEndpointDispatcher(this);
+            _routedEndpointDispatcher.Start();
+            RhinoApp.WriteLine("MCP_Rhino routed document endpoint dispatcher started.");
+        }
+        catch (Exception ex)
+        {
+            _routedEndpointDispatcher?.Dispose();
+            _routedEndpointDispatcher = null;
+            RhinoApp.WriteLine($"MCP_Rhino routed endpoint dispatcher is unavailable: {ex}");
         }
     }
 

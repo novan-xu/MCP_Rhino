@@ -89,9 +89,10 @@ public sealed class LiveDrawingViewManager : ILiveDrawingViewManager
         DrawingViewPreset preset,
         IReadOnlyList<int> layerIndices,
         IReadOnlyList<string> resolvedLayerFullPaths,
-        double fitMarginPercent)
+        double fitMarginPercent,
+        IReadOnlyList<Guid>? requestedObjectIds = null)
     {
-        if (preset != DrawingViewPreset.Standard8)
+        if (preset is not DrawingViewPreset.Standard8 and not DrawingViewPreset.Isometric4)
         {
             return OperationResponse<DrawingViewSetupResult>.Fail($"Unsupported drawing view preset: {preset}");
         }
@@ -102,7 +103,11 @@ public sealed class LiveDrawingViewManager : ILiveDrawingViewManager
             return OperationResponse<DrawingViewSetupResult>.Fail("EXPORT_VIEW_NOT_FOUND");
         }
 
-        OperationResponse<(BoundingBox BoundingBox, IReadOnlyList<Guid> ObjectIds)> target = ResolveTargetBoundingBox(document, layerIndices, fitMarginPercent);
+        OperationResponse<(BoundingBox BoundingBox, IReadOnlyList<Guid> ObjectIds)> target = ResolveTargetBoundingBox(
+            document,
+            layerIndices,
+            fitMarginPercent,
+            requestedObjectIds);
         if (!target.Success)
         {
             return OperationResponse<DrawingViewSetupResult>.Fail(target.Message);
@@ -111,7 +116,7 @@ public sealed class LiveDrawingViewManager : ILiveDrawingViewManager
         (BoundingBox targetBox, IReadOnlyList<Guid> targetObjectIds) = target.Data;
         var created = new List<string>();
         var updated = new List<string>();
-        List<DrawingViewDefinition> definitions = CreateStandardViewDefinitions();
+        List<DrawingViewDefinition> definitions = CreateViewDefinitions(preset);
 
         using var originalView = new ViewInfo(activeView.MainViewport);
         try
@@ -261,15 +266,19 @@ public sealed class LiveDrawingViewManager : ILiveDrawingViewManager
     private static OperationResponse<(BoundingBox BoundingBox, IReadOnlyList<Guid> ObjectIds)> ResolveTargetBoundingBox(
         RhinoDoc document,
         IReadOnlyList<int> layerIndices,
-        double fitMarginPercent)
+        double fitMarginPercent,
+        IReadOnlyList<Guid>? targetObjectIds)
     {
         HashSet<int> layerIndexSet = layerIndices.ToHashSet();
+        HashSet<Guid>? objectIdSet = targetObjectIds is { Count: > 0 } ? targetObjectIds.ToHashSet() : null;
         BoundingBox? union = null;
         var objectIds = new List<Guid>();
 
         foreach (RhinoObject rhinoObject in document.Objects)
         {
-            if (!IsVisibleObject(rhinoObject) || !layerIndexSet.Contains(rhinoObject.Attributes.LayerIndex))
+            if (!IsVisibleObject(rhinoObject)
+                || !layerIndexSet.Contains(rhinoObject.Attributes.LayerIndex)
+                || (objectIdSet is not null && !objectIdSet.Contains(rhinoObject.Id)))
             {
                 continue;
             }
@@ -321,19 +330,28 @@ public sealed class LiveDrawingViewManager : ILiveDrawingViewManager
         view.Redraw();
     }
 
-    private static List<DrawingViewDefinition> CreateStandardViewDefinitions()
+    private static List<DrawingViewDefinition> CreateViewDefinitions(DrawingViewPreset preset)
     {
-        return new List<DrawingViewDefinition>
+        var isometric = new List<DrawingViewDefinition>
         {
-            Create("MCP_Elevation_Front", DrawingViewKind.Elevation, 0d, -1d, 0d, 0d, 0d, 1d),
-            Create("MCP_Elevation_Back", DrawingViewKind.Elevation, 0d, 1d, 0d, 0d, 0d, 1d),
-            Create("MCP_Elevation_Left", DrawingViewKind.Elevation, 1d, 0d, 0d, 0d, 0d, 1d),
-            Create("MCP_Elevation_Right", DrawingViewKind.Elevation, -1d, 0d, 0d, 0d, 0d, 1d),
             Create("MCP_Iso_NE", DrawingViewKind.Isometric, -1d, -1d, -1d, 0d, 0d, 1d),
             Create("MCP_Iso_NW", DrawingViewKind.Isometric, 1d, -1d, -1d, 0d, 0d, 1d),
             Create("MCP_Iso_SE", DrawingViewKind.Isometric, -1d, 1d, -1d, 0d, 0d, 1d),
             Create("MCP_Iso_SW", DrawingViewKind.Isometric, 1d, 1d, -1d, 0d, 0d, 1d)
         };
+
+        if (preset == DrawingViewPreset.Isometric4)
+        {
+            return isometric;
+        }
+
+        return new List<DrawingViewDefinition>
+        {
+            Create("MCP_Elevation_Front", DrawingViewKind.Elevation, 0d, -1d, 0d, 0d, 0d, 1d),
+            Create("MCP_Elevation_Back", DrawingViewKind.Elevation, 0d, 1d, 0d, 0d, 0d, 1d),
+            Create("MCP_Elevation_Left", DrawingViewKind.Elevation, 1d, 0d, 0d, 0d, 0d, 1d),
+            Create("MCP_Elevation_Right", DrawingViewKind.Elevation, -1d, 0d, 0d, 0d, 0d, 1d)
+        }.Concat(isometric).ToList();
     }
 
     private static DrawingViewDefinition Create(

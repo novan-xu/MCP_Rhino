@@ -4,7 +4,7 @@ using System.Drawing;
 using MCP_Rhino.Server.Application.Interfaces;
 using MCP_Rhino.Server.Contracts.Responses;
 using MCP_Rhino.Server.Domain.Models;
-using AppearanceSettings = rhinocommon::Rhino.ApplicationSettings.AppearanceSettings;
+using BackgroundStyle = rhinocommon::Rhino.Display.BackgroundStyle;
 using ObjectColorSource = rhinocommon::Rhino.DocObjects.ObjectColorSource;
 using ObjectAttributes = rhinocommon::Rhino.DocObjects.ObjectAttributes;
 using RhinoDoc = rhinocommon::Rhino.RhinoDoc;
@@ -81,7 +81,7 @@ public sealed class LiveDrawingExportStateOperator : ILiveDrawingExportStateOper
     public OperationResponse SetBackground(RhinoDoc document, DrawingExportSnapshot snapshot, RhinoDisplayColor color)
     {
         Color resolved = color.ToColor();
-        AppearanceSettings.ViewportBackgroundColor = resolved;
+        document.RenderSettings.BackgroundStyle = BackgroundStyle.SolidColor;
         document.RenderSettings.BackgroundColorTop = resolved;
         document.RenderSettings.BackgroundColorBottom = resolved;
         document.Views.Redraw();
@@ -123,7 +123,7 @@ public sealed class LiveDrawingExportStateOperator : ILiveDrawingExportStateOper
     {
         return new DrawingBackgroundSnapshot
         {
-            ViewportBackgroundColor = ToColorData(AppearanceSettings.ViewportBackgroundColor),
+            RenderBackgroundStyle = (int)document.RenderSettings.BackgroundStyle,
             RenderBackgroundTop = ToColorData(document.RenderSettings.BackgroundColorTop),
             RenderBackgroundBottom = ToColorData(document.RenderSettings.BackgroundColorBottom)
         };
@@ -131,7 +131,7 @@ public sealed class LiveDrawingExportStateOperator : ILiveDrawingExportStateOper
 
     private static void RestoreBackground(RhinoDoc document, DrawingBackgroundSnapshot snapshot)
     {
-        AppearanceSettings.ViewportBackgroundColor = FromColorData(snapshot.ViewportBackgroundColor);
+        document.RenderSettings.BackgroundStyle = (BackgroundStyle)snapshot.RenderBackgroundStyle;
         document.RenderSettings.BackgroundColorTop = FromColorData(snapshot.RenderBackgroundTop);
         document.RenderSettings.BackgroundColorBottom = FromColorData(snapshot.RenderBackgroundBottom);
     }

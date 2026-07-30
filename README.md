@@ -7,6 +7,8 @@
 - [src/MCP_Rhino.Server/](src/MCP_Rhino.Server/) —— 主工程，构建产出 `MCP_Rhino.Server.rhp`（Rhino 插件）。`Debug` 产物保留旧的 bridge-pipe-only 插件形态，只启动固定 debug/test Named Pipe（`\\.\pipe\mcp_rhino`）；`Release` 产物是 chat-capable 插件，同样保留 debug pipe，并为 `_Mcpchat` 启动 process-scoped panel pipes（`\\.\pipe\mcp_rhino_<ProcessId>_<RuntimeSerialNumber>`）。
 - [src/MCP_Rhino.Bridge/](src/MCP_Rhino.Bridge/) —— 独立 `.exe`，承担 **stdio ↔ Named Pipe** 桥接，给 MCP Client 直接 spawn。
 - [src/MCP_Rhino.Companion/](src/MCP_Rhino.Companion/) —— 独立 WPF / WebView2 chat UI，`_Mcpchat` 默认启动它，并绑定到当前已保存 Rhino 文档的 per-doc pipe。
+- [src/MCP_Rhino.Transport/](src/MCP_Rhino.Transport/) —— Rhino 与 Router 共享的 BCL-only route discovery / attestation contract。
+- [src/MCP_Rhino.Router/](src/MCP_Rhino.Router/) —— 每个外部 MCP session 自动启动的 stdio gateway；一个 session 可选择并控制多个已打开 Rhino 文档。
 
 能力矩阵（当前已落地的 MCP Tool 分类）：几何创建 / 几何修改 / 对象编辑 / 对象与文档级 UserString / 图层管理 / 对象筛查 / 几何分析。详见 [src/MCP_Rhino.Server/Tools/](src/MCP_Rhino.Server/Tools/) 下各子目录。
 
@@ -19,10 +21,24 @@
 
 ### Step 1 —— 构建产物
 
+正常安装建议构建一个 Release bundle：
+
+```powershell
+Packaging\MCP_Rhino\Build-McpRhinoPackage.ps1
+```
+
+然后从输出 bundle 运行 `Installer\Install-McpRhino.ps1`。它将 Release `.rhp` 安装到 Rhino
+8 当前用户 package 目录，并把 Router / Bridge / Companion 安装到稳定的
+`%LOCALAPPDATA%\MCP_Rhino\bin`。如需修改某个 JSON MCP client 配置，必须显式传入
+`-ConfigureClient -ClientConfigPath <path>`；否则 installer 只输出可复制的配置 snippet。
+
+下面的直接 project build 用于开发：
+
 ```powershell
 dotnet build src\MCP_Rhino.Server\MCP_Rhino.Server.csproj -c Release
 dotnet build src\MCP_Rhino.Bridge\MCP_Rhino.Bridge.csproj -c Release
 dotnet build src\MCP_Rhino.Companion\MCP_Rhino.Companion.csproj -c Release
+dotnet build src\MCP_Rhino.Router\MCP_Rhino.Router.csproj -c Release
 ```
 
 构建产出：
@@ -30,6 +46,7 @@ dotnet build src\MCP_Rhino.Companion\MCP_Rhino.Companion.csproj -c Release
 - `src\MCP_Rhino.Server\bin\Release\net8.0\MCP_Rhino.Server.rhp`
 - `src\MCP_Rhino.Bridge\bin\Release\net8.0\MCP_Rhino.Bridge.exe`
 - `src\MCP_Rhino.Companion\bin\Release\net8.0-windows\MCP_Rhino.Companion.exe`
+- `src\MCP_Rhino.Router\bin\Release\net8.0\MCP_Rhino.Router.exe`
 
 需要旧的 bridge-pipe-only Rhino 插件时，也构建 Debug：
 
@@ -41,9 +58,11 @@ Debug 输出 `src\MCP_Rhino.Server\bin\Debug\net8.0\MCP_Rhino.Server.rhp`，只�
 
 > Rhino 如果装在非默认路径，需要先改 [src/MCP_Rhino.Server/MCP_Rhino.Server.csproj](src/MCP_Rhino.Server/MCP_Rhino.Server.csproj) 里 `RhinoCommon` 的 `HintPath`。
 
-### Step 2 —— 把 .rhp 加载进 Rhino
+### Step 2 —— 启动 Rhino
 
-拖入 Rhino 视口，或运行 `_PlugInManager` → `Install...`。成功标志是命令行出现：
+安装后的 Release `.rhp` 会在每个 Rhino 进程启动时自动加载，一次加载即可跟踪该进程内
+所有已打开文档；不需要运行 `_LoadPlugin`。直接 project build 的开发产物仍可拖入 Rhino
+视口，或运行 `_PlugInManager` → `Install...`。成功标志是命令行出现：
 
 ```text
 MCP_Rhino plugin loaded. Developer debug pipe requested: \\.\pipe\mcp_rhino
@@ -55,41 +74,39 @@ Rhino 里 `_Open` 目标文件并 `_Save` 过（必须已落盘，否则所有�
 
 ### Step 4 —— 接入 MCP Client
 
-**Claude Desktop** —— 编辑 `%APPDATA%\Claude\claude_desktop_config.json`：
+**任一支持 stdio 的 MCP Client** —— 正常安装使用稳定 Router 路径：
 
 ```json
 {
   "mcpServers": {
     "mcp-rhino": {
-      "command": "C:\\Projects\\MCP_Rhino\\src\\MCP_Rhino.Bridge\\bin\\Release\\net8.0\\MCP_Rhino.Bridge.exe"
+      "type": "stdio",
+      "command": "C:\\Users\\<user>\\AppData\\Local\\MCP_Rhino\\bin\\MCP_Rhino.Router.exe",
+      "args": []
     }
   }
 }
 ```
 
-**Claude Code** —— 推荐在**仓库根**放一个 `.mcp.json`。最省事的做法：把 [Project_Archive/Project_Test/260422_TEST_mcp-client-integration/samples/claude_code.mcp.json](Project_Archive/Project_Test/260422_TEST_mcp-client-integration/samples/claude_code.mcp.json) 拷到 `<repo>/.mcp.json`，把 `{{BRIDGE_EXE_ABSOLUTE_PATH}}` 替换成本机 `MCP_Rhino.Bridge.exe` 的绝对路径（路径里的反斜杠要写成 `\\`）。首次启动 Claude Code 会提示 `Enable mcp-rhino?`，点同意即生效。`.mcp.json` 已被 [.gitignore](.gitignore) 忽略，每人在自己机器上写自己的路径即可。
+每个 agent session 会自动 spawn 自己的 Router；不要手工先运行
+`MCP_Rhino.Router.exe`。多个 agent 可以同时连接同一批 Rhino 文档，并各自保持不同选择。
 
-> ⚠️ **不要用 `claude mcp add mcp-rhino ...` 的默认形式**——默认是 `local` scope，只写到 `~/.claude.json` 的 `projects[<path>].mcpServers`；实测 VSCode 里的 Claude Code 扩展不会把这里的条目注入到会话中（`/mcp` 会报 `No MCP servers configured`）。要走 CLI，必须显式加 `--scope user`：
->
-> ```powershell
-> claude mcp add --scope user mcp-rhino "C:\Projects\MCP_Rhino\src\MCP_Rhino.Bridge\bin\Release\net8.0\MCP_Rhino.Bridge.exe"
-> ```
+Router 连接后先调用 `rhino_router_list_documents`，再用
+`rhino_router_select_document(sessionId)` 选择目标。带顶层 `filePath` 的工具也可在路径唯一时
+直接路由。
 
-**其它 MCP Client** —— 新增一条 stdio server，`command` 填 Bridge.exe 绝对路径即可。
+调试旧 fixed pipe 时才把 client command 指向 `MCP_Rhino.Bridge.exe`。Bridge path 仍只连接
+一个拥有 `\\.\pipe\mcp_rhino` 的 Rhino 进程，不提供外部多文档选择。
 
-重启客户端后 Rhino 命令行会出现：
-
-```text
-MCP_Rhino pipe client connected: \\.\pipe\mcp_rhino
-```
-
-这条日志 = 端到端通了。
-
-> 多个 Rhino 进程并行时，`\\.\pipe\mcp_rhino` 仍然只作为单 owner debug/test 入口；每个 `_Mcpchat` 会自动使用独立的 `mcp_rhino_<ProcessId>_<RuntimeSerialNumber>` 管道。
+> 多个 Rhino 进程并行时，`\\.\pipe\mcp_rhino` 仍然只作为 single-owner debug/test 入口；
+> 外部 agent 走每文档 `mcp_rhino_route_*` endpoint，`_Mcpchat` 则继续使用自己的
+> panel-bound pipe。
 
 ### Step 5 —— 开始聊天
 
-推荐在 Rhino 里运行 `_Mcpchat`，它会打开绑定到当前已保存文档的 standalone Companion。也可以在外部 MCP Client 的对话框里用自然语言发指令；外部 client 默认走 `\\.\pipe\mcp_rhino` debug/test 入口。
+推荐在 Rhino 里运行 `_Mcpchat`，它会打开绑定到当前已保存文档的 standalone Companion。外部
+MCP Client 默认通过 Router 选择任一已打开文档；只有显式 Bridge 开发配置才走
+`\\.\pipe\mcp_rhino` debug/test 入口。
 
 第一句建议显式告诉 LLM 当前文档路径，避免它猜出错误 `filePath`：
 
@@ -109,8 +126,10 @@ MCP_Rhino pipe client connected: \\.\pipe\mcp_rhino
 MCP Client (Codex / Claude Code / …)
         │    stdio (MCP JSON-RPC)
         ▼
-MCP_Rhino.Bridge.exe
-        │    named pipe  \\.\pipe\mcp_rhino
+MCP_Rhino.Router.exe  (one process per MCP client session)
+        │    discovery + selected document
+        ▼
+route endpoint  mcp_rhino_route_<ProcessId>_<RuntimeSerialNumber>
         ▼
 McpNamedPipeServer  (inside Rhino .rhp)
         │    MCP SDK dispatcher
@@ -118,8 +137,11 @@ McpNamedPipeServer  (inside Rhino .rhp)
 *InLive Tool  (Tools/**)
         │    ILiveRhinoDocumentAccessor → RhinoApp.InvokeOnUiThread
         ▼
-RhinoDoc.ActiveDoc   ← 你在 Rhino 视口里看到结果
+RhinoDoc.FromRuntimeSerialNumber(...)   ← 不依赖 foreground activation
 ```
+
+`MCP_Rhino.Bridge.exe` + `\\.\pipe\mcp_rhino` remains the single-owner developer/debug path and
+continues to target `RhinoDoc.ActiveDoc`.
 
 `_Mcpchat` / Companion 路径使用 per-document pipe：
 

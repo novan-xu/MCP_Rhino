@@ -1,0 +1,5 @@
+commonModelScaleDenominator=804.9790654462527
+MCP_Iso_NE	230469	V:\01 Project Folders\P00020 BayHealth Kent Tower BKT\03-Design-Eng\03-BIM\05-Wireframe\06_exports\20260729_Lot visualization\20260729_Lot visualization_Iso_NE_print.png
+MCP_Iso_NW	216786	V:\01 Project Folders\P00020 BayHealth Kent Tower BKT\03-Design-Eng\03-BIM\05-Wireframe\06_exports\20260729_Lot visualization\20260729_Lot visualization_Iso_NW_print.png
+MCP_Iso_SE	200219	V:\01 Project Folders\P00020 BayHealth Kent Tower BKT\03-Design-Eng\03-BIM\05-Wireframe\06_exports\20260729_Lot visualization\20260729_Lot visualization_Iso_SE_print.png
+MCP_Iso_SW	219949	V:\01 Project Folders\P00020 BayHealth Kent Tower BKT\03-Design-Eng\03-BIM\05-Wireframe\06_exports\20260729_Lot visualization\20260729_Lot visualization_Iso_SW_print.png

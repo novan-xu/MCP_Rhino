@@ -5,14 +5,17 @@ using Microsoft.Extensions.Hosting;
 namespace MCP_Rhino.Server.Infrastructure.Plugin;
 
 // Entry point invoked by McpRhinoPlugin via reflection after this assembly has
-// been reloaded into an isolated AssemblyLoadContext. All MCP SDK types and
-// their System.Text.Json 10.x dependency resolve within that context; the plugin
-// class itself stays in AssemblyLoadContext.Default so Rhino's PlugInManager
-// keeps a single, stable PlugIn instance.
+// been reloaded into an isolated AssemblyLoadContext. Only primitives and JSON
+// strings cross the load-context boundary.
 public sealed class ServerBootstrap : IDisposable
 {
+    private static readonly TimeSpan ListenerReadyTimeout = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan AggregateStopTimeout = TimeSpan.FromSeconds(5);
+
     private readonly object _boundPipeLock = new();
     private readonly Dictionary<string, McpNamedPipeServer> _boundPipeServers = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _routedPipeLock = new();
+    private readonly Dictionary<string, RoutedPipeRegistration> _routedPipeServers = new(StringComparer.OrdinalIgnoreCase);
     private McpNamedPipeServer? _pipeServer;
 
     public void Start(string pipeName)
@@ -21,7 +24,7 @@ public sealed class ServerBootstrap : IDisposable
             pipeName,
             CreateConnectionHost,
             stopOnPipeCreateFailure: true,
-            pipeCreateFailureHint: "If another Rhino instance owns this debug pipe, this Rhino instance can still use process-scoped panel pipes.");
+            pipeCreateFailureHint: "If another Rhino instance owns this debug pipe, this Rhino instance can still use process-scoped panel and route pipes.");
         _pipeServer.Start();
     }
 
@@ -47,7 +50,6 @@ public sealed class ServerBootstrap : IDisposable
     public void StopBoundPipeServer(string pipeName)
     {
         McpNamedPipeServer? pipeServer = null;
-
         lock (_boundPipeLock)
         {
             if (_boundPipeServers.Remove(pipeName, out McpNamedPipeServer? existing))
@@ -59,8 +61,73 @@ public sealed class ServerBootstrap : IDisposable
         pipeServer?.Dispose();
     }
 
+    public bool StartRoutedPipeServer(string pipeName, uint runtimeSerialNumber, string attestationJson)
+    {
+        lock (_routedPipeLock)
+        {
+            if (_routedPipeServers.ContainsKey(pipeName))
+            {
+                return true;
+            }
+
+            var attestationProvider = new RoutedAttestationProvider(attestationJson);
+            var pipeServer = new McpNamedPipeServer(
+                pipeName,
+                RoutedHostFactory.For(runtimeSerialNumber, attestationProvider),
+                stopOnPipeCreateFailure: true,
+                pipeCreateFailureHint: "This route pipe did not start. The document remains unavailable to external MCP routers.",
+                maxConcurrentConnections: 8,
+                currentUserOnly: true);
+
+            if (!pipeServer.StartAndWait(ListenerReadyTimeout))
+            {
+                pipeServer.Dispose();
+                return false;
+            }
+
+            _routedPipeServers.Add(pipeName, new RoutedPipeRegistration(pipeServer, attestationProvider));
+            return true;
+        }
+    }
+
+    public void UpdateRoutedPipeAttestation(string pipeName, string attestationJson)
+    {
+        lock (_routedPipeLock)
+        {
+            if (_routedPipeServers.TryGetValue(pipeName, out RoutedPipeRegistration? registration))
+            {
+                registration.AttestationProvider.Update(attestationJson);
+            }
+        }
+    }
+
+    public void StopRoutedPipeServer(string pipeName)
+    {
+        RoutedPipeRegistration? registration = null;
+        lock (_routedPipeLock)
+        {
+            _routedPipeServers.Remove(pipeName, out registration);
+        }
+
+        registration?.PipeServer.Dispose();
+    }
+
+    public void StopAllRoutedPipeServers()
+    {
+        List<McpNamedPipeServer> servers;
+        lock (_routedPipeLock)
+        {
+            servers = _routedPipeServers.Values.Select(value => value.PipeServer).ToList();
+            _routedPipeServers.Clear();
+        }
+
+        StopServersTogether(servers);
+    }
+
     public void Dispose()
     {
+        StopAllRoutedPipeServers();
+
         List<McpNamedPipeServer> boundServers;
         lock (_boundPipeLock)
         {
@@ -68,13 +135,32 @@ public sealed class ServerBootstrap : IDisposable
             _boundPipeServers.Clear();
         }
 
-        foreach (McpNamedPipeServer boundServer in boundServers)
-        {
-            boundServer.Dispose();
-        }
+        StopServersTogether(boundServers);
 
         _pipeServer?.Dispose();
         _pipeServer = null;
+    }
+
+    private static void StopServersTogether(IReadOnlyCollection<McpNamedPipeServer> servers)
+    {
+        if (servers.Count == 0)
+        {
+            return;
+        }
+
+        Task aggregate = Task.WhenAll(servers.Select(server => server.StopAsync()));
+        try
+        {
+            aggregate.Wait(AggregateStopTimeout);
+        }
+        catch (AggregateException ex) when (ex.InnerExceptions.All(inner => inner is OperationCanceledException))
+        {
+        }
+
+        foreach (McpNamedPipeServer server in servers)
+        {
+            server.DisposeAfterStopRequested();
+        }
     }
 
     private static IHost CreateConnectionHost(Stream input, Stream output)
@@ -90,4 +176,8 @@ public sealed class ServerBootstrap : IDisposable
 
         return builder.Build();
     }
+
+    private sealed record RoutedPipeRegistration(
+        McpNamedPipeServer PipeServer,
+        RoutedAttestationProvider AttestationProvider);
 }

@@ -102,6 +102,11 @@ public static class McpConfigBuilder
             "MCP_Rhino.Bridge.exe"));
         yield return Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "MCP_Rhino",
+            "bin",
+            "MCP_Rhino.Bridge.exe");
+        yield return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "McNeel",
             "Rhinoceros",
             "8.0",

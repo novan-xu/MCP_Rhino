@@ -21,6 +21,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\MCP_Rhino.Transport\MCP_Rhino.Transport.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Reference Include="RhinoCommon" Aliases="rhinocommon">
       <HintPath>C:\Program Files\Rhino 8\System\netcore\RhinoCommon.dll</HintPath>
       <Private>false</Private>
@@ -36,7 +40,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\..\Project_Test\**\*.cs" LinkBase="Project_Test" />
+    <Compile Include="..\..\Project_Test\**\*.cs"
+             Exclude="..\..\Project_Test\260729_TEST_multi-document-rhino-router\RouterProtocolSmoke\**\*.cs"
+             LinkBase="Project_Test" />
     <Compile Include="..\..\Project_Archive\Project_Test\**\*.cs" LinkBase="Project_Archive\Project_Test" />
   </ItemGroup>
 

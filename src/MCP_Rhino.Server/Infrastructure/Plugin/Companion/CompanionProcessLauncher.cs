@@ -80,6 +80,11 @@ internal static class CompanionProcessLauncher
             CompanionExecutableName));
         yield return Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "MCP_Rhino",
+            "bin",
+            CompanionExecutableName);
+        yield return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "McNeel",
             "Rhinoceros",
             "8.0",

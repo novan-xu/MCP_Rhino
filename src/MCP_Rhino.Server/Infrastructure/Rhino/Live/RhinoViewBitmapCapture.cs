@@ -36,9 +36,31 @@ internal static class RhinoViewBitmapCapture
             };
             settings.MatchViewportAspectRatio();
 
+            return Capture(settings, view.MainViewport.Name);
+        }
+        catch (TargetInvocationException ex) when (ex.InnerException is not null)
+        {
+            return OperationResponse<RhinoCapturedBitmap>.Fail(ex.InnerException.Message);
+        }
+        catch (Exception ex)
+        {
+            return OperationResponse<RhinoCapturedBitmap>.Fail(ex.Message);
+        }
+    }
+
+    public static OperationResponse<RhinoCapturedBitmap> Capture(ViewCaptureSettings settings, string viewName)
+    {
+        MethodInfo? captureMethod = CaptureToBitmapMethod.Value;
+        if (captureMethod is null)
+        {
+            return OperationResponse<RhinoCapturedBitmap>.Fail("VIEW_CAPTURE_METHOD_NOT_FOUND");
+        }
+
+        try
+        {
             object? bitmap = captureMethod.Invoke(null, new object?[] { settings });
             return bitmap is null
-                ? OperationResponse<RhinoCapturedBitmap>.Fail($"Image capture failed for view [{view.MainViewport.Name}].")
+                ? OperationResponse<RhinoCapturedBitmap>.Fail($"Image capture failed for view [{viewName}].")
                 : OperationResponse<RhinoCapturedBitmap>.Ok(new RhinoCapturedBitmap(bitmap));
         }
         catch (TargetInvocationException ex) when (ex.InnerException is not null)
@@ -93,6 +115,63 @@ internal sealed class RhinoCapturedBitmap : IDisposable
         catch (Exception ex)
         {
             return OperationResponse.Fail(ex.Message);
+        }
+    }
+
+    public OperationResponse<bool> IsUniform()
+    {
+        try
+        {
+            Type bitmapType = _bitmap.GetType();
+            PropertyInfo? widthProperty = bitmapType.GetProperty("Width", BindingFlags.Public | BindingFlags.Instance);
+            PropertyInfo? heightProperty = bitmapType.GetProperty("Height", BindingFlags.Public | BindingFlags.Instance);
+            MethodInfo? getPixel = bitmapType.GetMethod(
+                "GetPixel",
+                BindingFlags.Public | BindingFlags.Instance,
+                binder: null,
+                types: new[] { typeof(int), typeof(int) },
+                modifiers: null);
+            if (widthProperty?.GetValue(_bitmap) is not int width
+                || heightProperty?.GetValue(_bitmap) is not int height
+                || getPixel is null
+                || width <= 0
+                || height <= 0)
+            {
+                return OperationResponse<bool>.Fail("Captured bitmap does not expose pixel inspection.");
+            }
+
+            const int sampleCount = 65;
+            int? firstArgb = null;
+            for (int row = 0; row < sampleCount; row++)
+            {
+                int y = (int)Math.Round(row * (height - 1d) / (sampleCount - 1d));
+                for (int column = 0; column < sampleCount; column++)
+                {
+                    int x = (int)Math.Round(column * (width - 1d) / (sampleCount - 1d));
+                    object? color = getPixel.Invoke(_bitmap, new object[] { x, y });
+                    MethodInfo? toArgb = color?.GetType().GetMethod("ToArgb", Type.EmptyTypes);
+                    if (toArgb?.Invoke(color, null) is not int argb)
+                    {
+                        return OperationResponse<bool>.Fail("Captured bitmap pixel color could not be inspected.");
+                    }
+
+                    firstArgb ??= argb;
+                    if (argb != firstArgb.Value)
+                    {
+                        return OperationResponse<bool>.Ok(false);
+                    }
+                }
+            }
+
+            return OperationResponse<bool>.Ok(true);
+        }
+        catch (TargetInvocationException ex) when (ex.InnerException is not null)
+        {
+            return OperationResponse<bool>.Fail(ex.InnerException.Message);
+        }
+        catch (Exception ex)
+        {
+            return OperationResponse<bool>.Fail(ex.Message);
         }
     }
 

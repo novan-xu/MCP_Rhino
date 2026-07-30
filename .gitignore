@@ -53,6 +53,8 @@ project.nuget.cache
 # Project-specific generated artifacts
 # =========================
 .tmp-build/
+.tmp-install*/
+.tmp-package*/
 artifacts/
 _validation/
 _validation/file-safeguard-build/

@@ -179,6 +179,8 @@ public sealed partial class DeveloperCommandHandler
             "PreviewModifyLayers",
             "PreviewPurgeLayers");
         Add(expectations, ToolSafetyExpectation.ReadOnlyClosedWorld,
+            "PreviewLotVisualizationExport");
+        Add(expectations, ToolSafetyExpectation.ReadOnlyClosedWorld,
             "SearchRhinoReference");
 
         Add(expectations, ToolSafetyExpectation.MutationClosedWorld,
@@ -273,6 +275,8 @@ public sealed partial class DeveloperCommandHandler
             "ExportToDxf",
             "ExportToIfc",
             "ExportToImage",
+            "ExportPrintScaleImages",
+            "ExportLotVisualization",
             "ExportToPdf",
             "ExportToStl",
             "GenerateProceduralTextureImage",

@@ -8,6 +8,7 @@ using MCP_Rhino.Server.Application.Services.Analysis;
 using MCP_Rhino.Server.Contracts.Requests;
 using MCP_Rhino.Server.Domain.Enums;
 using MCP_Rhino.Server.Skills.Inspection;
+using MCP_Rhino.Server.Skills.Drawing;
 using MCP_Rhino.Server.Skills.Modeling;
 
 namespace MCP_Rhino.Server.Infrastructure.CLI;
@@ -46,7 +47,9 @@ public sealed partial class DeveloperCommandHandler
     private readonly RhinoGeometryCurvatureService _geometryCurvatureService;
     private readonly RhinoGeometryIntersectionService _geometryIntersectionService;
     private readonly RhinoFileExportService _fileExportService;
+    private readonly RhinoPrintScaleImageExportService _printScaleImageExportService;
     private readonly RhinoDrawingExportService _drawingExportService;
+    private readonly LotVisualizationExportSkill _lotVisualizationExportSkill;
     private readonly RhinoExternalReferenceService _externalReferenceService;
     private readonly ArchitecturalPrimitiveCreationSkill _architecturalPrimitiveCreationSkill;
     private readonly ArchitecturalBooleanSkill _architecturalBooleanSkill;
@@ -104,6 +107,8 @@ public sealed partial class DeveloperCommandHandler
     partial void RegisterReferenceImageObjectModelingSkillsHandlers();
     partial void RegisterReferenceImageObjectModelingAgentHandlers();
     partial void RegisterFileExportReliabilityHandlers();
+    partial void RegisterPrintScaleImageExportHandlers();
+    partial void RegisterLotVisualizationExportSkillHandlers();
     partial void RegisterModelingSurfaceCleanupHandlers();
     partial void RegisterMaterialTextureCapabilityHandlers();
     partial void RegisterReferenceImageAgentAccessAndBriefingHandlers();
@@ -111,6 +116,7 @@ public sealed partial class DeveloperCommandHandler
     partial void RegisterSubDModelingToolsHandlers();
     partial void RegisterCompanionImageAttachmentsHandlers();
     partial void RegisterTakeoffSpreadsheetHandlers();
+    partial void RegisterMultiDocumentRhinoRouterHandlers();
 
     partial void RegisterExtensionHandlers()
     {
@@ -152,6 +158,8 @@ public sealed partial class DeveloperCommandHandler
         RegisterReferenceImageObjectModelingSkillsHandlers();
         RegisterReferenceImageObjectModelingAgentHandlers();
         RegisterFileExportReliabilityHandlers();
+        RegisterPrintScaleImageExportHandlers();
+        RegisterLotVisualizationExportSkillHandlers();
         RegisterModelingSurfaceCleanupHandlers();
         RegisterMaterialTextureCapabilityHandlers();
         RegisterReferenceImageAgentAccessAndBriefingHandlers();
@@ -159,6 +167,7 @@ public sealed partial class DeveloperCommandHandler
         RegisterSubDModelingToolsHandlers();
         RegisterCompanionImageAttachmentsHandlers();
         RegisterTakeoffSpreadsheetHandlers();
+        RegisterMultiDocumentRhinoRouterHandlers();
     }
 
     public DeveloperCommandHandler(
@@ -194,7 +203,9 @@ public sealed partial class DeveloperCommandHandler
         RhinoGeometryCurvatureService geometryCurvatureService,
         RhinoGeometryIntersectionService geometryIntersectionService,
         RhinoFileExportService fileExportService,
+        RhinoPrintScaleImageExportService printScaleImageExportService,
         RhinoDrawingExportService drawingExportService,
+        LotVisualizationExportSkill lotVisualizationExportSkill,
         RhinoExternalReferenceService externalReferenceService,
         ArchitecturalPrimitiveCreationSkill architecturalPrimitiveCreationSkill,
         ArchitecturalBooleanSkill architecturalBooleanSkill,
@@ -242,7 +253,9 @@ public sealed partial class DeveloperCommandHandler
         _geometryCurvatureService = geometryCurvatureService;
         _geometryIntersectionService = geometryIntersectionService;
         _fileExportService = fileExportService;
+        _printScaleImageExportService = printScaleImageExportService;
         _drawingExportService = drawingExportService;
+        _lotVisualizationExportSkill = lotVisualizationExportSkill;
         _externalReferenceService = externalReferenceService;
         _architecturalPrimitiveCreationSkill = architecturalPrimitiveCreationSkill;
         _architecturalBooleanSkill = architecturalBooleanSkill;
