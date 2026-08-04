@@ -32,7 +32,7 @@ public static class RoutedHostFactory
         RoutedAttestationProvider attestationProvider)
     {
         HostApplicationBuilder builder = Host.CreateApplicationBuilder();
-        McpRhinoPlugin.ConfigurePluginServices(builder.Services);
+        PluginServiceRegistration.Configure(builder.Services);
 
         builder.Services.RemoveAll<ILiveRhinoDocumentAccessor>();
         builder.Services.AddSingleton<ILiveRhinoDocumentAccessor>(

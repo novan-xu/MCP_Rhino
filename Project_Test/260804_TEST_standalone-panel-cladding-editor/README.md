@@ -1,0 +1,15 @@
+# Standalone panel cladding editor smoke
+
+Run independently of MCP_Rhino.Server:
+
+```powershell
+dotnet run --project .\Project_Test\260804_TEST_standalone-panel-cladding-editor\PanelCladdingEditorSmoke.csproj -c Debug
+dotnet run --project .\Project_Test\260804_TEST_standalone-panel-cladding-editor\PanelCladdingEditorSmoke.csproj -c Release
+```
+
+The smoke verifies key parsing, curved projection, deterministic type identity, preview rendering,
+Open XML catalog behavior, command registration, and absence of MCP assembly references.
+
+The project reference sets `PanelCladdingTestHost=true`, asking MSBuild for a DLL-form test assembly
+because the `dotnet` console host resolves project references by DLL convention. Default and
+published production builds remain direct `.rhp` outputs.

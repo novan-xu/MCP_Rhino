@@ -7,11 +7,15 @@
       "Bash(awk '{print $NF}')",
       "Bash(dotnet run *)",
       "Bash(echo \"---EXIT:$?---\")",
-      "mcp__mcp-rhino__apply_object_user_text_writes"
+      "mcp__mcp-rhino__apply_object_user_text_writes",
+      "Bash(dotnet sln list *)",
+      "Bash(dotnet build *)",
+      "Bash(taskkill *)",
+      "PowerShell(Stop-Process *)"
     ]
   },
+  "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "mcp-rhino"
-  ],
-  "enableAllProjectMcpServers": true
+  ]
 }

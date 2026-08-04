@@ -54,5 +54,5 @@ internal sealed class PluginLoadContext : AssemblyLoadContext
              or "Microsoft.Extensions.Hosting"
              or "ModelContextProtocol"
              or "ModelContextProtocol.Core"
-             or "MCP_Rhino.Server";
+             or "MCP_Rhino.Server.Runtime";
 }

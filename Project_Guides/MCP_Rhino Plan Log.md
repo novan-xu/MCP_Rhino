@@ -77,7 +77,7 @@
   - **README.md（可选）**：说明运行命令、预期输出、依赖的 Rhino / MCP 环境。
 - 测试文件夹需在对应 EXET 文档的「关联产物」与「测试记录」章节被显式引用，形成 `PLAN → TEST → EXET` 的闭环。
 - 测试产物默认保留在仓库中，用于回归复查；若确认某份测试已被正式集成测试覆盖且不再需要独立留档，可在 EXET 文档中标注后整体删除该测试文件夹。
-- When construction work changes the MCP server, Rhino plugin host, bridge compatibility, tool registration, panel/session routing, or runtime prompt injection, the TEST / EXET record must include both Debug and Release plugin validation. Prefer `dotnet build .\MCP_Rhino.sln -c Debug` and `dotnet build .\MCP_Rhino.sln -c Release`; a narrower Server project build is acceptable only when the EXET explains why solution-level validation was unnecessary.
+- When construction work changes the MCP server, Rhino plugin host, Router compatibility, tool registration, route endpoint lifecycle, or document-session routing, the TEST / EXET record must include both Debug and Release plugin validation. Prefer `dotnet build .\MCP_Rhino.sln -c Debug` and `dotnet build .\MCP_Rhino.sln -c Release`; a narrower Server project build is acceptable only when the EXET explains why solution-level validation was unnecessary.
 
 ## 完成产物归档指南
 
@@ -98,7 +98,7 @@
   - 缺少匹配 PLAN / EXET / TEST 任一产物的孤立文件
   - `README.md` 等目录说明文件
 - 归档后的 EXET 内部链接可以保留为历史路径；只有在该文档被重新编辑时才需要顺手修正为归档路径。
-- 当前 `MCP_Rhino.Server` 会编译活动 `Project_Test/**/*.cs` 与已归档 `Project_Archive/Project_Test/**/*.cs` 中的 smoke 注册代码，以保证历史 Rhino smoke command / CLI slug 在移动到归档后仍可构建。不要把生产实现代码放进这两个测试根目录。
+- 当前 `MCP_Rhino.Server` 默认编译活动 `Project_Test/**/*.cs` 与已归档 `Project_Archive/Project_Test/**/*.cs` 中的 smoke 注册代码，以保证历史 Rhino smoke command / CLI slug 在移动到归档后仍可构建。只有当某项 capability 已在新的 PLAN / EXET 中被明确退役、其生产类型已删除且旧 smoke 无法再代表受支持行为时，才可按精确 TEST 文件夹路径从编译中排除；禁止用宽泛 glob 静默停编其他历史 smoke。不要把生产实现代码放进这两个测试根目录。
 
 ## Live Smoke CLI 入口约定
 

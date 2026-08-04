@@ -1,17 +1,22 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
+    <McpRhinoCliHost Condition="'$(McpRhinoCliHost)' == ''">false</McpRhinoCliHost>
+    <McpRhinoIsolatedRuntime Condition="'$(McpRhinoIsolatedRuntime)' == ''">false</McpRhinoIsolatedRuntime>
+    <OutputType Condition="'$(McpRhinoIsolatedRuntime)' == 'true' or '$(McpRhinoCliHost)' != 'true'">Library</OutputType>
+    <OutputType Condition="'$(McpRhinoIsolatedRuntime)' != 'true' and '$(McpRhinoCliHost)' == 'true'">Exe</OutputType>
+    <AssemblyName Condition="'$(McpRhinoIsolatedRuntime)' == 'true'">MCP_Rhino.Server.Runtime</AssemblyName>
+    <TargetExt Condition="'$(McpRhinoIsolatedRuntime)' == 'true'">.dll</TargetExt>
+    <TargetExt Condition="'$(McpRhinoIsolatedRuntime)' != 'true' and '$(McpRhinoCliHost)' == 'true'">.dll</TargetExt>
+    <TargetExt Condition="'$(McpRhinoIsolatedRuntime)' != 'true' and '$(McpRhinoCliHost)' != 'true'">.rhp</TargetExt>
+    <GenerateDependencyFile>true</GenerateDependencyFile>
+    <DefineConstants Condition="'$(McpRhinoIsolatedRuntime)' == 'true'">$(DefineConstants);MCP_RHINO_ISOLATED_RUNTIME</DefineConstants>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>MCP_Rhino.Server</RootNamespace>
     <LangVersion>latest</LangVersion>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
-    <DefineConstants>$(DefineConstants);MCP_RHINO_BRIDGE_PIPE_ONLY</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
@@ -29,34 +34,42 @@
       <HintPath>C:\Program Files\Rhino 8\System\netcore\RhinoCommon.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="Rhino.UI">
-      <HintPath>C:\Program Files\Rhino 8\System\netcore\Rhino.UI.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="Eto">
-      <HintPath>C:\Program Files\Rhino 8\System\Eto.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
   </ItemGroup>
 
   <ItemGroup>
     <Compile Include="..\..\Project_Test\**\*.cs"
-             Exclude="..\..\Project_Test\260729_TEST_multi-document-rhino-router\RouterProtocolSmoke\**\*.cs"
+             Exclude="..\..\Project_Test\260507_TEST_debug-bridge-only-plugin\**\*.cs;
+                      ..\..\Project_Test\260507_TEST_panel-runtime-policy\**\*.cs;
+                      ..\..\Project_Test\260509_TEST_companion-image-attachments\**\*.cs;
+                      ..\..\Project_Test\260729_TEST_multi-document-rhino-router\RouterProtocolSmoke\**\*.cs;
+                      ..\..\Project_Test\260804_TEST_panel-cladding-type-editor\**\*.cs;
+                      ..\..\Project_Test\260804_TEST_standalone-panel-cladding-editor\**\*.cs;
+                      ..\..\Project_Test\260804_TEST_direct-rhp-plugin-identity\RhpExecutableProbe\**\*.cs"
              LinkBase="Project_Test" />
-    <Compile Include="..\..\Project_Archive\Project_Test\**\*.cs" LinkBase="Project_Archive\Project_Test" />
+    <Compile Include="..\..\Project_Archive\Project_Test\**\*.cs"
+             Exclude="..\..\Project_Archive\Project_Test\260505_TEST_rhino-claude-code-panel\**\*.cs;
+                      ..\..\Project_Archive\Project_Test\260506_TEST_llm-panel-cli-switching\**\*.cs;
+                      ..\..\Project_Archive\Project_Test\260506_TEST_multi-rhino-panel-pipes\**\*.cs;
+                      ..\..\Project_Archive\Project_Test\260506_TEST_rhino-chat-file-lock-safety\**\*.cs;
+                      ..\..\Project_Archive\Project_Test\260506_TEST_rhino-chat-save-safety\**\*.cs;
+                      ..\..\Project_Archive\Project_Test\260506_TEST_rhino-claude-code-companion-ui\**\*.cs"
+             LinkBase="Project_Archive\Project_Test" />
   </ItemGroup>
 
-  <ItemGroup>
-    <None Update="Infrastructure\Plugin\plugin.manifest">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <Content Include="Prompts\Runtime\*.md">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+  <!-- Production is an automatic Router host, not a Rhino command surface. -->
+  <ItemGroup Condition="'$(McpRhinoIsolatedRuntime)' != 'true' and '$(McpRhinoCliHost)' != 'true'">
+    <Compile Remove="Infrastructure\Plugin\*Command.cs" />
   </ItemGroup>
 
-  <Target Name="CopyRhinoPluginAssembly" AfterTargets="Build">
-    <Copy SourceFiles="$(TargetDir)$(AssemblyName).dll" DestinationFiles="$(TargetDir)$(AssemblyName).rhp" />
-  </Target>
+  <ItemGroup Condition="'$(McpRhinoIsolatedRuntime)' == 'true'">
+    <Compile Remove="Infrastructure\Plugin\MCP_Rhino.RhinoPlugin.cs" />
+    <Compile Remove="Infrastructure\Plugin\PluginLoadContext.cs" />
+    <Compile Remove="Infrastructure\Plugin\*Command.cs" />
+    <Compile Remove="Infrastructure\Plugin\Routing\RoutedDocumentEndpointDispatcher.cs" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(McpRhinoCliHost)' != 'true'">
+    <Compile Remove="Program.cs" />
+  </ItemGroup>
 
 </Project>

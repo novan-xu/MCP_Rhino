@@ -10,7 +10,7 @@
 - 只负责应用启动、Host 构建、调用注册扩展。
 - 不放业务逻辑。
 - 不放 RhinoCommon 读写细节。
-- MCP server 的默认启动形态为 **Rhino Plugin 加载回调**（`.rhp` 宿主）；plugin 在 Rhino 进程内启动 **Named Pipe MCP server**。外部 Client 由独立的 `MCP_Rhino.Bridge` 项目产出的 `.exe` 承担 stdio-to-pipe 桥接。`Program.cs` 保留为可执行入口，但仅服务于开发期 live smoke fallback，不承担 MCP host 角色。
+- MCP server 的唯一启动形态为 **Rhino Plugin 加载回调**（`.rhp` 宿主）发布 per-document route endpoints，外部 Client 只启动 `MCP_Rhino.Router.exe`。`Program.cs` 保留为可执行入口，但仅服务于开发期 smoke fallback，不承担 MCP host 或 transport 角色。
 
 ### 2. Server/
 - `DependencyInjection.cs`：注册内部服务、仓储、基础设施实现。
@@ -78,11 +78,10 @@
 - 这里回答"具体如何和外部技术打交道"。
 
 - **Rhino 适配组织**：`Infrastructure/Rhino/` 承载 RhinoCommon 适配；所有与文档状态有关的适配器以 `Live*` 前缀命名。历史保留的 `Rhino/Live/` 子目录可继续作为分组使用，但项目执行模式只有 Live 一种。
-- **`Plugin/` 子目录**：放置 Rhino `.rhp` 宿主入口（`MCP_Rhino.RhinoPlugin.cs`、`McpNamedPipeServer.cs` 等）。在 `OnLoad` 里尝试启动 **Developer Debug Named Pipe MCP server**（固定管道 `\\.\pipe\mcp_rhino`），承载测试 / smoke / 外部调试 MCP 协议帧；Client 端经独立的 `MCP_Rhino.Bridge` 项目提供的 stdio-to-pipe 桥接 exe 连入。多 Rhino 进程并行时，固定 debug 管道只能由一个进程拥有；其它 Rhino 进程不得因此加载失败，仍必须能启动自己的 process-scoped panel-bound 管道。
-- **Plugin build-mode contract**：`Debug` and `Release` both build `MCP_Rhino.Server.rhp`, but they intentionally expose different Rhino UI surfaces. `Debug` defines `MCP_RHINO_BRIDGE_PIPE_ONLY`, loads only when needed, and preserves the old bridge-pipe-only plugin shape: it starts only the Developer Debug Control Path (`\\.\pipe\mcp_rhino`) and must not launch Companion, Rhino-hosted chat panel, panel-bound pipes, or routed document endpoints. Packaged `Release` returns `PlugInLoadTime.AtStartup`: it keeps the debug pipe, enables `_Mcpchat` / Companion / panel-bound pipes, and publishes one independent route endpoint for every saved open document in the Rhino process. Startup route failures are diagnostic and must not prevent Rhino from loading. The MCP tool registration and protocol surface must stay shared across both configurations.
-- **MCP update validation rule**：Any construction work that changes the MCP server, plugin host, bridge compatibility, tool registration, panel/session routing, or runtime prompt injection must compile the Debug plugin as well as the Release plugin. The validation record must include `dotnet build .\MCP_Rhino.sln -c Debug` and `dotnet build .\MCP_Rhino.sln -c Release`, or a narrower Debug/Release project build with a stated reason. If the tool surface changes, run the MCP tool safety smoke in both configurations.
-- **`Plugin/Panel/` 子目录**：放置 Rhino 内 fallback chat panel、per-document panel dispatcher、panel chat session glue。默认 `_Mcpchat` 优先启动独立 Companion；只有 Companion 不可用时才使用 Rhino-hosted fallback panel。
-- **`Plugin/Companion/` 子目录**：放置从 Rhino plugin 启动独立 Companion 进程的薄适配（launch spec、process launcher、session handle 等）。这里只负责 Rhino 侧启动与生命周期衔接，不承载 LLM session 业务。
+- **`Plugin/` 子目录**：放置 Rhino `.rhp` 宿主入口、route endpoint dispatcher、`McpNamedPipeServer` 与 routed host factory。插件只发布 `mcp_rhino_route_<ProcessId>_<RuntimeSerialNumber>` endpoints，不启动其他 MCP transport 或嵌入式 chat surface。
+- **Plugin build-mode contract**：Debug 与 Release 都返回 `PlugInLoadTime.AtStartup`，使用相同的 Router-only plugin shape、相同的 MCP tool/resource surface 与相同的 per-document route lifecycle。禁止重新引入按 configuration 分叉的连接模式。
+- **MCP update validation rule**：Any construction work that changes the MCP server, plugin host, Router compatibility, tool registration, route endpoint lifecycle, or document-session routing must compile the Debug plugin as well as the Release plugin. The validation record must include `dotnet build .\MCP_Rhino.sln -c Debug` and `dotnet build .\MCP_Rhino.sln -c Release`, or a narrower Debug/Release project build with a stated reason. If the tool surface changes, run the MCP tool safety smoke in both configurations.
+- **Router-only transport contract**：Router 是唯一受支持的 client transport。Fixed debug pipe、stdio bridge、embedded/standalone chat companion 与 panel-bound MCP server 均不得作为 fallback、debug shortcut 或可选安装组件恢复。
 - `CLI/` 放置面向开发者 / 终端的命令行适配实现（例如 `DeveloperCommandHandler`），作为外部入口到 Application / Agent 层的薄适配层；`Program.cs` 只负责解析并委托给这里。
 
 ### 9. Contracts/
@@ -103,8 +102,7 @@
 - 放置 Agent / Skill 使用的提示词模板。
 - 长 prompt 不要硬编码在 C# 类中。
 - 可使用 `.md`、`.txt`、`.yaml` 等文本文件组织。
-- `Prompts/Runtime/McpRhinoRuntimePolicyBundle.md` 是 chat panel / Companion 注入给 LLM 的 runtime-only policy bundle；它只约束运行时 Rhino / 外部文件任务，不承载能力构建规则。
-- 该 runtime policy bundle 只允许由 chat panel / Companion prompt 路径加载；仓库工作区 / test route 仍使用 `AGENTS.md`、`Runtime_Workflow/`、`Project_Guides/`，不得把 panel runtime policy 当作仓库级规则注入。
+- Transport 不拥有或注入 LLM runtime prompt。仓库工作区与 test route 使用 `AGENTS.md`、`Runtime_Workflow/` 和 `Project_Guides/`；Agent/Skill 专用 prompt 仍按其能力归属放在本目录。
 
 ## 新功能归属判断表
 
@@ -149,9 +147,8 @@ Rhino 侧的能力只跑一种模式：经 RhinoCommon 操作运行中的 `Rhino
 
 ### 通用契约
 
-- 所有能力必须由 Rhino Plugin 宿主加载，或经未来的 panel-bound MCP server 驱动。
-- 全局 pipe 路径解析为 `RhinoDoc.ActiveDoc`。目标文档必须存在、已 Save 到磁盘（`doc.Path` 非空）、且 `doc.Path` 与请求中的 `FilePath` 匹配，否则分别返回 `NO_ACTIVE_DOCUMENT` / `ACTIVE_DOC_UNSAVED` / `FILE_NOT_ACTIVE`。
-- Panel-bound 路径解析为 `RhinoDoc.FromRuntimeSerialNumber(boundSerial)`。目标文档必须存在、已 Save 到磁盘；请求 `FilePath` 在 bound mode 下被忽略并重写为绑定文档当前 `Path`。文档不存在 / 未保存分别返回 `DOCUMENT_CLOSED` / `ACTIVE_DOC_UNSAVED`；正常不返回 `FILE_NOT_ACTIVE`。
+- 所有能力必须由 Rhino Plugin 宿主加载，并由 Router 选择的 routed endpoint 驱动。
+- Routed path 解析为 `RhinoDoc.FromRuntimeSerialNumber(boundSerial)`。目标文档必须存在且已保存；文档关闭或未保存分别返回 `DOCUMENT_CLOSED` / `ACTIVE_DOC_UNSAVED`。显式选择与冲突 `FilePath` 由 Router 返回 `DOCUMENT_TARGET_CONFLICT`。
 - RhinoCommon 的 `RhinoDoc` / `Rhino.Geometry` API 限定在 Rhino UI 主线程。所有访问必须经 `ILiveRhinoDocumentAccessor` 封送到主线程同步执行；主线程长时间阻塞（> 10s）时返回 `RHINO_MAIN_THREAD_BUSY`。
 - 不允许在 live 失败后改读磁盘快照；调用方必须面对当前 Rhino 会话状态。
 
@@ -178,42 +175,11 @@ Rhino 侧的能力只跑一种模式：经 RhinoCommon 操作运行中的 `Rhino
 - 因 Rhino Undo 已覆盖"误操作可回退"的核心诉求，`IFileMutationSafeguard` / Archive snapshot / preflight warning 机制不再保留，相关 Tool、Skill、Service、接口一并下线。
 - Save 时机回归 Rhino 既有流程（用户手动 Save 或 Rhino 自带 AutoSave）。
 
-### Developer Debug Control Path（Global Pipe）
+### Router-only transport contract
 
-`\\.\pipe\mcp_rhino` 是开发者调试控制路径，目标文档解析为 `RhinoDoc.ActiveDoc`。
-
-- 触发场景：外部 MCP client 或 smoke 经 `MCP_Rhino.Bridge.exe` 默认参数连接 `\\.\pipe\mcp_rhino`。
-- 用途：快速验证新 tool / skill / agent 的 live Rhino 行为、回归既有能力、调试外部 MCP client 配置。
-- 约束：目标文档必须是当前 `RhinoDoc.ActiveDoc`，且请求 `FilePath` 必须与 `ActiveDoc.Path` 匹配；否则沿用 `NO_ACTIVE_DOCUMENT` / `ACTIVE_DOC_UNSAVED` / `FILE_NOT_ACTIVE`。
-- 这条路径是正式保留的开发入口，但不是最终多文档 / 多 Rhino 进程用户体验路径；外部 agent 的多文档、多进程控制必须走 Router path，`_Mcpchat` / Companion 继续走 panel-bound per-doc server。
-- `mcp_rhino` 是单 owner debug pipe：同一台机器上只能有一个 Rhino 进程拥有它。第二个 Rhino 进程如果遇到 `All pipe instances are busy`，必须只禁用本进程的 debug pipe 并继续提供 panel-bound 管道，不能进入无限错误循环，也不能阻止插件加载。
-- `bin/Debug/net8.0/MCP_Rhino.Server.rhp` is the preferred plugin for bridge-only external MCP client testing. It must keep this debug pipe path working and must reject chat panel / panel-bound startup.
-- `bin/Release/net8.0/MCP_Rhino.Server.rhp` must remain compatible with the same bridge path while also supporting `_Mcpchat` and panel-bound execution.
-- 新能力的 capability smoke 可以优先走该路径或专属 Rhino smoke command 验证业务能力；panel smoke 只验证 panel / bound accessor / CC / per-doc pipe 生命周期。
-
-### Panel-bound execution mode（Per-Document）
-
-Live Only 是默认模式，绑定到 `RhinoDoc.ActiveDoc`。本子节描述 panel 启用的 per-doc 绑定变体。
-
-- 触发场景：Rhino 内由 chat panel / companion 启动的 per-doc MCP server 实例（`\\.\pipe\mcp_rhino_<ProcessId>_<RuntimeSerialNumber>`）。
-- 实现：`Infrastructure/Rhino/Live/BoundLiveRhinoDocumentAccessor` 实现 `ILiveRhinoDocumentAccessor`，所有 `RhinoDoc` 解析都来自 `RhinoDoc.FromRuntimeSerialNumber(boundSerial)`，不走 `ActiveDoc`。
-- Pipe 命名必须同时包含 Rhino 进程 id 与 `RuntimeSerialNumber`。`RuntimeSerialNumber` 只保证在单个 Rhino 进程内稳定，不保证跨 Rhino 进程唯一；禁止恢复为 `mcp_rhino_<RuntimeSerialNumber>` 这类跨进程可碰撞命名。
-- Panel / companion 生成的临时 MCP config 目录也必须按 pipe name 隔离，不能只按 `RuntimeSerialNumber` 隔离。
-- Panel / companion 启动 Claude / Codex / bridge 等 LLM 子进程时，进程工作目录必须使用按 pipe name 隔离的临时目录；禁止把 `.3dm` 所在目录作为 CLI working directory。绑定文档路径只能作为 prompt / MCP tool 参数传递，不能作为本地文件工具、project workspace、session persistence 或 fallback 读取的入口。
-- 约束：
-  - 绑定 doc 必须存在（`FromRuntimeSerialNumber` 非 null）→ 否则返回 `DOCUMENT_CLOSED`。
-  - 绑定 doc 必须已落盘（`doc.Path` 非空）→ 否则沿用 `ACTIVE_DOC_UNSAVED`。
-  - 请求 `FilePath` 字段在 bound mode 下被忽略并自动重写为绑定 doc 的当前 `Path`；正常不返回 `FILE_NOT_ACTIVE`。
-  - 主线程封送、Undo record 包裹、超时（`> 10s` → `RHINO_MAIN_THREAD_BUSY`）等约束沿用 Live Only §通用契约。
-- 全局管道（`\\.\pipe\mcp_rhino`）作为 Developer Debug Control Path 保留 `ActiveDoc`-following 严格语义，不受本子节约束。
-- 新增错误码 `DOCUMENT_CLOSED`：bound doc 在 tool call 飞行期间被关闭。客户端处理建议：停止后续调用；面板侧此时已经在 dispatcher 触发 panel 销毁。
-- 并发：per-doc panel 不开启并行写入。所有 mutation 仍经 `RhinoApp.InvokeOnUiThread` 序列化在 UI 主线程，跨 panel 串行执行。
-
-### External Multi-Document Router Path
-
-- Packaged Release Rhino plug-in startup creates a current-user route endpoint per saved open
-  document. Pipe names use `mcp_rhino_route_<ProcessId>_<RuntimeSerialNumber>` and are distinct from
-  both the fixed debug pipe and panel-bound pipes.
+- Debug and Release Rhino plug-in startup creates a current-user route endpoint per saved open
+  document. Pipe names use `mcp_rhino_route_<ProcessId>_<RuntimeSerialNumber>`; no alternate MCP
+  endpoint namespace is supported.
 - `MCP_Rhino.Transport` owns only the BCL-based route protocol, path normalization, endpoint
   descriptor/attestation records, and the atomic current-user discovery registry under
   `%LOCALAPPDATA%\MCP_Rhino\Routing\v1`. It contains no Rhino or MCP business surface.
@@ -231,7 +197,7 @@ Live Only 是默认模式，绑定到 `RhinoDoc.ActiveDoc`。本子节描述 pan
 - Unsaved documents may be listed as unavailable, but become routable on first Save. Save As keeps
   the document session/pipe and atomically republishes the verified path. Closing marks the
   descriptor unavailable before one bounded aggregate endpoint drain.
-- Release installation uses Rhino 8's current-user package layout
+- Installation uses Rhino 8's current-user package layout
   `%APPDATA%\McNeel\Rhinoceros\packages\8.0\MCP_Rhino\<version>` and installs external executables at
   `%LOCALAPPDATA%\MCP_Rhino\bin`. Client entries must use the absolute installed Router path and must
   never point to repository `bin` output. Installer changes to client configuration require explicit
@@ -250,9 +216,7 @@ Live Only 是默认模式，绑定到 `RhinoDoc.ActiveDoc`。本子节描述 pan
 ## 演进指南
 
 - 主 Server 项目（`MCP_Rhino.Server`，产出 `.rhp`）保持单项目分层的 DDD 目录结构；当业务复杂度显著上升时再考虑拆 `Application.Core` / `Infrastructure` 等子项目。
-- **例外：`MCP_Rhino.Bridge` 为独立 csproj**，承载 stdio-to-named-pipe 桥接能力（详见 §8 Plugin/ 子目录）。它只依赖 BCL 的 `System.IO.Pipes`，不引 RhinoCommon，不承担业务逻辑；不适合放进 `Infrastructure/` 下，因为它是 MCP Client 直接 spawn 的最小 exe，对部署可移动性有独立诉求。后续若有其他类似"对外 thin shim"项目，可建立 `src/` 下的兄弟 csproj，但禁止反向依赖主 Server 项目的业务层。
-- **例外：`MCP_Rhino.Companion` 为独立 WPF / WebView2 csproj**，承载 `_Mcpchat` 默认打开的 standalone chat UI。它由 Rhino plugin 启动，绑定到单个已保存 Rhino 文档，使用 process-scoped panel pipe 和 `MCP_Rhino.Bridge` 接入 MCP；它不引 RhinoCommon，不直接读写 `.3dm`，不替代 Server 内的 Tool / Skill / Agent 层。
-- **例外：`MCP_Rhino.Transport` 为独立 BCL-only csproj**，只承载 Router / Release plugin 共享的 discovery、descriptor、attestation 和 route pipe contract。它不得依赖 RhinoCommon 或 MCP SDK。
+- **例外：`MCP_Rhino.Transport` 为独立 BCL-only csproj**，只承载 Router / plugin 共享的 discovery、descriptor、attestation 和 route pipe contract。它不得依赖 RhinoCommon 或 MCP SDK。
 - **例外：`MCP_Rhino.Router` 为独立 stdio MCP csproj**，承载每个外部 agent session 的多文档 discovery、selection 和 backend proxy。它可以依赖 Transport 和固定版本 MCP SDK，但不得依赖 Server 或 RhinoCommon，也不得承载 Rhino business logic。
 - **`Packaging/MCP_Rhino/`** owns Release staging, current-user install/repair/uninstall, owned hashes,
   rollback state, and opt-in client configuration templates. Deployment code must not contain Rhino

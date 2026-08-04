@@ -26,28 +26,23 @@ When adding a new rule file, decide by intent: *how to build* goes to `Project_G
 ### Current MCP Runtime Shape
 
 - Rhino-facing runtime capabilities are Live Only. They operate on the currently running Rhino 8 document through the loaded `MCP_Rhino.Server.rhp` plugin; do not fall back to direct `.3dm` disk reads.
-- Normal installed external MCP clients launch `%LOCALAPPDATA%\MCP_Rhino\bin\MCP_Rhino.Router.exe`
-  over stdio. Each client session owns its Router process; users do not start a Router daemon.
-- The Router discovers every saved open document published by every packaged Release Rhino process.
-  Call `rhino_router_list_documents`, then `rhino_router_select_document` with its opaque session id
+- `MCP_Rhino.Router.exe` is the only supported MCP client connection. Installed clients launch
+  `%LOCALAPPDATA%\MCP_Rhino\bin\MCP_Rhino.Router.exe` over stdio; each client session owns its Router
+  process, and users do not start a shared Router daemon.
+- Debug and Release `MCP_Rhino.Server.rhp` builds have the same startup shape. The plugin loads at
+  Rhino startup and publishes a current-user route endpoint for every saved open document in that
+  Rhino process. Opening or closing documents updates discovery without loading another plugin.
+- Call `rhino_router_list_documents`, then `rhino_router_select_document` with its opaque session id
   before using tools that do not carry an unambiguous top-level `filePath`.
-- `MCP_Rhino.Bridge.exe` remains the explicit developer/test stdio path. Its default mode connects to
-  the single-owner Developer Debug Control Path `\\.\pipe\mcp_rhino`, resolved against
-  `RhinoDoc.ActiveDoc`; `--pipe` remains available for an explicit pipe.
-- `bin/Debug/net8.0/MCP_Rhino.Server.rhp` is the bridge-pipe-only plugin used for the old external-client/test route. It starts the debug pipe but does not provide `_Mcpchat`, Companion, or panel-bound pipes.
-- The packaged Release `MCP_Rhino.Server.rhp` loads at Rhino startup. It keeps the debug bridge pipe,
-  enables `_Mcpchat`, Companion, and panel-bound pipes, and publishes current-user route endpoints for
-  all saved documents in that Rhino process. Opening another document does not load another plug-in;
-  the one process-level plug-in instance tracks document lifecycle.
-- `_Mcpchat` opens the standalone `MCP_Rhino.Companion` by default. The companion is bound to one saved Rhino document and connects through a process-scoped pipe named `\\.\pipe\mcp_rhino_<ProcessId>_<RuntimeSerialNumber>`.
-- If the standalone companion cannot be launched, the Rhino-hosted fallback panel may use the same panel-bound execution semantics.
-- In bound mode, `FilePath` is treated as prompt context only; the server rewrites it to the bound document path. In global debug mode, `FilePath` must match `RhinoDoc.ActiveDoc.Path`.
 - In Router mode, the endpoint is bound to one runtime serial number. A selected session plus a
   conflicting `filePath` returns `DOCUMENT_TARGET_CONFLICT`; duplicate open paths return
   `DOCUMENT_TARGET_AMBIGUOUS` until the caller selects a session id. A lost mutation connection is
   not replayed and reports `MUTATION_OUTCOME_UNKNOWN`.
-- Panel-launched LLM sessions receive the runtime-only policy bundle from `src/MCP_Rhino.Server/Prompts/Runtime/McpRhinoRuntimePolicyBundle.md`; they do not inherit repository construction rules from `AGENTS.md`.
-- Repository-workspace / test-route sessions do not receive this panel runtime policy as injected prompt context. They run from the repository workspace and must follow `AGENTS.md`, `Runtime_Workflow/`, and `Project_Guides/` instead.
+- Fixed debug pipes, stdio bridges, embedded chat/companion surfaces, and per-document panel pipes are
+  retired. Do not add a fallback transport when Router discovery or selection fails; report the live
+  route capability gap instead.
+- Repository-workspace and test-route sessions follow `AGENTS.md`, `Runtime_Workflow/`, and
+  `Project_Guides/`.
 - MCP resources, when registered, are reference-only surfaces. They may be used for static RhinoCommon/RhinoScript references, local tool help, or modeling policy text. They must not be used as a substitute for live document reads, previews, mutations, selection state, viewport state, or filesystem export.
 
 ### 1. Assess

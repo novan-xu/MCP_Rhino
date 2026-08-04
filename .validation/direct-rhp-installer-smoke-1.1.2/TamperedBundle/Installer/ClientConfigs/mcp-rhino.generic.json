@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "mcp-rhino": {
+      "type": "stdio",
+      "command": "%LOCALAPPDATA%\\MCP_Rhino\\bin\\MCP_Rhino.Router.exe",
+      "args": []
+    }
+  }
+}

@@ -23,5 +23,5 @@ if (handler.TryHandle(args))
     return;
 }
 
-Console.Error.WriteLine("CLI mode only supports explicit developer commands. Load the Rhino plugin and use MCP_Rhino.Bridge for MCP transport.");
+Console.Error.WriteLine("CLI mode only supports explicit developer commands. Load the Rhino plugin and use MCP_Rhino.Router for MCP transport.");
 Environment.ExitCode = 1;

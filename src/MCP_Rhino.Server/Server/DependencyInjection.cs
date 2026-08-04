@@ -17,7 +17,6 @@ public static class DependencyInjection
     public static IServiceCollection AddLiveRhinoAdapters(this IServiceCollection services)
     {
         services.AddSingleton<ILiveRhinoDocumentAccessor, LiveRhinoDocumentAccessor>();
-        services.AddSingleton<ILiveRhinoDocumentAccessorFactory, LiveRhinoDocumentAccessorFactory>();
         services.AddSingleton<ILiveGeometryBuilder, LiveRhinoGeometryBuilder>();
         services.AddSingleton<ILiveGeneralPrimitiveBuilder, LiveGeneralPrimitiveBuilder>();
         services.AddSingleton<ILiveCurveDerivedGeometryOperator, LiveCurveDerivedGeometryOperator>();
@@ -66,7 +65,6 @@ public static class DependencyInjection
     public static IServiceCollection AddCliFallbackLiveRhinoAdapters(this IServiceCollection services)
     {
         services.AddSingleton<ILiveRhinoDocumentAccessor, NullLiveRhinoDocumentAccessor>();
-        services.AddSingleton<ILiveRhinoDocumentAccessorFactory, LiveRhinoDocumentAccessorFactory>();
         services.AddSingleton<ILiveGeometryBuilder, LiveRhinoGeometryBuilder>();
         services.AddSingleton<ILiveGeneralPrimitiveBuilder, LiveGeneralPrimitiveBuilder>();
         services.AddSingleton<ILiveCurveDerivedGeometryOperator, LiveCurveDerivedGeometryOperator>();

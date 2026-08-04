@@ -76,20 +76,12 @@ public sealed partial class DeveloperCommandHandler
     partial void RegisterGeometryEditDerivedRoutingHandlers();
     partial void RegisterGeometryEditSurfaceCompositeHandlers();
     partial void RegisterSurfacePointOrderRebuildHandlers();
-    partial void RegisterRhinoClaudeCodePanelHandlers();
-    partial void RegisterRhinoClaudeCodeCompanionUiHandlers();
     partial void RegisterGravityAwareSurfacePointOrderHandlers();
     partial void RegisterSurfaceDirectionTweakHandlers();
     partial void RegisterStandardFourPointSurfaceRebuildHandlers();
     partial void RegisterSurfaceFrontBackFlipHandlers();
     partial void RegisterDrawingExportHandlers();
-    partial void RegisterRhinoChatSaveSafetyHandlers();
-    partial void RegisterMultiRhinoPanelPipeHandlers();
-    partial void RegisterLlmPanelCliSwitchingHandlers();
     partial void RegisterMcpToolSafetyAnnotationHandlers();
-    partial void RegisterRhinoChatFileLockSafetyHandlers();
-    partial void RegisterPanelRuntimePolicyHandlers();
-    partial void RegisterDebugBridgeOnlyPluginHandlers();
     partial void RegisterArchitecturalModelingPrimitivesHandlers();
     partial void RegisterBlockCapabilitiesHandlers();
     partial void RegisterMcpSurfaceStructureGovernanceHandlers();
@@ -114,9 +106,9 @@ public sealed partial class DeveloperCommandHandler
     partial void RegisterReferenceImageAgentAccessAndBriefingHandlers();
     partial void RegisterReferenceImageAccurateProductModelingHandlers();
     partial void RegisterSubDModelingToolsHandlers();
-    partial void RegisterCompanionImageAttachmentsHandlers();
     partial void RegisterTakeoffSpreadsheetHandlers();
     partial void RegisterMultiDocumentRhinoRouterHandlers();
+    partial void RegisterDirectRhpPluginIdentityHandlers();
 
     partial void RegisterExtensionHandlers()
     {
@@ -127,20 +119,12 @@ public sealed partial class DeveloperCommandHandler
         RegisterGeometryEditDerivedRoutingHandlers();
         RegisterGeometryEditSurfaceCompositeHandlers();
         RegisterSurfacePointOrderRebuildHandlers();
-        RegisterRhinoClaudeCodePanelHandlers();
-        RegisterRhinoClaudeCodeCompanionUiHandlers();
         RegisterGravityAwareSurfacePointOrderHandlers();
         RegisterSurfaceDirectionTweakHandlers();
         RegisterStandardFourPointSurfaceRebuildHandlers();
         RegisterSurfaceFrontBackFlipHandlers();
         RegisterDrawingExportHandlers();
-        RegisterRhinoChatSaveSafetyHandlers();
-        RegisterMultiRhinoPanelPipeHandlers();
-        RegisterLlmPanelCliSwitchingHandlers();
         RegisterMcpToolSafetyAnnotationHandlers();
-        RegisterRhinoChatFileLockSafetyHandlers();
-        RegisterPanelRuntimePolicyHandlers();
-        RegisterDebugBridgeOnlyPluginHandlers();
         RegisterArchitecturalModelingPrimitivesHandlers();
         RegisterBlockCapabilitiesHandlers();
         RegisterMcpSurfaceStructureGovernanceHandlers();
@@ -165,9 +149,9 @@ public sealed partial class DeveloperCommandHandler
         RegisterReferenceImageAgentAccessAndBriefingHandlers();
         RegisterReferenceImageAccurateProductModelingHandlers();
         RegisterSubDModelingToolsHandlers();
-        RegisterCompanionImageAttachmentsHandlers();
         RegisterTakeoffSpreadsheetHandlers();
         RegisterMultiDocumentRhinoRouterHandlers();
+        RegisterDirectRhpPluginIdentityHandlers();
     }
 
     public DeveloperCommandHandler(

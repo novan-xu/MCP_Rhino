@@ -91,6 +91,7 @@ Follow `Project_Guides/` and:
 - Do not start `PLAN` work without explicit user confirmation.
 - Do not bypass `Project_Guides` when constructing new capabilities.
 - Do not disguise a capability gap as an executable runtime task.
+- Do not use Computer Use or any other Windows UI automation unless the user explicitly requests Computer Use or Windows UI automation in the current request. Mentioning an application or file, or asking to "open" or "go to" one, does not by itself authorize UI automation.
 
 ## Document Priority
 

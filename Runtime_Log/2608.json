@@ -1,0 +1,6 @@
+{"ts":"2026-08-04T10:48","task":"verify live modification access to test.3dm","tools":["GetLayers"]}
+{"ts":"2026-08-04T10:51","task":"verify routed live modification access to test.3dm","tools":["rhino_router_list_documents","rhino_router_select_document","GetLayers"]}
+{"ts":"2026-08-04T11:31","task":"verify Router-only live modification access to BKT WF setup test.3dm using a no-op current-layer mutation","tools":["rhino_router_list_documents","rhino_router_select_document","GetDocumentSummary","SetCurrentLayerInLive","AppendActivityLog"]}
+{"ts":"2026-08-04T11:59","task":"develop linked Grasshopper Python script for WT-01 panel mullion offsets and dynamic cladding user-text keys","tools":["rhino_router_list_documents","rhino_router_select_document","FilterObjects","GetEditableGeometryDescriptor","GetGeometryFramesInLive","ShellCommand","AppendActivityLog"]}
+{"ts":"2026-08-04T12:04","task":"revise WT-01 Grasshopper panel attribute script to mutate input Breps in place with no outputs","tools":["rhino_router_list_documents","rhino_router_select_document","ShellCommand","AppendActivityLog"]}
+{"ts":"2026-08-04T17:37","task":"change WT-01 layer color to cyan in routed live BKT WF setup test.3dm and verify","tools":["rhino_router_list_documents","rhino_router_select_document","GetLayers","PreviewModifyLayers","ModifyLayers","AppendActivityLog"]}

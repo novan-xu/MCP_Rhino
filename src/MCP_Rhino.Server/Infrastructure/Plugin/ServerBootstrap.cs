@@ -1,65 +1,16 @@
-using MCP_Rhino.Server.Server;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-
 namespace MCP_Rhino.Server.Infrastructure.Plugin;
 
-// Entry point invoked by McpRhinoPlugin via reflection after this assembly has
-// been reloaded into an isolated AssemblyLoadContext. Only primitives and JSON
-// strings cross the load-context boundary.
+// Entry point invoked by McpRhinoPlugin via reflection from the isolated
+// MCP_Rhino.Server.Runtime assembly. That runtime variant deliberately excludes
+// all Rhino PlugIn and Command entry types. Only primitives and JSON strings
+// cross the load-context boundary.
 public sealed class ServerBootstrap : IDisposable
 {
     private static readonly TimeSpan ListenerReadyTimeout = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan AggregateStopTimeout = TimeSpan.FromSeconds(5);
 
-    private readonly object _boundPipeLock = new();
-    private readonly Dictionary<string, McpNamedPipeServer> _boundPipeServers = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _routedPipeLock = new();
     private readonly Dictionary<string, RoutedPipeRegistration> _routedPipeServers = new(StringComparer.OrdinalIgnoreCase);
-    private McpNamedPipeServer? _pipeServer;
-
-    public void Start(string pipeName)
-    {
-        _pipeServer = new McpNamedPipeServer(
-            pipeName,
-            CreateConnectionHost,
-            stopOnPipeCreateFailure: true,
-            pipeCreateFailureHint: "If another Rhino instance owns this debug pipe, this Rhino instance can still use process-scoped panel and route pipes.");
-        _pipeServer.Start();
-    }
-
-    public void StartBoundPipeServer(string pipeName, uint runtimeSerialNumber)
-    {
-        lock (_boundPipeLock)
-        {
-            if (_boundPipeServers.ContainsKey(pipeName))
-            {
-                return;
-            }
-
-            var pipeServer = new McpNamedPipeServer(
-                pipeName,
-                BoundHostFactory.For(runtimeSerialNumber),
-                stopOnPipeCreateFailure: true,
-                pipeCreateFailureHint: "This panel-bound pipe did not start. Check for stale clients or unexpected pipe-name collisions.");
-            pipeServer.Start();
-            _boundPipeServers.Add(pipeName, pipeServer);
-        }
-    }
-
-    public void StopBoundPipeServer(string pipeName)
-    {
-        McpNamedPipeServer? pipeServer = null;
-        lock (_boundPipeLock)
-        {
-            if (_boundPipeServers.Remove(pipeName, out McpNamedPipeServer? existing))
-            {
-                pipeServer = existing;
-            }
-        }
-
-        pipeServer?.Dispose();
-    }
 
     public bool StartRoutedPipeServer(string pipeName, uint runtimeSerialNumber, string attestationJson)
     {
@@ -127,18 +78,6 @@ public sealed class ServerBootstrap : IDisposable
     public void Dispose()
     {
         StopAllRoutedPipeServers();
-
-        List<McpNamedPipeServer> boundServers;
-        lock (_boundPipeLock)
-        {
-            boundServers = _boundPipeServers.Values.ToList();
-            _boundPipeServers.Clear();
-        }
-
-        StopServersTogether(boundServers);
-
-        _pipeServer?.Dispose();
-        _pipeServer = null;
     }
 
     private static void StopServersTogether(IReadOnlyCollection<McpNamedPipeServer> servers)
@@ -161,20 +100,6 @@ public sealed class ServerBootstrap : IDisposable
         {
             server.DisposeAfterStopRequested();
         }
-    }
-
-    private static IHost CreateConnectionHost(Stream input, Stream output)
-    {
-        HostApplicationBuilder builder = Host.CreateApplicationBuilder();
-        McpRhinoPlugin.ConfigurePluginServices(builder.Services);
-
-        builder.Services
-            .AddMcpServer()
-            .AddRhinoTools()
-            .AddRhinoResources()
-            .WithStreamServerTransport(input, output);
-
-        return builder.Build();
     }
 
     private sealed record RoutedPipeRegistration(
