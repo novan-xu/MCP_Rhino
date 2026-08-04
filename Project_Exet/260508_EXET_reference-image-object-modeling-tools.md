@@ -67,7 +67,7 @@ Material support was implemented as Rhino document material-table creation plus 
 Debug server build with alternate output:
 
 ```powershell
-dotnet build src\MCP_Rhino.Server\MCP_Rhino.Server.csproj -c Debug -p:OutputPath=C:\01_Projects\MCP_Rhino\.validation\server-debug\
+dotnet build src\MCP_Rhino.Server\MCP_Rhino.Server.csproj -c Debug -p:OutputPath=<REPO_ROOT>\.validation\server-debug\
 ```
 
 Result:
@@ -79,7 +79,7 @@ Result:
 Debug safety smoke from alternate output:
 
 ```powershell
-dotnet C:\01_Projects\MCP_Rhino\.validation\server-debug\MCP_Rhino.Server.dll mcp-tool-safety-annotations-smoke-test
+dotnet <REPO_ROOT>\.validation\server-debug\MCP_Rhino.Server.dll mcp-tool-safety-annotations-smoke-test
 ```
 
 Result:
@@ -90,7 +90,7 @@ Result:
 Debug CLI fallback smoke from alternate output:
 
 ```powershell
-dotnet C:\01_Projects\MCP_Rhino\.validation\server-debug\MCP_Rhino.Server.dll reference-image-object-modeling-tools-smoke-test
+dotnet <REPO_ROOT>\.validation\server-debug\MCP_Rhino.Server.dll reference-image-object-modeling-tools-smoke-test
 ```
 
 Result:

@@ -25,7 +25,7 @@
 - Updated the archived MCP tool-safety regression table with `ExportPrintScaleImages` as destructive open-world.
 - Invoked the newly built exporter inside the active lot-model Rhino process through RhinoCode, without Computer Use, so captures used the current live unsaved state.
 - Final live exports use 2400 × 2400 px, 300 DPI, 6 mm margins, a common same-unit model-scale denominator of `804.9790654462527`, and white background.
-- Removed five untagged task-generated Breps from `01_BKT-CW Panels::slab` after an exact-id preview, then removed the empty layer and regenerated the four images from the original 1,167 panel objects.
+- Removed five untagged task-generated Breps from `01_SAMPLE-CW Panels::slab` after an exact-id preview, then removed the empty layer and regenerated the four images from the original 1,167 panel objects.
 
 ## 与计划的偏差
 
@@ -49,7 +49,7 @@
 - Post-implementation `dotnet build MCP_Rhino.sln -c Release --no-restore`: exit `0`, 0 warnings, 0 errors.
 - Final corrected `dotnet build src/MCP_Rhino.Server/MCP_Rhino.Server.csproj -c Debug --no-restore`: exit `0`, 0 warnings, 0 errors.
 - Final corrected Release build to isolated output:
-  `dotnet build src/MCP_Rhino.Server/MCP_Rhino.Server.csproj -c Release --no-restore -o C:\Users\nxu\AppData\Local\Temp\MCP_Rhino_PrintScaleBuild_Final`
+  `dotnet build src/MCP_Rhino.Server/MCP_Rhino.Server.csproj -c Release --no-restore -o %USERPROFILE%\AppData\Local\Temp\MCP_Rhino_PrintScaleBuild_Final`
   → exit `0`, 0 warnings, 0 errors.
 - A normal-path final Release copy attempt failed only because Rhino PID 4000 held the previously live-loaded DLL; compilation to the isolated output succeeded.
 
@@ -62,7 +62,7 @@
 
 ### Live model verification
 
-- Active document: `V:\01 Project Folders\P00020 BayHealth Kent Tower BKT\03-Design-Eng\03-BIM\05-Wireframe\06_exports\20260729_Lot visualization\20260729_Lot visualization.3dm`
+- Active document: `<PROJECT_ROOT>\06_exports\20260729_Lot visualization\20260729_Lot visualization.3dm`
 - Model units: Inches.
 - Final object count: 1,167 Breps.
 - Named isometric views present: `MCP_Iso_NE`, `MCP_Iso_NW`, `MCP_Iso_SE`, `MCP_Iso_SW`.

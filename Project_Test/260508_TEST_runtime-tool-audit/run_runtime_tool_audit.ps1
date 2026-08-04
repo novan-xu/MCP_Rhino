@@ -1,6 +1,6 @@
 param(
-    [string]$RepoRoot = "C:\01_Projects\MCP_Rhino",
-    [string]$DocumentPath = "C:\Users\Novan\Desktop\Untitled.3dm"
+    [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path,
+    [string]$DocumentPath = "<LOCAL_TEST_MODEL_PATH>"
 )
 
 $ErrorActionPreference = "Stop"

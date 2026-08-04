@@ -65,7 +65,7 @@ modeling-surface-cleanup-smoke-test
 Alternate Debug server build:
 
 ```powershell
-dotnet build src\MCP_Rhino.Server\MCP_Rhino.Server.csproj -c Debug -p:OutputPath=C:\01_Projects\MCP_Rhino\.validation\modeling-surface-cleanup-debug\
+dotnet build src\MCP_Rhino.Server\MCP_Rhino.Server.csproj -c Debug -p:OutputPath=<REPO_ROOT>\.validation\modeling-surface-cleanup-debug\
 ```
 
 Result:
@@ -77,7 +77,7 @@ Result:
 Debug cleanup smoke:
 
 ```powershell
-dotnet C:\01_Projects\MCP_Rhino\.validation\modeling-surface-cleanup-debug\MCP_Rhino.Server.dll modeling-surface-cleanup-smoke-test
+dotnet <REPO_ROOT>\.validation\modeling-surface-cleanup-debug\MCP_Rhino.Server.dll modeling-surface-cleanup-smoke-test
 ```
 
 Result:
@@ -87,7 +87,7 @@ Result:
 Debug safety smoke:
 
 ```powershell
-dotnet C:\01_Projects\MCP_Rhino\.validation\modeling-surface-cleanup-debug\MCP_Rhino.Server.dll mcp-tool-safety-annotations-smoke-test
+dotnet <REPO_ROOT>\.validation\modeling-surface-cleanup-debug\MCP_Rhino.Server.dll mcp-tool-safety-annotations-smoke-test
 ```
 
 Result:
@@ -98,7 +98,7 @@ Result:
 Debug retained primitive smoke:
 
 ```powershell
-dotnet C:\01_Projects\MCP_Rhino\.validation\modeling-surface-cleanup-debug\MCP_Rhino.Server.dll architectural-modeling-primitives-smoke-test
+dotnet <REPO_ROOT>\.validation\modeling-surface-cleanup-debug\MCP_Rhino.Server.dll architectural-modeling-primitives-smoke-test
 ```
 
 Result:

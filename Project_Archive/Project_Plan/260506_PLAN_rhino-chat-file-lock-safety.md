@@ -3,7 +3,7 @@
 ## Background
 
 After Claude Code modified a Rhino document from the MCP_Rhino panel, Rhino could not save
-`C:\Users\nxu\OneDrive - Island International Industries\Desktop\MET - Wireframe desktop.3dm`.
+`<LOCAL_TEST_MODEL_PATH>`.
 The file was not marked read-only, but an exclusive open check failed. Windows Restart Manager
 reported the blocking process tree as `MCP_Rhino.Companion.exe`, `claude.exe`, and
 `MCP_Rhino.Bridge.exe`.

@@ -36,7 +36,7 @@ The archived MCP client integration probe used `StreamReader.Peek()` to poll bri
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File Project_Test\260508_TEST_bridge-handshake-probe\run_bridge_handshake_validation.ps1 `
-  -DocumentPath "C:\Users\Novan\Desktop\Untitled.3dm"
+  -DocumentPath "<LOCAL_TEST_MODEL_PATH>"
 ```
 
 ## Acceptance Criteria

@@ -56,7 +56,7 @@ Deferred:
 Debug build:
 
 ```powershell
-dotnet build .\src\MCP_Rhino.Server\MCP_Rhino.Server.csproj -c Debug -p:OutputPath="c:\01_Projects\MCP_Rhino\.validation\exec-debug\"
+dotnet build .\src\MCP_Rhino.Server\MCP_Rhino.Server.csproj -c Debug -p:OutputPath="<REPO_ROOT>\.validation\exec-debug\"
 ```
 
 Result:
@@ -67,7 +67,7 @@ Result:
 Release build:
 
 ```powershell
-dotnet build .\src\MCP_Rhino.Server\MCP_Rhino.Server.csproj -c Release -p:OutputPath="c:\01_Projects\MCP_Rhino\.validation\exec-release\"
+dotnet build .\src\MCP_Rhino.Server\MCP_Rhino.Server.csproj -c Release -p:OutputPath="<REPO_ROOT>\.validation\exec-release\"
 ```
 
 Result:
@@ -86,7 +86,7 @@ Result for both Debug and Release:
 
 - `[OK] material texture capability smoke kept material, texture, lighting, and shadow cues out of geometry.`
 - `[OK] ReferenceImageObjectModelingAgent raised-strip policy rejects non-geometric visual cues.`
-- `[OK] generated procedural woven texture image: C:\01_Projects\MCP_Rhino\.validation\material-texture-smoke\woven-smoke.png (2151 bytes).`
+- `[OK] generated procedural woven texture image: <REPO_ROOT>\.validation\material-texture-smoke\woven-smoke.png (2151 bytes).`
 - `[OK] textured material creation and texture mapping route to live Rhino after validation.`
 
 MCP surface governance smoke:

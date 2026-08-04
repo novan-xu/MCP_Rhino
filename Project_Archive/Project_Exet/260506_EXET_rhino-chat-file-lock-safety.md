@@ -13,7 +13,7 @@
 ## Execution Result / Actual Scope
 
 - Diagnosed the active desktop file:
-  `C:\Users\nxu\OneDrive - Island International Industries\Desktop\MET - Wireframe desktop.3dm`.
+  `<LOCAL_TEST_MODEL_PATH>`.
 - Confirmed the file was not read-only (`Attributes=Archive`, `IsReadOnly=False`).
 - Confirmed an exclusive open failed while the error was active.
 - Used Windows Restart Manager to identify the lock owners:
@@ -21,7 +21,7 @@
   - `claude.exe` PID 44000
   - `MCP_Rhino.Bridge.exe` PID 37020
 - Observed Rhino's failed save temp file:
-  `MET - Wireframe desktop.3dm_tmp`, last write `2026-05-06 16:26:50`.
+  `Sample - Wireframe.3dm_tmp`, last write `2026-05-06 16:26:50`.
 - Added isolated per-pipe workspace helpers for companion and legacy panel launches.
 - Changed Claude and Codex launch paths so their working directory is no longer the `.3dm` folder.
 - Changed the Rhino-to-companion process launch to `UseShellExecute = true` so the companion tree
@@ -62,7 +62,7 @@
 ## Test Record
 
 ```powershell
-dotnet build .\MCP_Rhino.sln -c Release -p:OutDir=C:\Projects\MCP_Rhino\.tmp-build\Release\
+dotnet build .\MCP_Rhino.sln -c Release -p:OutDir=<REPO_ROOT>\.tmp-build\Release\
 ```
 
 - Exit code: 0
@@ -117,7 +117,7 @@ dotnet run --project .\src\MCP_Rhino.Server\MCP_Rhino.Server.csproj -c Release -
 
 Additional live lock check after the inherited-handle process tree exited:
 
-- `C:\Users\nxu\OneDrive - Island International Industries\Desktop\MET - Wireframe desktop.3dm`
+- `<LOCAL_TEST_MODEL_PATH>`
 - `LockedExclusive=False`
 - `IsReadOnly=False`
 
@@ -141,7 +141,7 @@ Additional live lock check after the inherited-handle process tree exited:
 
 - Manual Rhino verification is still required with the rebuilt plug-in: open the test file, start
   `_Mcpchat`, perform a small Claude/Codex MCP mutation, and save.
-- The failed save temp file `MET - Wireframe desktop.3dm_tmp` remains next to the model. It was not
+- The failed save temp file `Sample - Wireframe.3dm_tmp` remains next to the model. It was not
   deleted automatically in this pass so Rhino's recovery path is not disturbed.
 
 ## Conclusion

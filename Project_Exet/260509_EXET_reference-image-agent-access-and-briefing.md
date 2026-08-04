@@ -36,7 +36,7 @@ Implemented the access strategy:
 Debug build:
 
 ```powershell
-dotnet build .\src\MCP_Rhino.Server\MCP_Rhino.Server.csproj -c Debug -p:OutputPath="c:\01_Projects\MCP_Rhino\.validation\exec-debug\"
+dotnet build .\src\MCP_Rhino.Server\MCP_Rhino.Server.csproj -c Debug -p:OutputPath="<REPO_ROOT>\.validation\exec-debug\"
 ```
 
 Result:
@@ -47,7 +47,7 @@ Result:
 Release build:
 
 ```powershell
-dotnet build .\src\MCP_Rhino.Server\MCP_Rhino.Server.csproj -c Release -p:OutputPath="c:\01_Projects\MCP_Rhino\.validation\exec-release\"
+dotnet build .\src\MCP_Rhino.Server\MCP_Rhino.Server.csproj -c Release -p:OutputPath="<REPO_ROOT>\.validation\exec-release\"
 ```
 
 Result:

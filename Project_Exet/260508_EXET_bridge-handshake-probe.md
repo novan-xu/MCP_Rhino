@@ -39,7 +39,7 @@ No bridge transport or server runtime code was changed. The issue was isolated t
 - `StandardOutput.Peek()` produced a false timeout after `initialize`; replacing it with `ReadLineAsync()` fixed the probe.
 - The probe needed to use the exported snake_case tool name `get_document_summary`.
 - A temporary build attempt using both `BaseOutputPath` and `BaseIntermediateOutputPath` created duplicate assembly attribute errors because moving the intermediate folder changed default `obj` exclusion behavior. The corrected validation used `OutputPath` only.
-- Rhino was not running during the first live wrapper attempt; Rhino 8 was started with `C:\Users\Novan\Desktop\Untitled.3dm`, and the Debug plugin was loaded with Rhino's `LoadPlugin` command.
+- Rhino was not running during the first live wrapper attempt; Rhino 8 was started with `<LOCAL_TEST_MODEL_PATH>`, and the Debug plugin was loaded with Rhino's `LoadPlugin` command.
 
 ## Test Record
 
@@ -64,27 +64,27 @@ Result: both server builds completed with 0 warnings and 0 errors.
 
 Validated `.rhp` outputs:
 
-- `C:\Users\Novan\AppData\Local\Temp\mcp-rhino-server-debug-output\MCP_Rhino.Server.rhp`
-- `C:\Users\Novan\AppData\Local\Temp\mcp-rhino-server-release-output\MCP_Rhino.Server.rhp`
+- `%USERPROFILE%\AppData\Local\Temp\mcp-rhino-server-debug-output\MCP_Rhino.Server.rhp`
+- `%USERPROFILE%\AppData\Local\Temp\mcp-rhino-server-release-output\MCP_Rhino.Server.rhp`
 
 ### Live Runtime Validation
 
 Rhino 8 was started with:
 
 ```powershell
-C:\Users\Novan\Desktop\Untitled.3dm
+<LOCAL_TEST_MODEL_PATH>
 ```
 
 Debug plugin was loaded into Rhino with:
 
 ```text
-_-LoadPlugin "C:\01_Projects\MCP_Rhino\src\MCP_Rhino.Server\bin\Debug\net8.0\MCP_Rhino.Server.rhp"
+_-LoadPlugin "<REPO_ROOT>\src\MCP_Rhino.Server\bin\Debug\net8.0\MCP_Rhino.Server.rhp"
 ```
 
 Regression wrapper command:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\Project_Test\260508_TEST_bridge-handshake-probe\run_bridge_handshake_validation.ps1 -DocumentPath C:\Users\Novan\Desktop\Untitled.3dm -TimeoutSeconds 20
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Project_Test\260508_TEST_bridge-handshake-probe\run_bridge_handshake_validation.ps1 -DocumentPath <LOCAL_TEST_MODEL_PATH> -TimeoutSeconds 20
 ```
 
 Result: exit code 0.
@@ -92,7 +92,7 @@ Result: exit code 0.
 Observed live `get_document_summary` result:
 
 - `success`: true
-- `filePath`: `C:\Users\Novan\Desktop\Untitled.3dm`
+- `filePath`: `<LOCAL_TEST_MODEL_PATH>`
 - `objectCount`: 202
 - `layerCount`: 18
 - `units`: Millimeters

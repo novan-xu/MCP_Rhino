@@ -56,11 +56,11 @@
   - `dotnet build .\MCP_Rhino.sln -c Release -v:minimal`
   - Exit code: 0
 - Debug CLI fallback smoke:
-  - `dotnet run --project .\src\MCP_Rhino.Server\MCP_Rhino.Server.csproj -- file-export-reliability-smoke-test C:\Users\Novan\Desktop\Untitled.3dm`
+  - `dotnet run --project .\src\MCP_Rhino.Server\MCP_Rhino.Server.csproj -- file-export-reliability-smoke-test <LOCAL_TEST_MODEL_PATH>`
   - Exit code: 0
   - Output: `[OK] file-export-reliability CLI fallback smoke completed.`
 - Release CLI fallback smoke:
-  - `dotnet run --project .\src\MCP_Rhino.Server\MCP_Rhino.Server.csproj -c Release -- file-export-reliability-smoke-test C:\Users\Novan\Desktop\Untitled.3dm`
+  - `dotnet run --project .\src\MCP_Rhino.Server\MCP_Rhino.Server.csproj -c Release -- file-export-reliability-smoke-test <LOCAL_TEST_MODEL_PATH>`
   - Exit code: 0
   - Output: `[OK] file-export-reliability CLI fallback smoke completed.`
 - Packaged bitmap dependency check:
@@ -104,15 +104,15 @@ Validated against the running Debug plugin through `src\MCP_Rhino.Bridge\bin\Deb
 Loaded runtime:
 
 - Rhino process: `4892`
-- Active document: `C:\Users\Novan\Desktop\Untitled.3dm`
+- Active document: `<LOCAL_TEST_MODEL_PATH>`
 - Loaded plugin: `src\MCP_Rhino.Server\bin\Debug\net8.0\MCP_Rhino.Server.rhp`
 - Loaded plugin timestamp: `2026-05-08 20:50:05`
 - Loaded RhinoCommon: `C:\Program Files\Rhino 8\System\netcore\RhinoCommon.dll`, product version `Rhino 8.30`
-- Loaded `System.Drawing.Common`: `C:\Program Files\dotnet\shared\Microsoft.WindowsDesktop.App\8.0.26\System.Drawing.Common.dll`
+- Loaded `System.Drawing.Common`: `<DOTNET_SHARED_FRAMEWORK>\System.Drawing.Common.dll`
 
 Focused live tool probe output directory:
 
-- `C:\01_Projects\MCP_Rhino\_validation\live-file-export-check-20260508_205322`
+- `<REPO_ROOT>\_validation\live-file-export-check-20260508_205322`
 
 Results:
 

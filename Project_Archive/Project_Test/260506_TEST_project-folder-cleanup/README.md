@@ -114,7 +114,7 @@ Geometry analysis smoke test completed successfully (CLI fallback mode).
 
 ### Root Generated Artifact Cleanup
 
-Removed generated root artifacts after verifying their paths were under `C:\Projects\MCP_Rhino`:
+Removed generated root artifacts after verifying their paths were under `<REPO_ROOT>`:
 
 - `.tmp-build/`
 - `artifacts/`

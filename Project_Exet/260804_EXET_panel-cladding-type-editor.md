@@ -8,9 +8,9 @@
 ## Related artifacts
 
 - Tests: [Project_Test/260804_TEST_panel-cladding-type-editor/](../Project_Test/260804_TEST_panel-cladding-type-editor/)
-- Shared Grasshopper script: `V:\01 Project Folders\P00020 BayHealth Kent Tower BKT\03-Design-Eng\03-BIM\05-Wireframe\02_grasshopper\WF setup\WT01_panel_mullion_attributes.py`
-- Verified delivery bundle: `C:\Projects\MCP_Rhino\_validation\panel-cladding-type-editor\delivery\MCP_Rhino-1.0.3`
-- Staged production install: `C:\Users\nxu\AppData\Local\MCP_Rhino\staged\1.0.3-20260804192138899`
+- Shared Grasshopper script: `<PROJECT_ROOT>\02_grasshopper\WF setup\WT01_panel_mullion_attributes.py`
+- Verified delivery bundle: `<REPO_ROOT>\_validation\panel-cladding-type-editor\delivery\MCP_Rhino-1.0.3`
+- Staged production install: `%USERPROFILE%\AppData\Local\MCP_Rhino\staged\1.0.3-20260804192138899`
 - Commit / PR: not created
 
 ## Execution result / actual implementation
@@ -48,7 +48,7 @@
 ### Grasshopper script syntax
 
 ```powershell
-python -m py_compile "V:\01 Project Folders\P00020 BayHealth Kent Tower BKT\03-Design-Eng\03-BIM\05-Wireframe\02_grasshopper\WF setup\WT01_panel_mullion_attributes.py"
+python -m py_compile "<PROJECT_ROOT>\02_grasshopper\WF setup\WT01_panel_mullion_attributes.py"
 ```
 
 - Exit code: 0
@@ -83,7 +83,7 @@ dotnet run --project .\src\MCP_Rhino.Server\MCP_Rhino.Server.csproj -c Release -
 
 ### Workbook visual verification
 
-- Artifact: `C:\Projects\MCP_Rhino\_validation\panel-cladding-type-editor\Debug3\panel-cladding-types.xlsx`
+- Artifact: `<REPO_ROOT>\_validation\panel-cladding-type-editor\Debug3\panel-cladding-types.xlsx`
 - The spreadsheet verifier inspected all three sheets and found no formula errors.
 - `Read Me` remained unchanged.
 - `_CLADDING_INDEX` remained hidden and contained the full digest/signature mapping.
@@ -109,7 +109,7 @@ Packaging\MCP_Rhino\Build-McpRhinoPackage.ps1 -OutputRoot _validation\panel-clad
 ### Production staging boundary
 
 - Default installer detected active Rhino/Router processes and did not overwrite the installation.
-- Final audited bundle was staged at `C:\Users\nxu\AppData\Local\MCP_Rhino\staged\1.0.3-20260804192138899`.
+- Final audited bundle was staged at `%USERPROFILE%\AppData\Local\MCP_Rhino\staged\1.0.3-20260804192138899`.
 - No client configuration was changed.
 
 ## Acceptance criteria alignment
@@ -136,7 +136,7 @@ Packaging\MCP_Rhino\Build-McpRhinoPackage.ps1 -OutputRoot _validation\panel-clad
 ## Current remaining item
 
 - Close Rhino and Router processes, run
-  `C:\Users\nxu\AppData\Local\MCP_Rhino\staged\1.0.3-20260804192138899\Installer\Install-McpRhino.ps1`,
+  `%USERPROFILE%\AppData\Local\MCP_Rhino\staged\1.0.3-20260804192138899\Installer\Install-McpRhino.ps1`,
   restart Rhino, reopen `test.3dm`, then run `_McpPanelCladdingTypeEditorSmoke` followed by `_McpPanelCladdingEditor` on one WT-01 panel. This is required because Rhino cannot hot-replace the loaded `.rhp` and UI automation was not authorized.
 
 ## Conclusion

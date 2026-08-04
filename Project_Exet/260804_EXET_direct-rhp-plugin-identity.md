@@ -9,8 +9,8 @@
 
 - Test folder: `Project_Test/260804_TEST_direct-rhp-plugin-identity/`
 - Package bundle: `.validation/direct-rhp-package/MCP_Rhino-1.1.0/`
-- Production stage: `C:\Users\nxu\AppData\Local\MCP_Rhino\staged\1.1.0-20260804205619580\`
-- Installed plug-in: `C:\Users\nxu\AppData\Roaming\McNeel\Rhinoceros\packages\8.0\MCP_Rhino\1.1.0\`
+- Production stage: `%USERPROFILE%\AppData\Local\MCP_Rhino\staged\1.1.0-20260804205619580\`
+- Installed plug-in: `%USERPROFILE%\AppData\Roaming\McNeel\Rhinoceros\packages\8.0\MCP_Rhino\1.1.0\`
 - Commit / PR: none created in this execution.
 
 ## 执行结果 / 实际落地范围
@@ -158,7 +158,7 @@ On the first production launch of 1.1.0, Rhino still displayed `Unable to load M
 A PE-level comparison then found the remaining nonstandard difference:
 
 - installed MCP_Rhino 1.1.0 RHP managed entry point token: `100663317`;
-- working BayHealthPanelCladdingEditor 1.0.5 RHP managed entry point token: `0`.
+- working PanelCladdingEditor 1.0.5 RHP managed entry point token: `0`.
 
 The MCP_Rhino project still used `OutputType=Exe` for its production `.rhp` so `Program.cs` could remain directly runnable. File-identity tests did not detect this hybrid executable/plugin shape, and no prior test launched the final package through Rhino's real plug-in loader.
 
@@ -185,12 +185,12 @@ The MCP_Rhino project still used `OutputType=Exe` for its production `.rhp` so `
 ### Deployment state
 
 - The user closed Rhino, and no Rhino or Router process remained during deployment.
-- The corrected staged bundle `C:\Users\nxu\AppData\Local\MCP_Rhino\staged\1.1.1-20260804211328335\` installed successfully.
+- The corrected staged bundle `%USERPROFILE%\AppData\Local\MCP_Rhino\staged\1.1.1-20260804211328335\` installed successfully.
 - Installed ownership manifest and Yak package version: `1.1.1`.
 - Installed Router validation: passed.
 - Installer `Validate`: passed.
 - The installed plug-in root contains the production RHP and GUID-free isolated Runtime DLL, with no sibling `MCP_Rhino.Server.dll`, no executable host, and no custom `plugin.manifest`.
-- A recursive package-tree audit found exactly one discoverable MCP_Rhino RHP: `C:\Users\nxu\AppData\Roaming\McNeel\Rhinoceros\packages\8.0\MCP_Rhino\1.1.1\MCP_Rhino.Server.rhp`.
+- A recursive package-tree audit found exactly one discoverable MCP_Rhino RHP: `%USERPROFILE%\AppData\Roaming\McNeel\Rhinoceros\packages\8.0\MCP_Rhino\1.1.1\MCP_Rhino.Server.rhp`.
 - Required final action: restart Rhino and confirm the real loader no longer displays the duplicate-ID dialog.
 
 The earlier conclusion is superseded: 1.1.0 failed live Rhino acceptance because it was still an executable RHP. Version 1.1.1 corrects that production output shape and is installed and statically validated. Fresh Rhino startup remains the final live acceptance check.

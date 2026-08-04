@@ -22,8 +22,8 @@ CLI fallback validation reaches the live-Rhino boundary for document mutations. 
 ```powershell
 Test-Path .\Project_Plan\260509_PLAN_material-texture-capability.md
 Select-String -Path .\src\MCP_Rhino.Server\Prompts\Modeling\ReferenceImageObjectModelingAgent.md -Pattern 'Material, texture, lighting, and shadow cues are not object geometry'
-dotnet build .\src\MCP_Rhino.Server\MCP_Rhino.Server.csproj -c Debug -p:OutputPath="c:\01_Projects\MCP_Rhino\.validation\material-agent-debug\"
-dotnet build .\src\MCP_Rhino.Server\MCP_Rhino.Server.csproj -c Release -p:OutputPath="c:\01_Projects\MCP_Rhino\.validation\material-agent-release\"
+dotnet build .\src\MCP_Rhino.Server\MCP_Rhino.Server.csproj -c Debug -p:OutputPath="<REPO_ROOT>\.validation\material-agent-debug\"
+dotnet build .\src\MCP_Rhino.Server\MCP_Rhino.Server.csproj -c Release -p:OutputPath="<REPO_ROOT>\.validation\material-agent-release\"
 dotnet .\.validation\exec-debug\MCP_Rhino.Server.dll material-texture-capability-smoke-test
 dotnet .\.validation\exec-release\MCP_Rhino.Server.dll material-texture-capability-smoke-test
 dotnet .\.validation\exec-debug\MCP_Rhino.Server.dll mcp-surface-structure-governance-smoke-test

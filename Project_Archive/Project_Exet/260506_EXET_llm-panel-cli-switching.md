@@ -60,7 +60,7 @@
   - Exit code: 0
   - Debug pipe and process-scoped panel pipe checks passed
 
-- `codex debug prompt-input -c "mcp_servers.rhino.command='C:\Projects\MCP_Rhino\src\MCP_Rhino.Bridge\bin\Release\net8.0\MCP_Rhino.Bridge.exe'" -c "mcp_servers.rhino.args=['--pipe','mcp_rhino_nonexistent']" "ping"`
+- `codex debug prompt-input -c "mcp_servers.rhino.command='<REPO_ROOT>\src\MCP_Rhino.Bridge\bin\Release\net8.0\MCP_Rhino.Bridge.exe'" -c "mcp_servers.rhino.args=['--pipe','mcp_rhino_nonexistent']" "ping"`
   - Exit code: 0
   - Result: installed Codex accepted the TOML override shape
 

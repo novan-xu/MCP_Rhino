@@ -12,7 +12,7 @@
 #
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File handshake_probe.ps1 `
-#     -BridgeExe "C:\Projects\MCP_Rhino\src\MCP_Rhino.Bridge\bin\Release\net8.0\MCP_Rhino.Bridge.exe"
+#     -BridgeExe "<REPO_ROOT>\src\MCP_Rhino.Bridge\bin\Release\net8.0\MCP_Rhino.Bridge.exe"
 
 param(
     [Parameter(Mandatory = $true)]

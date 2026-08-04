@@ -56,17 +56,29 @@ project.nuget.cache
 .tmp-install*/
 .tmp-package*/
 artifacts/
+.validation/
 _validation/
 _validation/file-safeguard-build/
 _validation/geometry-smoke-test/
 _validation/online-mutation-refactor/
 _validation/layer-management-tools/
 _validation/live-document-smoke/
+**/obj-testhost/
+**/__pycache__/
+*.pyc
 *.3dmbak
 *.rhl
 _tmp*.csx
 .cline/
 .mcp.json
+
+# Local models, runtime history, and machine-specific client configuration
+*.3dm
+Runtime_Log/*.json
+Runtime_Test/Runtime_Log/*.json
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+.codex/config.toml
 
 # =========================
 # OS-generated files

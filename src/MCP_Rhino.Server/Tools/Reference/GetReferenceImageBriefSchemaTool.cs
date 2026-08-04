@@ -41,7 +41,7 @@ public sealed class GetReferenceImageBriefSchemaTool
             """,
             JsonExample = """
             {
-              "referenceImagePath": "C:/Users/Novan/Desktop/reference.png",
+              "referenceImagePath": "<USER_HOME>/Desktop/reference.png",
               "referenceImageLabel": "sofa-reference",
               "objectType": "sofa",
               "objectTypeConfidence": 0.9,

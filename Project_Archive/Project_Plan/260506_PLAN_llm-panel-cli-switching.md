@@ -4,7 +4,7 @@
 
 The companion LLM panel can switch between Claude Code CLI and Codex CLI, but three related issues were observed:
 
-- Codex startup fails on Windows when the discovered executable is an npm `.cmd` shim such as `C:\NX_setup\node-v24.14.1-win-x64\codex.cmd`.
+- Codex startup fails on Windows when the discovered executable is an npm `.cmd` shim such as `<CODEX_CLI_PATH>`.
 - Claude Code can leave the panel input disabled after the backing process is not running.
 - The WebView settings panel keeps showing Claude model choices after switching to Codex, and model selections are not handled by the host.
 

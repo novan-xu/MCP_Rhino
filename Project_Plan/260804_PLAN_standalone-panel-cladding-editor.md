@@ -42,7 +42,7 @@ MCP_Rhino project or assembly.
   explicit composition in the command.
 - Give the plug-in a new GUID and package name so Rhino treats it as a distinct product.
 - After Rhino persisted a collision against the original development identity, issue the clean
-  product identity `BayHealthPanelCladdingEditor` with GUID
+  product identity `PanelCladdingEditor` with GUID
   `7C1A4D3B-5E29-4F68-9A72-1D8C6B0F4E35`; command names and document schema remain unchanged.
 - Keep the command modeless and document/object pinned, with stale-fingerprint and Undo protection.
 - Keep workbook preparation before Rhino mutation and rollback Rhino state when external commit

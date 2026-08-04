@@ -26,7 +26,7 @@ Rhino 自己——在 Rhino 内开 docking panel，每打开一个 .3dm 就生�
 心智模型类比。
 
 LLM 本身的认证、模型选择、provider 路由全部委托给已经成熟的 **Claude Code CLI**
-（v2.1.119+，本机 `C:\Users\Novan\.local\bin\claude`），不在我们的插件里重写一遍。这条
+（v2.1.119+，本机 `%USERPROFILE%\.local\bin\claude`），不在我们的插件里重写一遍。这条
 决策有三个理由：
 
 - 用户已有 Claude Max 订阅 + claude.ai OAuth；CC 进程会自动继承，无需我们处理 API key。

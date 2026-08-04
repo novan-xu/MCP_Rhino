@@ -63,7 +63,7 @@ Result:
 Debug server validation with alternate output:
 
 ```powershell
-dotnet build .\src\MCP_Rhino.Server\MCP_Rhino.Server.csproj -c Debug -p:OutputPath=C:\01_Projects\MCP_Rhino\.validation\server-debug\
+dotnet build .\src\MCP_Rhino.Server\MCP_Rhino.Server.csproj -c Debug -p:OutputPath=<REPO_ROOT>\.validation\server-debug\
 ```
 
 Result:

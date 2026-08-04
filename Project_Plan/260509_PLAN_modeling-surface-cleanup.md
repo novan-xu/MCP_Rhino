@@ -74,9 +74,9 @@ Keep:
 Run:
 
 ```powershell
-dotnet build src\MCP_Rhino.Server\MCP_Rhino.Server.csproj -c Debug -p:OutputPath=C:\01_Projects\MCP_Rhino\.validation\modeling-surface-cleanup-debug\
-dotnet C:\01_Projects\MCP_Rhino\.validation\modeling-surface-cleanup-debug\MCP_Rhino.Server.dll modeling-surface-cleanup-smoke-test
-dotnet C:\01_Projects\MCP_Rhino\.validation\modeling-surface-cleanup-debug\MCP_Rhino.Server.dll mcp-tool-safety-annotations-smoke-test
+dotnet build src\MCP_Rhino.Server\MCP_Rhino.Server.csproj -c Debug -p:OutputPath=<REPO_ROOT>\.validation\modeling-surface-cleanup-debug\
+dotnet <REPO_ROOT>\.validation\modeling-surface-cleanup-debug\MCP_Rhino.Server.dll modeling-surface-cleanup-smoke-test
+dotnet <REPO_ROOT>\.validation\modeling-surface-cleanup-debug\MCP_Rhino.Server.dll mcp-tool-safety-annotations-smoke-test
 dotnet build .\MCP_Rhino.sln -c Release
 dotnet src\MCP_Rhino.Server\bin\Release\net8.0\MCP_Rhino.Server.dll modeling-surface-cleanup-smoke-test
 dotnet src\MCP_Rhino.Server\bin\Release\net8.0\MCP_Rhino.Server.dll mcp-tool-safety-annotations-smoke-test

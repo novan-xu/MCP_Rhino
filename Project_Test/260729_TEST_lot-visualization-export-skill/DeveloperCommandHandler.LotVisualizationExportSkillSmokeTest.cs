@@ -99,11 +99,11 @@ public sealed partial class DeveloperCommandHandler
             RequireLotVisualization(colors.Add($"{color.R},{color.G},{color.B}"), $"Lot color {index} was not distinct.");
         }
 
-        string firstName = (string)(createGroupName.Invoke(null, new object[] { "MCP_Lot_", "REL-BKT-PNL-01.00" })
+        string firstName = (string)(createGroupName.Invoke(null, new object[] { "MCP_Lot_", "REL-SAMPLE-PNL-01.00" })
             ?? throw new InvalidOperationException("Lot group naming policy returned null."));
-        string repeatedName = (string)(createGroupName.Invoke(null, new object[] { "MCP_Lot_", "REL-BKT-PNL-01.00" })
+        string repeatedName = (string)(createGroupName.Invoke(null, new object[] { "MCP_Lot_", "REL-SAMPLE-PNL-01.00" })
             ?? throw new InvalidOperationException("Lot group naming policy returned null."));
-        string secondName = (string)(createGroupName.Invoke(null, new object[] { "MCP_Lot_", "REL-BKT-PNL-02.00" })
+        string secondName = (string)(createGroupName.Invoke(null, new object[] { "MCP_Lot_", "REL-SAMPLE-PNL-02.00" })
             ?? throw new InvalidOperationException("Lot group naming policy returned null."));
         RequireLotVisualization(firstName == repeatedName, "Lot group naming should be deterministic.");
         RequireLotVisualization(firstName != secondName, "Different lots should receive different group names.");

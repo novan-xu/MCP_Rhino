@@ -69,7 +69,7 @@ That boundary is intentional: the MCP Rhino server should not pretend to have mu
 Debug server build with alternate output:
 
 ```powershell
-dotnet build src\MCP_Rhino.Server\MCP_Rhino.Server.csproj -c Debug -p:OutputPath=C:\01_Projects\MCP_Rhino\.validation\server-debug\
+dotnet build src\MCP_Rhino.Server\MCP_Rhino.Server.csproj -c Debug -p:OutputPath=<REPO_ROOT>\.validation\server-debug\
 ```
 
 Result:
@@ -81,7 +81,7 @@ Result:
 Debug skills smoke from alternate output:
 
 ```powershell
-dotnet C:\01_Projects\MCP_Rhino\.validation\server-debug\MCP_Rhino.Server.dll reference-image-object-modeling-skills-smoke-test
+dotnet <REPO_ROOT>\.validation\server-debug\MCP_Rhino.Server.dll reference-image-object-modeling-skills-smoke-test
 ```
 
 Result:
@@ -92,7 +92,7 @@ Result:
 Debug safety smoke from alternate output:
 
 ```powershell
-dotnet C:\01_Projects\MCP_Rhino\.validation\server-debug\MCP_Rhino.Server.dll mcp-tool-safety-annotations-smoke-test
+dotnet <REPO_ROOT>\.validation\server-debug\MCP_Rhino.Server.dll mcp-tool-safety-annotations-smoke-test
 ```
 
 Result:

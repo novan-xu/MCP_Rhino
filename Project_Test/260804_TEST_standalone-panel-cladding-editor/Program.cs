@@ -324,7 +324,7 @@ internal static class Program
         RequirePanelCladding(
             assembly.GetType("PanelCladdingEditor.PanelCladdingEditorPlugin")?.GUID ==
                 Guid.Parse("7C1A4D3B-5E29-4F68-9A72-1D8C6B0F4E35"),
-            "Standalone plug-in must use the clean BayHealth product GUID.");
+            "Standalone plug-in must use the clean product GUID.");
 
         Type editorCommand = assembly.GetType("PanelCladdingEditor.UI.PanelCladdingEditorCommand")!;
         Type smokeCommand = assembly.GetType("PanelCladdingEditor.UI.PanelCladdingEditorSmokeCommand")!;

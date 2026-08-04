@@ -23,7 +23,7 @@ The corrected requirement is surface-local:
 - "lower-left" is evaluated in the view from the surface front face, using projected gravity as local down;
 - point order starts at that lower-left corner and proceeds clockwise in that front-face view.
 
-Reference sketch: `C:\Users\nxu\OneDrive - Island International Industries\Downloads\image.png`.
+Reference sketch: `<LOCAL_REFERENCE_IMAGE_PATH>`.
 
 ## Goals
 

@@ -18,7 +18,7 @@ foreach ($file in $manifest.files) {
     if ($hash -ne [string]$file.sha256) { throw "Bundle hash mismatch: $($file.path)" }
 }
 
-$packageRoot = Join-Path $RhinoPackageRoot "BayHealthPanelCladdingEditor"
+$packageRoot = Join-Path $RhinoPackageRoot "PanelCladdingEditor"
 $target = Join-Path $packageRoot ([string]$manifest.version)
 if ($Mode -eq "Validate") {
     if (-not (Test-Path -LiteralPath (Join-Path $target "PanelCladdingEditor.rhp"))) {

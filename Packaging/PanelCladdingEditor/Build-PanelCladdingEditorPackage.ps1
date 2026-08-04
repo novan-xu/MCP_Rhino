@@ -44,10 +44,10 @@ if ($depsText -notmatch 'PanelCladdingEditor\.rhp' -or $depsText -match 'PanelCl
 
 @"
 ---
-name: BayHealthPanelCladdingEditor
+name: PanelCladdingEditor
 version: $Version
 authors:
-  - BayHealth project team
+  - Panel Cladding Editor contributors
 description: Standalone Rhino 8 panel cladding type editor
 keywords:
   - cladding
@@ -68,7 +68,7 @@ $files = Get-ChildItem -LiteralPath $bundle -Recurse -File | Sort-Object FullNam
         sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
     }
 }
-[ordered]@{ name = "BayHealthPanelCladdingEditor"; version = $Version; files = @($files) } |
+[ordered]@{ name = "PanelCladdingEditor"; version = $Version; files = @($files) } |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $bundle "bundle-manifest.json") -Encoding utf8
 
 Write-Output $bundle

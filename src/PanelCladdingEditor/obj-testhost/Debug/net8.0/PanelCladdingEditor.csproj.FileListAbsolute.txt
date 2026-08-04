@@ -1,6 +1,0 @@
-C:\Projects\MCP_Rhino\src\PanelCladdingEditor\obj-testhost\Debug\net8.0\PanelCladdingEditor.csproj.AssemblyReference.cache
-C:\Projects\MCP_Rhino\src\PanelCladdingEditor\obj-testhost\Debug\net8.0\PanelCladdingEditor.GeneratedMSBuildEditorConfig.editorconfig
-C:\Projects\MCP_Rhino\src\PanelCladdingEditor\obj-testhost\Debug\net8.0\PanelCladdingEditor.AssemblyInfoInputs.cache
-C:\Projects\MCP_Rhino\src\PanelCladdingEditor\obj-testhost\Debug\net8.0\PanelCladdingEditor.AssemblyInfo.cs
-C:\Projects\MCP_Rhino\src\PanelCladdingEditor\obj-testhost\Debug\net8.0\PanelCladdingEditor.csproj.CoreCompileInputs.cache
-C:\Projects\MCP_Rhino\src\PanelCladdingEditor\obj-testhost\Debug\net8.0\PanelCladdingEditor.sourcelink.json

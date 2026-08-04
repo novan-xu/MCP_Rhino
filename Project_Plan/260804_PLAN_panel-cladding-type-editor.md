@@ -127,7 +127,7 @@ must not silently switch to UV distance or surface arc length.
   package dependency if the Execute investigation confirms that direct Open XML package editing is
   safer than extending the BCL ZIP writer.
 - The shared project script
-  `V:\01 Project Folders\P00020 BayHealth Kent Tower BKT\03-Design-Eng\03-BIM\05-Wireframe\02_grasshopper\WF setup\WT01_panel_mullion_attributes.py`:
+  `<PROJECT_ROOT>\02_grasshopper\WF setup\WT01_panel_mullion_attributes.py`:
   curved/projectable-panel compatibility only; its public Grasshopper contract remains unchanged.
 - `Project_Test/260804_TEST_panel-cladding-type-editor/`: unit, workbook, render, CLI smoke, and live
   Rhino smoke artifacts created during Execute.
@@ -403,7 +403,7 @@ Expected production additions or modifications during Execute include:
 - `src/MCP_Rhino.Server/MCP_Rhino.Server.csproj`
 - `Packaging/MCP_Rhino/Build-McpRhinoPackage.ps1` and package manifest inputs when a new private
   dependency must be staged
-- `V:\01 Project Folders\P00020 BayHealth Kent Tower BKT\03-Design-Eng\03-BIM\05-Wireframe\02_grasshopper\WF setup\WT01_panel_mullion_attributes.py`
+- `<PROJECT_ROOT>\02_grasshopper\WF setup\WT01_panel_mullion_attributes.py`
 - `Project_Test/260804_TEST_panel-cladding-type-editor/`
 - `Project_Exet/260804_EXET_panel-cladding-type-editor.md`
 

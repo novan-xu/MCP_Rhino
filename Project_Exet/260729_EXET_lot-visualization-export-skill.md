@@ -45,7 +45,7 @@
 
 - `dotnet build .\MCP_Rhino.sln -c Debug --no-restore`
   - Exit `0`; 0 warnings; 0 errors.
-- `dotnet build .\MCP_Rhino.sln -c Release --no-restore -p:BaseOutputPath=C:\Users\nxu\AppData\Local\Temp\MCP_Rhino_LotSkill_Final2\`
+- `dotnet build .\MCP_Rhino.sln -c Release --no-restore -p:BaseOutputPath=%USERPROFILE%\AppData\Local\Temp\MCP_Rhino_LotSkill_Final2\`
   - Exit `0`; 0 warnings; 0 errors.
 
 ### Final Debug smokes

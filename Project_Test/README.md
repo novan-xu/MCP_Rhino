@@ -2,8 +2,8 @@
 
 本项目全部 **轻量化冒烟测试单元（Smoke Test Unit）** 的归档根目录。
 
-> 当前仅提供开发者级别的冒烟测试，用于验证 `Tool → Skill → Service → Rhino` 全链路在真实 `.3dm`
-> 文件上的行为。尚未接入 xUnit / NUnit 等正式测试框架。
+> 当前仅提供开发者级别的冒烟测试，用于验证 `Tool → Skill → Service → Rhino` 全链路在本地 `.3dm`
+> 文件上的行为。`.3dm` fixture 不进入版本控制；尚未接入 xUnit / NUnit 等正式测试框架。
 
 ---
 
@@ -32,11 +32,11 @@ Project_Test/
 
 ## 2. 测试输入约定
 
-测试统一直接使用 `Runtime_Test/` 下的 `.3dm` fixture。
+测试统一直接使用开发者放在 `Runtime_Test/local/` 下的本地 `.3dm` fixture。仓库只保留测试代码与 fixture 说明，不提交模型文件。
 
 - 不再引入 `_validation/<slug>/` 工作副本约定。
 - 冒烟测试应优先选择只读路径；若测试本身涉及 mutation，必须在同一轮 smoke 末尾恢复 fixture 基线状态，并用断言证明状态已回归。
-- EXET 文档中的「测试记录」只记录实际使用的 `Runtime_Test/...` 路径，不再写工作副本路径。
+- EXET 文档中的「测试记录」使用 `Runtime_Test/local/<fixture>.3dm` 这类匿名仓库相对路径，不记录用户目录、盘符或项目名称。
 
 ---
 
@@ -85,7 +85,7 @@ partial void Register<Feature>Handlers()
 示例：
 
 ```powershell
-dotnet run --project src/MCP_Rhino.Server -- geometry-analysis-smoke-test Runtime_Test/MCP_rhino_test.3dm
+dotnet run --project src/MCP_Rhino.Server -- geometry-analysis-smoke-test Runtime_Test/local/<fixture>.3dm
 ```
 
 ```text
@@ -99,7 +99,7 @@ _McpGeometryAnalysisSmoke
 一个合格的轻量化冒烟测试单元必须：
 
 1. **入参单一**：首参数为 `.3dm` 路径，其它参数有默认值；缺参数时输出用法并返回失败。
-2. **统一使用 `Runtime_Test/` fixture**：不再复制工作副本；若测试会写文档，必须在测试结束前恢复到基线状态。
+2. **统一使用本地 fixture**：从 `Runtime_Test/local/` 读取被 Git 忽略的模型；若测试会写文档，必须在测试结束前恢复到基线状态。
 3. **退出码清晰**：
    - 全部 checkpoint 通过 → `ExitCode = 0`
    - 任一断言失败、源文件缺失、参数解析失败 → `ExitCode = 1`
@@ -126,7 +126,7 @@ _McpGeometryAnalysisSmoke
 6. 在测试文件里实现 `partial void Register<Feature>Handlers()`，注册 `"<feature>-smoke-test"`
 7. 若测试需要的 Skill / Service 尚未注入 `DeveloperCommandHandler`，补齐构造参数与 DI 注册
 8. `dotnet build src/MCP_Rhino.Server/MCP_Rhino.Server.csproj --nologo`
-9. `dotnet run --project src/MCP_Rhino.Server -- <feature>-smoke-test Runtime_Test/<fixture>.3dm`
+9. `dotnet run --project src/MCP_Rhino.Server -- <feature>-smoke-test Runtime_Test/local/<fixture>.3dm`
 10. 在 `Project_Exet/<YYMMDD>_EXET_<capability-name>.md` 中记录 checkpoint、退出码与验收结果
 
 ---

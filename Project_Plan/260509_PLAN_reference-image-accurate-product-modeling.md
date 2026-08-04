@@ -152,9 +152,9 @@ boxes when that loses the object identity.
 
 Use the Kyajah armchair references as a golden fixture:
 
-- `C:/Users/Novan/Desktop/default_name.jpg`
-- `C:/Users/Novan/Desktop/Kyajah+27.5''+Wide+Armchair+With+Solid+wood+legs.jpg`
-- `C:/Users/Novan/Desktop/Upholstered+Armchair+with+Wooden+Legs+(Set+Of+2)-96213300.jpg`
+- `<LOCAL_REFERENCE_IMAGE_PATH>`
+- `<USER_HOME>/Desktop/Kyajah+27.5''+Wide+Armchair+With+Solid+wood+legs.jpg`
+- `<LOCAL_REFERENCE_IMAGE_PATH>`
 
 The test should not depend on those desktop paths permanently; execution should
 copy or encode minimal request samples under the matching `Project_Test` folder.

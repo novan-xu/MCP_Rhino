@@ -10,7 +10,7 @@
 - Test folder: `Project_Test/260729_TEST_multi-document-rhino-router/`
 - Package source: `Packaging/MCP_Rhino/`
 - Staged current-user bundle:
-  `C:\Users\nxu\AppData\Local\MCP_Rhino\staged\1.0.0-20260729200817170`
+  `%USERPROFILE%\AppData\Local\MCP_Rhino\staged\1.0.0-20260729200817170`
 - Commit: not committed in this execution pass
 
 ## Execution Result / Actual Scope
@@ -113,7 +113,7 @@ Packaging:
 - Disposable uninstall -> exit 0; prior `mcp-rhino` entry restored, unrelated entry preserved, bin,
   plug-in version, and ownership manifest removed, and no `.3dm` path touched.
 - Actual current-user installer with active Rhino processes -> exit 0 with staged-only warning at
-  `C:\Users\nxu\AppData\Local\MCP_Rhino\staged\1.0.0-20260729200817170`; no installed component or
+  `%USERPROFILE%\AppData\Local\MCP_Rhino\staged\1.0.0-20260729200817170`; no installed component or
   client entry was replaced.
 
 Regression:
@@ -155,8 +155,8 @@ documentation changes.
 ## Live Activation Follow-Up (2026-07-29)
 
 - After the user closed all Rhino instances, installed the previously staged bundle successfully to:
-  - Router: `C:\Users\nxu\AppData\Local\MCP_Rhino\bin\MCP_Rhino.Router.exe`
-  - Plug-in: `C:\Users\nxu\AppData\Roaming\McNeel\Rhinoceros\packages\8.0\MCP_Rhino\1.0.0\MCP_Rhino.Server.rhp`
+  - Router: `%USERPROFILE%\AppData\Local\MCP_Rhino\bin\MCP_Rhino.Router.exe`
+  - Plug-in: `%USERPROFILE%\AppData\Roaming\McNeel\Rhinoceros\packages\8.0\MCP_Rhino\1.0.0\MCP_Rhino.Server.rhp`
 - Packaged validation passed for version `1.0.0`, protocol `1`, all 126 manifest-owned files, the
   package version selector, and the installed Router.
 - Launched Rhino 8 normally with `20260729_Lot visualization.3dm`; Rhino PID 4000 published a READY
@@ -165,7 +165,7 @@ documentation changes.
   and pipe `mcp_rhino_route_4000_268435457` for the exact requested document path.
 - An installed-Router MCP initialize/tools/call probe passed end to end. Routed
   `get_document_summary` returned the live document with 1,167 objects, 14 layers, Inches units, and
-  current layer `01_BKT-CW Panels`.
+  current layer `01_SAMPLE-CW Panels`.
 - Rhino remains open on the requested document. No MCP client configuration was changed; client
   opt-in remains a separate explicit step.
 

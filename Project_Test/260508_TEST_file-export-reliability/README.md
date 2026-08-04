@@ -17,7 +17,7 @@ Validates the export failures found by the 2026-05-08 live runtime audit.
 CLI fallback:
 
 ```powershell
-dotnet run --project src\MCP_Rhino.Server\MCP_Rhino.Server.csproj -- file-export-reliability-smoke-test C:\Users\Novan\Desktop\Untitled.3dm
+dotnet run --project src\MCP_Rhino.Server\MCP_Rhino.Server.csproj -- file-export-reliability-smoke-test <LOCAL_TEST_MODEL_PATH>
 ```
 
 Live Rhino command:

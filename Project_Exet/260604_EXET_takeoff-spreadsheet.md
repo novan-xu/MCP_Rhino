@@ -48,7 +48,7 @@ Builds:
   - `Rhino 8 (42760)` locking `MCP_Rhino.Server.dll`
   - `MCP_Rhino.Bridge (43304, 35304, 36576)` locking `MCP_Rhino.Bridge.exe`
   - `MCP_Rhino.Companion (31812)` locking `MCP_Rhino.Companion.exe`
-- `dotnet build .\MCP_Rhino.sln -c Release -p:BaseOutputPath=C:\Projects\MCP_Rhino\_validation\build-output\` -> exit 0
+- `dotnet build .\MCP_Rhino.sln -c Release -p:BaseOutputPath=<REPO_ROOT>\_validation\build-output\` -> exit 0
 
 Debug smokes:
 
@@ -59,10 +59,10 @@ Debug smokes:
 
 Release smokes from alternate output:
 
-- `dotnet C:\Projects\MCP_Rhino\_validation\build-output\Release\net8.0\MCP_Rhino.Server.dll mcp-tool-safety-annotations-smoke-test` -> exit 0, verified 156 tools
-- `dotnet C:\Projects\MCP_Rhino\_validation\build-output\Release\net8.0\MCP_Rhino.Server.dll mcp-tool-overlap-cleanup-smoke-test` -> exit 0, verified 156 tools
-- `dotnet C:\Projects\MCP_Rhino\_validation\build-output\Release\net8.0\MCP_Rhino.Server.dll mcp-surface-structure-governance-smoke-test` -> exit 0, inventory found 156 tools
-- `dotnet C:\Projects\MCP_Rhino\_validation\build-output\Release\net8.0\MCP_Rhino.Server.dll takeoff-spreadsheet-smoke-test` -> exit 0
+- `dotnet <REPO_ROOT>\_validation\build-output\Release\net8.0\MCP_Rhino.Server.dll mcp-tool-safety-annotations-smoke-test` -> exit 0, verified 156 tools
+- `dotnet <REPO_ROOT>\_validation\build-output\Release\net8.0\MCP_Rhino.Server.dll mcp-tool-overlap-cleanup-smoke-test` -> exit 0, verified 156 tools
+- `dotnet <REPO_ROOT>\_validation\build-output\Release\net8.0\MCP_Rhino.Server.dll mcp-surface-structure-governance-smoke-test` -> exit 0, inventory found 156 tools
+- `dotnet <REPO_ROOT>\_validation\build-output\Release\net8.0\MCP_Rhino.Server.dll takeoff-spreadsheet-smoke-test` -> exit 0
 
 ## Acceptance Alignment
 
