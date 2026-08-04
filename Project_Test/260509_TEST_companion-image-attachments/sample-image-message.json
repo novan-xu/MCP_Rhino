@@ -1,0 +1,14 @@
+{
+  "type": "send",
+  "text": "Please inspect this reference image and describe the object.",
+  "attachments": [
+    {
+      "id": "sample-image-1",
+      "name": "reference.png",
+      "mediaType": "image/png",
+      "kind": "image",
+      "sizeBytes": 67,
+      "base64Data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lYgX5QAAAABJRU5ErkJggg=="
+    }
+  ]
+}

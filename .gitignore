@@ -1,0 +1,94 @@
+﻿# =========================
+# .NET / C# build outputs
+# =========================
+**/bin/
+**/obj/
+
+# =========================
+# Test results & coverage
+# =========================
+TestResults/
+**/TestResults/
+coverage/
+coverage-results/
+*.coverage
+*.coveragexml
+
+# =========================
+# Visual Studio / VS Code
+# =========================
+.vs/
+.vscode/
+*.user
+*.rsuser
+*.suo
+*.userosscache
+*.sln.docstates
+
+# =========================
+# Rider / ReSharper
+# =========================
+_ReSharper*/
+*.DotSettings.user
+
+# =========================
+# NuGet / package restore caches
+# =========================
+packages/
+*.nupkg
+*.snupkg
+project.assets.json
+project.nuget.cache
+*.nuget.dgspec.json
+
+# =========================
+# Logs / temp / local caches
+# =========================
+*.log
+*.tmp
+*.temp
+*.cache
+
+# =========================
+# Project-specific generated artifacts
+# =========================
+.tmp-build/
+.tmp-install*/
+.tmp-package*/
+artifacts/
+.validation/
+_validation/
+_validation/file-safeguard-build/
+_validation/geometry-smoke-test/
+_validation/online-mutation-refactor/
+_validation/layer-management-tools/
+_validation/live-document-smoke/
+**/obj-testhost/
+**/__pycache__/
+*.pyc
+*.3dmbak
+*.rhl
+_tmp*.csx
+.cline/
+.mcp.json
+
+# Local models, runtime history, and machine-specific client configuration
+*.3dm
+Runtime_Log/*.json
+Runtime_Test/Runtime_Log/*.json
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+.codex/config.toml
+
+# =========================
+# OS-generated files
+# =========================
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# =========================
+# Keep repository assets under version control
+# =========================
+!Project_Plan/
+!Runtime_Test/

@@ -1,0 +1,5 @@
+commonModelScaleDenominator=804.9790654462527
+MCP_Iso_NE	230469	<PROJECT_ROOT>\06_exports\20260729_Lot visualization\20260729_Lot visualization_Iso_NE_print.png
+MCP_Iso_NW	216786	<PROJECT_ROOT>\06_exports\20260729_Lot visualization\20260729_Lot visualization_Iso_NW_print.png
+MCP_Iso_SE	200219	<PROJECT_ROOT>\06_exports\20260729_Lot visualization\20260729_Lot visualization_Iso_SE_print.png
+MCP_Iso_SW	219949	<PROJECT_ROOT>\06_exports\20260729_Lot visualization\20260729_Lot visualization_Iso_SW_print.png

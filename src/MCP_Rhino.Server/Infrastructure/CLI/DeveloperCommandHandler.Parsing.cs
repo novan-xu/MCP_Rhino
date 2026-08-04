@@ -1,0 +1,370 @@
+using MCP_Rhino.Server.Contracts.Requests;
+using MCP_Rhino.Server.Domain.Enums;
+
+namespace MCP_Rhino.Server.Infrastructure.CLI;
+
+public sealed partial class DeveloperCommandHandler
+{
+    private static PreviewObjectEditsRequest BuildPreviewObjectEditsRequest(string[] args)
+    {
+        return new PreviewObjectEditsRequest
+        {
+            FilePath = args[1],
+            Operations = ParseEditOperations(args[2]),
+            LayerQueries = ParseNamedCsv(args, "layers="),
+            ConfirmedLayerFullPaths = ParseNamedCsv(args, "layerpaths="),
+            ObjectTypes = ParseNamedCsv(args, "types="),
+            UserAttributeConditions = ParseNamedUserAttributes(args, "attrs="),
+            MatchMode = ParseNamedFilterMatchMode(args, "mode="),
+            UserAttributeMatchMode = ParseNamedFilterMatchMode(args, "attrmode=")
+        };
+    }
+
+    private static ApplyObjectEditsRequest BuildApplyObjectEditsRequest(string[] args)
+    {
+        return new ApplyObjectEditsRequest
+        {
+            FilePath = args[1],
+            Operations = ParseEditOperations(args[2]),
+            LayerQueries = ParseNamedCsv(args, "layers="),
+            ConfirmedLayerFullPaths = ParseNamedCsv(args, "layerpaths="),
+            ObjectTypes = ParseNamedCsv(args, "types="),
+            UserAttributeConditions = ParseNamedUserAttributes(args, "attrs="),
+            MatchMode = ParseNamedFilterMatchMode(args, "mode="),
+            UserAttributeMatchMode = ParseNamedFilterMatchMode(args, "attrmode=")
+        };
+    }
+
+    private static ObjectUserTextBatchWriteRequest BuildObjectUserTextBatchWriteRequest(string[] args)
+    {
+        return new ObjectUserTextBatchWriteRequest
+        {
+            FilePath = args[1],
+            Entries = ParseObjectScopedUserTextEntries(args[2])
+        };
+    }
+
+    private static List<ObjectEditOperationRequest> ParseEditOperations(string input)
+    {
+        var operations = new List<ObjectEditOperationRequest>();
+        foreach (string token in input.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            int separatorIndex = token.IndexOf(':');
+            if (separatorIndex <= 0)
+            {
+                throw new InvalidOperationException($"Invalid editSpec fragment: {token}");
+            }
+
+            string operationName = token[..separatorIndex].Trim().ToLowerInvariant();
+            string payload = token[(separatorIndex + 1)..].Trim();
+
+            switch (operationName)
+            {
+                case "set-user":
+                case "set-user-text":
+                    int equalIndex = payload.IndexOf('=');
+                    if (equalIndex <= 0)
+                    {
+                        throw new InvalidOperationException($"SetUserText format must be set-user:key=value. Received: {token}");
+                    }
+
+                    operations.Add(new ObjectEditOperationRequest
+                    {
+                        OperationType = ObjectEditOperationType.SetUserText,
+                        Key = payload[..equalIndex],
+                        Value = payload[(equalIndex + 1)..]
+                    });
+                    break;
+
+                case "remove-user":
+                case "remove-user-text":
+                    operations.Add(new ObjectEditOperationRequest
+                    {
+                        OperationType = ObjectEditOperationType.RemoveUserText,
+                        Key = payload
+                    });
+                    break;
+
+                case "set-layer":
+                    operations.Add(new ObjectEditOperationRequest
+                    {
+                        OperationType = ObjectEditOperationType.SetLayer,
+                        TargetLayerFullPath = payload
+                    });
+                    break;
+
+                case "set-color":
+                case "set-display-color":
+                    string[] colorParts = payload.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    if (colorParts.Length != 3
+                        || !int.TryParse(colorParts[0], out int r)
+                        || !int.TryParse(colorParts[1], out int g)
+                        || !int.TryParse(colorParts[2], out int b))
+                    {
+                        throw new InvalidOperationException($"SetDisplayColor format must be set-color:r,g,b. Received: {token}");
+                    }
+
+                    operations.Add(new ObjectEditOperationRequest
+                    {
+                        OperationType = ObjectEditOperationType.SetDisplayColor,
+                        Color = new ObjectColorRequest
+                        {
+                            R = r,
+                            G = g,
+                            B = b
+                        }
+                    });
+                    break;
+
+                default:
+                    throw new InvalidOperationException($"Unknown edit operation: {operationName}");
+            }
+        }
+
+        return operations;
+    }
+
+    private static List<ObjectScopedUserTextEntryRequest> ParseObjectScopedUserTextEntries(string input)
+    {
+        var entries = new List<ObjectScopedUserTextEntryRequest>();
+        foreach (string token in input.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            int pipeIndex = token.IndexOf('|');
+            if (pipeIndex <= 0)
+            {
+                throw new InvalidOperationException($"Invalid entrySpec fragment: {token}");
+            }
+
+            if (!Guid.TryParse(token[..pipeIndex], out Guid objectId))
+            {
+                throw new InvalidOperationException($"Invalid ObjectId: {token[..pipeIndex]}");
+            }
+
+            string payload = token[(pipeIndex + 1)..].Trim();
+            int equalIndex = payload.IndexOf('=');
+            if (equalIndex <= 0)
+            {
+                throw new InvalidOperationException($"entrySpec format must be objectId|key=value. Received: {token}");
+            }
+
+            entries.Add(new ObjectScopedUserTextEntryRequest
+            {
+                ObjectId = objectId,
+                Key = payload[..equalIndex],
+                Value = payload[(equalIndex + 1)..]
+            });
+        }
+
+        return entries;
+    }
+
+    private static List<ObjectScopedUserTextKeyRequest> ParseObjectScopedUserTextKeys(string input)
+    {
+        var entries = new List<ObjectScopedUserTextKeyRequest>();
+        foreach (string token in input.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            int pipeIndex = token.IndexOf('|');
+            if (pipeIndex <= 0)
+            {
+                throw new InvalidOperationException($"Invalid entrySpec fragment: {token}. Expected objectId|key");
+            }
+
+            if (!Guid.TryParse(token[..pipeIndex], out Guid objectId))
+            {
+                throw new InvalidOperationException($"Invalid ObjectId: {token[..pipeIndex]}");
+            }
+
+            string key = token[(pipeIndex + 1)..].Trim();
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                throw new InvalidOperationException($"entrySpec key cannot be empty. Received: {token}");
+            }
+
+            entries.Add(new ObjectScopedUserTextKeyRequest
+            {
+                ObjectId = objectId,
+                Key = key
+            });
+        }
+
+        return entries;
+    }
+
+    private static List<DocumentUserStringEntryRequest> ParseDocumentUserStringWriteEntries(string input)
+    {
+        var entries = new List<DocumentUserStringEntryRequest>();
+        foreach (string token in input.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            int equalIndex = token.IndexOf('=');
+            if (equalIndex <= 0)
+            {
+                throw new InvalidOperationException($"entrySpec format must be key=value or section|entry=value. Received: {token}");
+            }
+
+            string keyPart = token[..equalIndex].Trim();
+            string value = token[(equalIndex + 1)..];
+            (string? section, string key) = SplitSectionKey(keyPart);
+
+            entries.Add(new DocumentUserStringEntryRequest
+            {
+                Section = section,
+                Key = key,
+                Value = value
+            });
+        }
+
+        return entries;
+    }
+
+    private static List<DocumentUserStringEntryRequest> ParseDocumentUserStringDeleteEntries(string input)
+    {
+        var entries = new List<DocumentUserStringEntryRequest>();
+        foreach (string token in input.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            (string? section, string key) = SplitSectionKey(token.Trim());
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                throw new InvalidOperationException($"entrySpec key cannot be empty. Received: {token}");
+            }
+
+            entries.Add(new DocumentUserStringEntryRequest
+            {
+                Section = section,
+                Key = key
+            });
+        }
+
+        return entries;
+    }
+
+    private static (string? Section, string Key) SplitSectionKey(string keyPart)
+    {
+        int pipeIndex = keyPart.IndexOf('|');
+        if (pipeIndex < 0)
+        {
+            return (null, keyPart);
+        }
+
+        string section = keyPart[..pipeIndex].Trim();
+        string entry = keyPart[(pipeIndex + 1)..].Trim();
+        return (string.IsNullOrEmpty(section) ? null : section, entry);
+    }
+
+    private static List<Guid> ParseGuidCsv(string input)
+    {
+        var guids = new List<Guid>();
+        foreach (string token in input.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (!Guid.TryParse(token, out Guid objectId))
+            {
+                throw new InvalidOperationException($"Invalid ObjectId: {token}");
+            }
+
+            guids.Add(objectId);
+        }
+
+        return guids;
+    }
+
+    private static List<string> ParseNamedCsv(string[] args, string prefix)
+    {
+        string? token = args.FirstOrDefault(arg => arg.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+        return token is null ? new List<string>() : ParseCsv(token[prefix.Length..]);
+    }
+
+    private static List<UserAttributeConditionRequest> ParseNamedUserAttributes(string[] args, string prefix)
+    {
+        string? token = args.FirstOrDefault(arg => arg.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+        return token is null ? new List<UserAttributeConditionRequest>() : ParseUserAttributeConditions(token[prefix.Length..]);
+    }
+
+    private static FilterMatchMode ParseNamedFilterMatchMode(string[] args, string prefix)
+    {
+        string? token = args.FirstOrDefault(arg => arg.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+        return token is null ? FilterMatchMode.All : ParseFilterMatchMode(token[prefix.Length..]);
+    }
+
+    private static List<string> ParseCsv(string input)
+    {
+        return input
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(item => !string.IsNullOrWhiteSpace(item))
+            .ToList();
+    }
+
+    private static List<UserAttributeConditionRequest> ParseUserAttributeConditions(string input)
+    {
+        var conditions = new List<UserAttributeConditionRequest>();
+        foreach (string token in input.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            int containsIndex = token.IndexOf('~');
+            int exactIndex = token.IndexOf('=');
+
+            if (containsIndex > 0)
+            {
+                conditions.Add(new UserAttributeConditionRequest
+                {
+                    Key = token[..containsIndex],
+                    ExpectedValue = token[(containsIndex + 1)..],
+                    ComparisonMode = UserAttributeComparisonMode.Contains
+                });
+                continue;
+            }
+
+            if (exactIndex > 0)
+            {
+                conditions.Add(new UserAttributeConditionRequest
+                {
+                    Key = token[..exactIndex],
+                    ExpectedValue = token[(exactIndex + 1)..],
+                    ComparisonMode = UserAttributeComparisonMode.Exact
+                });
+                continue;
+            }
+
+            conditions.Add(new UserAttributeConditionRequest
+            {
+                Key = token,
+                ComparisonMode = UserAttributeComparisonMode.Exists
+            });
+        }
+
+        return conditions;
+    }
+
+    private static FilterMatchMode ParseFilterMatchMode(string value)
+    {
+        return Enum.TryParse<FilterMatchMode>(value, true, out var parsed)
+            ? parsed
+            : FilterMatchMode.All;
+    }
+
+    // Resolves a writable validation directory for smoke / probe output.
+    // When the handler is invoked from Rhino plugin host, Directory.GetCurrentDirectory()
+    // returns Rhino's install folder (read-only). Walk up from the loaded-assembly location
+    // to locate the repo (.git) root; if none is found, fall back to the OS temp dir.
+    internal static string ResolveValidationDirectory(string slug)
+    {
+        string? repoRoot = TryFindRepoRoot(AppContext.BaseDirectory);
+        string baseRoot = repoRoot ?? Path.Combine(Path.GetTempPath(), "MCP_Rhino");
+        string validationDirectory = Path.Combine(baseRoot, "_validation", slug);
+        Directory.CreateDirectory(validationDirectory);
+        return validationDirectory;
+    }
+
+    private static string? TryFindRepoRoot(string startPath)
+    {
+        string? current = startPath;
+        for (int i = 0; i < 10 && current is not null; i++)
+        {
+            if (Directory.Exists(Path.Combine(current, ".git")))
+            {
+                return current;
+            }
+
+            current = Directory.GetParent(current)?.FullName;
+        }
+
+        return null;
+    }
+}

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "mcp-rhino": {
+      "command": "{{BRIDGE_EXE_ABSOLUTE_PATH}}",
+      "args": []
+    }
+  }
+}
