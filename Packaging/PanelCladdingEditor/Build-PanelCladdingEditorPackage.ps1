@@ -1,20 +1,28 @@
 [CmdletBinding()]
 param(
-    [string]$Version = "1.0.0",
-    [string]$OutputRoot = (Join-Path $PSScriptRoot "artifacts")
+    [string]$Version,
+    [string]$OutputRoot
 )
 
 $ErrorActionPreference = "Stop"
+if ([string]::IsNullOrWhiteSpace($OutputRoot)) { $OutputRoot = Join-Path $PSScriptRoot "artifacts" }
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $project = Join-Path $repoRoot "src\PanelCladdingEditor\PanelCladdingEditor.csproj"
+$definitionPath = Join-Path $PSScriptRoot "package-manifest.json"
+$definition = Get-Content -Raw -LiteralPath $definitionPath | ConvertFrom-Json
+if ([string]::IsNullOrWhiteSpace($Version)) { $Version = [string]$definition.version }
+if (-not $Version.Equals([string]$definition.version, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "Requested version '$Version' does not match package-manifest.json version '$($definition.version)'."
+}
 $buildOutput = Join-Path $repoRoot "src\PanelCladdingEditor\bin\Release\net8.0"
 $publish = Join-Path $OutputRoot "publish"
 $bundle = Join-Path $OutputRoot "PanelCladdingEditor-$Version"
 $plugin = Join-Path $bundle "Plugin"
+$installer = Join-Path $bundle "Installer"
 
 if (Test-Path -LiteralPath $publish) { Remove-Item -LiteralPath $publish -Recurse -Force }
 if (Test-Path -LiteralPath $bundle) { Remove-Item -LiteralPath $bundle -Recurse -Force }
-New-Item -ItemType Directory -Path $plugin -Force | Out-Null
+New-Item -ItemType Directory -Path $plugin, $installer -Force | Out-Null
 
 dotnet publish $project -c Release -o $publish --nologo
 if ($LASTEXITCODE -ne 0) { throw "PanelCladdingEditor publish failed." }
@@ -60,6 +68,10 @@ $forbidden = Get-ChildItem -LiteralPath $plugin -File | Where-Object {
     $_.Name -match "^(MCP_Rhino|ModelContextProtocol|Microsoft\.Extensions\.Hosting)"
 }
 if ($forbidden) { throw "Forbidden dependency in package: $($forbidden.Name -join ', ')" }
+
+Copy-Item -LiteralPath $definitionPath -Destination (Join-Path $bundle "package-manifest.json") -Force
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Install-PanelCladdingEditor.ps1") -Destination $installer -Force
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Uninstall-PanelCladdingEditor.ps1") -Destination $installer -Force
 
 $files = Get-ChildItem -LiteralPath $bundle -Recurse -File | Sort-Object FullName | ForEach-Object {
     $relativePath = $_.FullName.Substring($bundle.Length).TrimStart('\')

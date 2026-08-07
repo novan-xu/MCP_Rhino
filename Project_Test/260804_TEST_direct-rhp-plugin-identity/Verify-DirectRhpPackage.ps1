@@ -2,12 +2,17 @@
 param(
     [Parameter(Mandatory)]
     [string] $BundleRoot,
-    [string] $TempRoot = (Join-Path $PSScriptRoot '.validation')
+    [string] $TempRoot
 )
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $validationBase = [IO.Path]::GetFullPath((Join-Path $repoRoot '.validation'))
+# The scratch root must live under the repository .validation directory, so default it there
+# instead of beside this script.
+if ([string]::IsNullOrWhiteSpace($TempRoot)) {
+    $TempRoot = Join-Path $validationBase 'direct-rhp-plugin-identity'
+}
 $tempRootFull = [IO.Path]::GetFullPath($TempRoot)
 $validationPrefix = $validationBase.TrimEnd('\') + '\'
 if (-not $tempRootFull.StartsWith($validationPrefix, [StringComparison]::OrdinalIgnoreCase)) {
@@ -21,10 +26,11 @@ $bundleRootFull = (Resolve-Path $BundleRoot).Path
 $installer = Join-Path $bundleRootFull 'Installer\Install-McpRhino.ps1'
 $definition = Get-Content -LiteralPath (Join-Path $bundleRootFull 'package-manifest.json') -Raw | ConvertFrom-Json
 $productRoot = Join-Path $tempRootFull 'Product'
-$rhinoPackages = Join-Path $tempRootFull 'RhinoPackages'
-$packageRoot = Join-Path $rhinoPackages ([string]$definition.pluginPackageName)
-$oldPluginRoot = Join-Path $packageRoot '1.0.0'
-$newPluginRoot = Join-Path $packageRoot ([string]$definition.productVersion)
+$legacyRhinoPackages = Join-Path $tempRootFull 'RhinoPackages'
+$legacyPackageRoot = Join-Path $legacyRhinoPackages ([string]$definition.pluginPackageName)
+$rhinoPluginRoot = Join-Path $productRoot 'plugin'
+$oldPluginRoot = Join-Path $legacyPackageRoot '1.0.0'
+$newPluginRoot = Join-Path $rhinoPluginRoot ([string]$definition.productVersion)
 $oldBinRoot = Join-Path $productRoot 'bin'
 $registryTestRoot = 'Registry::HKEY_CURRENT_USER\Software\MCP_Rhino\InstallerTests\DirectRhpPluginIdentity\Plug-Ins'
 $registryPluginKey = Join-Path $registryTestRoot ([string]$definition.pluginId).ToLowerInvariant()
@@ -39,8 +45,20 @@ $identityRows = @(& dotnet $identityProbe --rhino-identities $bundleRhp $rhinoCo
 if ($LASTEXITCODE -ne 0) { throw 'Packaged Rhino identity enumeration failed.' }
 $pluginRows = @($identityRows | Where-Object { $_.StartsWith('RHINO_IDENTITY|kind=PLUGIN|', [StringComparison]::Ordinal) })
 $commandRows = @($identityRows | Where-Object { $_.StartsWith('RHINO_IDENTITY|kind=COMMAND|', [StringComparison]::Ordinal) })
-if ($pluginRows.Count -ne 1 -or $pluginRows[0].IndexOf([string]$definition.pluginId, [StringComparison]::OrdinalIgnoreCase) -lt 0) {
+if ($pluginRows.Count -ne 1) {
     throw 'The production RHP does not contain exactly one canonical Rhino plug-in identity.'
+}
+# Rhino reads the plug-in id from the assembly-level GuidAttribute, so assert that field and not the
+# plug-in class GUID; an assembly without one resolves to Guid.Empty and collides with every other RHP.
+if ($pluginRows[0] -notmatch 'pluginId=([0-9a-fA-F-]{36})') {
+    throw "The production RHP identity row does not report a plug-in id: $($pluginRows[0])"
+}
+$packagedPluginId = $Matches[1]
+if (-not $packagedPluginId.Equals([string]$definition.pluginId, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "The production RHP declares plug-in id '$packagedPluginId' instead of the manifest id '$($definition.pluginId)'."
+}
+if ($pluginRows[0] -notmatch 'declared=True') {
+    throw 'The production RHP does not declare an assembly-level plug-in id; Rhino would load it as Guid.Empty.'
 }
 if ($commandRows.Count -ne 0) { throw "The production RHP still contains $($commandRows.Count) Rhino command type(s)." }
 
@@ -68,9 +86,11 @@ $priorManifest = [ordered]@{
 }
 $priorManifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $productRoot 'install-manifest.json') -Encoding utf8
 
-& $installer -Mode Install -BundleRoot $bundleRootFull -ProductRoot $productRoot -RhinoPackageRoot $rhinoPackages -RhinoPluginRegistryRoot $registryTestRoot | Out-Host
+Set-Content -LiteralPath (Join-Path $legacyPackageRoot 'manifest.txt') -Value '1.0.0' -Encoding ascii
+& $installer -Mode Install -BundleRoot $bundleRootFull -ProductRoot $productRoot -RhinoPluginRoot $rhinoPluginRoot -LegacyRhinoPackageRoot $legacyRhinoPackages -RhinoPluginRegistryRoot $registryTestRoot | Out-Host
 if ($LASTEXITCODE -ne 0) { throw 'Isolated package upgrade failed.' }
 if (Test-Path -LiteralPath $oldPluginRoot) { throw 'The prior owned 1.0.0 plug-in root remains discoverable.' }
+if (Test-Path -LiteralPath $legacyPackageRoot) { throw 'The legacy Rhino Package Manager product root remains discoverable.' }
 if (-not (Test-Path -LiteralPath (Join-Path $newPluginRoot 'MCP_Rhino.Server.rhp') -PathType Leaf)) {
     throw 'The corrected RHP was not installed.'
 }
@@ -78,12 +98,18 @@ if (Test-Path -LiteralPath (Join-Path $newPluginRoot 'MCP_Rhino.Server.dll')) {
     throw 'The duplicate plug-in DLL was installed.'
 }
 
-& $installer -Mode Validate -BundleRoot $bundleRootFull -ProductRoot $productRoot -RhinoPackageRoot $rhinoPackages -RhinoPluginRegistryRoot $registryTestRoot | Out-Host
+& $installer -Mode Validate -BundleRoot $bundleRootFull -ProductRoot $productRoot -RhinoPluginRoot $rhinoPluginRoot -LegacyRhinoPackageRoot $legacyRhinoPackages -RhinoPluginRegistryRoot $registryTestRoot | Out-Host
 if ($LASTEXITCODE -ne 0) { throw 'Isolated package validation failed.' }
 
 $registration = Get-ItemProperty -LiteralPath $registryPluginKey
 $registeredFile = Get-ItemProperty -LiteralPath (Join-Path $registryPluginKey 'PlugIn')
 if ([int]$registration.LoadMode -ne 1) { throw 'Canonical Rhino registration is not AtStartup.' }
+if ([int]$registration.DirectoryInstall -ne 0) { throw 'Canonical Rhino registration is not registry-only.' }
+if (-not ([IO.Path]::GetFullPath([string]$registration.FileName)).Equals(
+    [IO.Path]::GetFullPath((Join-Path $newPluginRoot 'MCP_Rhino.Server.rhp')),
+    [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'Shorthand Rhino startup registration does not point to the active installed RHP.'
+}
 if (-not ([IO.Path]::GetFullPath([string]$registeredFile.FileName)).Equals(
     [IO.Path]::GetFullPath((Join-Path $newPluginRoot 'MCP_Rhino.Server.rhp')),
     [StringComparison]::OrdinalIgnoreCase)) {
@@ -102,7 +128,8 @@ try {
         -Mode Validate `
         -BundleRoot $tamperedBundle `
         -ProductRoot $productRoot `
-        -RhinoPackageRoot $rhinoPackages `
+        -RhinoPluginRoot $rhinoPluginRoot `
+        -LegacyRhinoPackageRoot $legacyRhinoPackages `
         -RhinoPluginRegistryRoot $registryTestRoot | Out-Host
 } catch {
     if ($_.Exception.Message -notmatch 'Duplicate MCP_Rhino.Server.dll') {

@@ -16,5 +16,5 @@ public sealed class PanelCladdingEditorPlugin : PlugIn
         Instance = this;
     }
 
-    public override PlugInLoadTime LoadTime => PlugInLoadTime.WhenNeeded;
+    public override PlugInLoadTime LoadTime => PlugInLoadTime.AtStartup;
 }

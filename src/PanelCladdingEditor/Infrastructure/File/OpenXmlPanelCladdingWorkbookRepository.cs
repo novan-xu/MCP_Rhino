@@ -67,6 +67,89 @@ public sealed class OpenXmlPanelCladdingWorkbookRepository : IPanelCladdingWorkb
         }
     }
 
+    public OperationResponse<IPreparedPanelCladdingWorkbookBatchUpdate> PrepareBatchUpsert(
+        PanelCladdingWorkbookBatchUpsert request)
+    {
+        PanelCladdingWorkbookUpsert[] items = (request.Items ?? Array.Empty<PanelCladdingWorkbookUpsert>())
+            .ToArray();
+        if (items.Length == 0)
+        {
+            return OperationResponse<IPreparedPanelCladdingWorkbookBatchUpdate>.Fail(
+                "PANEL_CLADDING_WORKBOOK_BATCH_ITEMS_REQUIRED");
+        }
+        if (items.Any(item => item.Layout.ObjectId == Guid.Empty) ||
+            items.Select(item => item.Layout.ObjectId).Distinct().Count() != items.Length)
+        {
+            return OperationResponse<IPreparedPanelCladdingWorkbookBatchUpdate>.Fail(
+                "PANEL_CLADDING_WORKBOOK_BATCH_OBJECT_IDS_INVALID");
+        }
+
+        OperationResponse<string> pathValidation = ValidatePath(
+            request.WorkbookPath,
+            request.AllowCreate);
+        if (!pathValidation.Success || pathValidation.Data is null)
+        {
+            return OperationResponse<IPreparedPanelCladdingWorkbookBatchUpdate>.Fail(
+                pathValidation.Message);
+        }
+
+        string finalPath = pathValidation.Data;
+        bool existed = File.Exists(finalPath);
+        OperationResponse lockCheck = CheckExclusiveAccess(finalPath, existed);
+        if (!lockCheck.Success)
+        {
+            return OperationResponse<IPreparedPanelCladdingWorkbookBatchUpdate>.Fail(lockCheck.Message);
+        }
+
+        string directory = Path.GetDirectoryName(finalPath)!;
+        string tempPath = Path.Combine(
+            directory,
+            $".{Path.GetFileNameWithoutExtension(finalPath)}.cladding-batch.{Guid.NewGuid():N}.tmp.xlsx");
+        try
+        {
+            if (existed)
+            {
+                File.Copy(finalPath, tempPath, overwrite: false);
+            }
+            else
+            {
+                CreateEmptyWorkbook(tempPath);
+            }
+
+            long originalLength = existed ? new FileInfo(finalPath).Length : -1L;
+            DateTime originalWriteUtc = existed ? File.GetLastWriteTimeUtc(finalPath) : DateTime.MinValue;
+            var results = new List<PanelCladdingWorkbookBatchItemResult>(items.Length);
+            bool modified = false;
+            foreach (PanelCladdingWorkbookUpsert item in items)
+            {
+                PreparedState state = UpdateTemporaryWorkbook(tempPath, finalPath, item);
+                results.Add(new PanelCladdingWorkbookBatchItemResult
+                {
+                    ObjectId = item.Layout.ObjectId,
+                    Result = state.Result
+                });
+                modified |= state.Modified;
+            }
+
+            ValidateWorkbook(tempPath);
+            return OperationResponse<IPreparedPanelCladdingWorkbookBatchUpdate>.Ok(
+                new PreparedWorkbookBatchUpdate(
+                    tempPath,
+                    finalPath,
+                    existed,
+                    originalLength,
+                    originalWriteUtc,
+                    results,
+                    modified));
+        }
+        catch (Exception ex)
+        {
+            TryDelete(tempPath);
+            return OperationResponse<IPreparedPanelCladdingWorkbookBatchUpdate>.Fail(
+                $"PANEL_CLADDING_WORKBOOK_BATCH_PREPARE_FAILED: {ex.Message}");
+        }
+    }
+
     private static PreparedState UpdateTemporaryWorkbook(
         string tempPath,
         string finalPath,
@@ -750,6 +833,94 @@ public sealed class OpenXmlPanelCladdingWorkbookRepository : IPanelCladdingWorkb
             catch (Exception ex)
             {
                 return OperationResponse.Fail($"PANEL_CLADDING_WORKBOOK_COMMIT_FAILED: {ex.Message}");
+            }
+        }
+
+        public void Dispose()
+        {
+            if (!_committed)
+            {
+                TryDelete(_tempPath);
+            }
+        }
+    }
+
+    private sealed class PreparedWorkbookBatchUpdate : IPreparedPanelCladdingWorkbookBatchUpdate
+    {
+        private readonly string _tempPath;
+        private readonly string _finalPath;
+        private readonly bool _existed;
+        private readonly long _originalLength;
+        private readonly DateTime _originalWriteUtc;
+        private readonly bool _modified;
+        private bool _committed;
+
+        public PreparedWorkbookBatchUpdate(
+            string tempPath,
+            string finalPath,
+            bool existed,
+            long originalLength,
+            DateTime originalWriteUtc,
+            IReadOnlyList<PanelCladdingWorkbookBatchItemResult> results,
+            bool modified)
+        {
+            _tempPath = tempPath;
+            _finalPath = finalPath;
+            _existed = existed;
+            _originalLength = originalLength;
+            _originalWriteUtc = originalWriteUtc;
+            Results = results;
+            _modified = modified;
+        }
+
+        public IReadOnlyList<PanelCladdingWorkbookBatchItemResult> Results { get; }
+
+        public OperationResponse Commit()
+        {
+            if (_committed)
+            {
+                return OperationResponse.Ok("Workbook batch update already committed.");
+            }
+
+            try
+            {
+                if (!_modified)
+                {
+                    TryDelete(_tempPath);
+                    _committed = true;
+                    return OperationResponse.Ok("All workbook types already exist.");
+                }
+
+                if (_existed)
+                {
+                    var current = new FileInfo(_finalPath);
+                    if (!current.Exists ||
+                        current.Length != _originalLength ||
+                        current.LastWriteTimeUtc != _originalWriteUtc)
+                    {
+                        return OperationResponse.Fail("PANEL_CLADDING_WORKBOOK_CHANGED_DURING_SAVE");
+                    }
+                    string backup = _finalPath + ".mcp-cladding-backup";
+                    TryDelete(backup);
+                    File.Replace(_tempPath, _finalPath, backup, ignoreMetadataErrors: true);
+                    TryDelete(backup);
+                }
+                else
+                {
+                    if (File.Exists(_finalPath))
+                    {
+                        return OperationResponse.Fail("PANEL_CLADDING_WORKBOOK_CREATED_DURING_SAVE");
+                    }
+                    File.Move(_tempPath, _finalPath);
+                }
+
+                _committed = true;
+                return OperationResponse.Ok("Panel cladding workbook batch updated.");
+            }
+            catch (Exception ex)
+            {
+                return OperationResponse.Fail(
+                    $"PANEL_CLADDING_WORKBOOK_BATCH_COMMIT_FAILED: {ex.Message}");
             }
         }
 

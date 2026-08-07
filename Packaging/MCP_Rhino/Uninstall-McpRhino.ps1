@@ -36,6 +36,33 @@ if ($null -ne $manifest.clientAction) {
     }
 }
 
+$registryRoot = if (-not [string]::IsNullOrWhiteSpace([string]$manifest.rhinoPluginRegistryRoot)) {
+    [string]$manifest.rhinoPluginRegistryRoot
+} else {
+    'Registry::HKEY_CURRENT_USER\Software\McNeel\Rhinoceros\8.0\Plug-Ins'
+}
+if (-not $registryRoot.StartsWith('Registry::HKEY_CURRENT_USER\', [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'The recorded Rhino plug-in registry root is outside HKEY_CURRENT_USER.'
+}
+$pluginKey = Join-Path $registryRoot ([string]$manifest.pluginId).ToLowerInvariant()
+if (Test-Path -LiteralPath $pluginKey) {
+    $registration = Get-ItemProperty -LiteralPath $pluginKey -ErrorAction SilentlyContinue
+    $pluginFile = Get-ItemProperty -LiteralPath (Join-Path $pluginKey 'PlugIn') -ErrorAction SilentlyContinue
+    $ownedRhp = Join-Path ([string]$manifest.pluginRoot) 'MCP_Rhino.Server.rhp'
+    $isOwnedRegistration = $null -ne $registration -and
+        ([string]$registration.Name).Equals('MCP_Rhino', [StringComparison]::OrdinalIgnoreCase) -and
+        $null -ne $pluginFile -and
+        ([IO.Path]::GetFullPath([string]$pluginFile.FileName)).Equals(
+            [IO.Path]::GetFullPath($ownedRhp), [StringComparison]::OrdinalIgnoreCase)
+    if ($isOwnedRegistration) {
+        if ($PSCmdlet.ShouldProcess($pluginKey, 'Remove installer-owned Rhino plug-in registration')) {
+            Remove-Item -LiteralPath $pluginKey -Recurse -Force
+        }
+    } else {
+        Write-Warning "Rhino plug-in registration changed after installation and was left untouched: $pluginKey"
+    }
+}
+
 $retained = @()
 $ownedFiles = @($manifest.files) + @($manifest.rollbackFiles)
 foreach ($file in $ownedFiles) {
@@ -53,6 +80,7 @@ $cleanupRoots = @(
     [string]$manifest.pluginRoot,
     [string]$manifest.binRoot,
     [string]$manifest.rollbackRoot,
+    [string]$manifest.legacyPackageProductRoot,
     (Split-Path -Parent ([string]$manifest.pluginRoot))
 ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object { $_.Length } -Descending -Unique
 foreach ($root in $cleanupRoots) {

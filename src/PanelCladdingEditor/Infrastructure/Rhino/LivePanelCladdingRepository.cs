@@ -43,6 +43,16 @@ public sealed partial class LivePanelCladdingRepository : ILivePanelCladdingRepo
             : ReadLayoutOnMainThread(resolved.Data, objectId);
     }
 
+    public OperationResponse<PanelCladdingMatchPanelSnapshot> ReadMatchPanel(
+        string filePath,
+        Guid objectId)
+    {
+        OperationResponse<RhinoDoc> resolved = ResolveDocument(filePath);
+        return !resolved.Success || resolved.Data is null
+            ? OperationResponse<PanelCladdingMatchPanelSnapshot>.Fail(resolved.Message)
+            : ReadMatchPanelOnMainThread(resolved.Data, objectId);
+    }
+
     public OperationResponse<PanelAttributeCommitResult> CommitAttributes(
         PanelAttributeCommitRequest request,
         Func<OperationResponse> finalizeExternalCommit)
@@ -70,6 +80,18 @@ public sealed partial class LivePanelCladdingRepository : ILivePanelCladdingRepo
             var originalAttributes = rhinoObject.Attributes.Duplicate();
             var proposedAttributes = rhinoObject.Attributes.Duplicate();
             bool changed = false;
+            var deleteKeys = request.UserTextDeletes
+                .Where(key => !string.IsNullOrWhiteSpace(key))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            string?[] existingKeys = proposedAttributes.GetUserStrings()?.AllKeys ?? Array.Empty<string?>();
+            foreach (string? key in existingKeys)
+            {
+                if (key is not null && deleteKeys.Contains(key))
+                {
+                    proposedAttributes.DeleteUserString(key);
+                    changed = true;
+                }
+            }
             foreach ((string key, string value) in request.UserTextWrites)
             {
                 if (!string.Equals(proposedAttributes.GetUserString(key), value, StringComparison.Ordinal))
@@ -278,6 +300,75 @@ public sealed partial class LivePanelCladdingRepository : ILivePanelCladdingRepo
             Preview = previewData.Preview,
             WorkbookPath = document.Strings.GetValue(PanelCladdingKeyService.WorkbookPathDocumentKey) ?? string.Empty
         });
+    }
+
+    private OperationResponse<PanelCladdingMatchPanelSnapshot> ReadMatchPanelOnMainThread(
+        RhinoDoc document,
+        Guid objectId)
+    {
+        RhinoObject? rhinoObject = document.Objects.FindId(objectId);
+        if (rhinoObject?.Geometry is not Brep brep)
+        {
+            return OperationResponse<PanelCladdingMatchPanelSnapshot>.Fail(
+                "PANEL_CLADDING_BREP_NOT_FOUND");
+        }
+
+        OperationResponse<LocalMesh> localMeshResponse = BuildLocalMesh(
+            brep,
+            document.ModelAbsoluteTolerance);
+        if (!localMeshResponse.Success || localMeshResponse.Data is null)
+        {
+            return OperationResponse<PanelCladdingMatchPanelSnapshot>.Fail(localMeshResponse.Message);
+        }
+        LocalMesh local = localMeshResponse.Data;
+        double width = local.XMax - local.XMin;
+        double height = local.YMax - local.YMin;
+        if (width <= document.ModelAbsoluteTolerance || height <= document.ModelAbsoluteTolerance)
+        {
+            return OperationResponse<PanelCladdingMatchPanelSnapshot>.Fail(
+                "PANEL_CLADDING_PANEL_EXTENT_INVALID");
+        }
+
+        var geometryCell = new PanelCladdingCell
+        {
+            Column = 0,
+            Row = 0,
+            RowLabel = "A",
+            ShortLabel = "0A",
+            UserTextKey = PanelCladdingKeyService.GetCellKey(0, "A"),
+            Value = string.Empty
+        };
+        OperationResponse<(PanelGeometryClass Classification, string Diagnostic, PanelPreviewGeometry Preview)> preview =
+            _projection.Build(
+                local.Vertices,
+                local.Triangles,
+                local.XMin,
+                local.XMax,
+                local.YMin,
+                local.YMax,
+                Array.Empty<double>(),
+                Array.Empty<double>(),
+                new[] { geometryCell },
+                document.ModelAbsoluteTolerance);
+        if (!preview.Success)
+        {
+            return OperationResponse<PanelCladdingMatchPanelSnapshot>.Fail(preview.Message);
+        }
+
+        return OperationResponse<PanelCladdingMatchPanelSnapshot>.Ok(
+            new PanelCladdingMatchPanelSnapshot
+            {
+                ObjectId = objectId,
+                Geometry = new PanelCladdingMatchGeometryDescriptor
+                {
+                    GeometryClass = preview.Data.Classification,
+                    Width = width,
+                    Height = height,
+                    ModelTolerance = document.ModelAbsoluteTolerance,
+                    DepthSamples = preview.Data.Preview.DepthSamples
+                },
+                UserText = ReadUserText(rhinoObject)
+            });
     }
 
     private static OperationResponse<LocalMesh> BuildLocalMesh(Brep brep, double tolerance)

@@ -115,3 +115,56 @@ discoverability false.
 After restart, run `_PanelCladdingEditorSmoke`, then preselect one prepared panel in
 `test.3dm` and run `_PanelCladdingEditor`. This live UI check cannot be completed while the new
 `.rhp` is not loaded in the current Rhino process.
+
+## Canonical cladding type-key revision (2026-08-05)
+
+- Changed the panel type-code user-text key from `CW_4.00_CLADDING_TYPE` to
+  `CW_1.10_CLADDING_TYPE`.
+- Kept `CW_4.00_CLADDING_SIGNATURE` unchanged. Its `v1:sha256:<digest>` value fingerprints the
+  normalized panel geometry class, dimensions, grid topology, H/V offsets, cell materials, and
+  curved depth samples. The workbook index uses the full digest to reuse identical types and avoid
+  type-code collisions; the stored panel value provides a traceable configuration identity.
+- Added save-time migration: a successful editor save deletes the legacy
+  `CW_4.00_CLADDING_TYPE` user string before writing `CW_1.10_CLADDING_TYPE`, preventing both keys
+  from remaining on the panel.
+- Added regression assertions for the new type key, explicit legacy key, and unchanged signature
+  key. Standalone editor and spawn smokes passed in Debug and Release.
+- Full serial solution builds passed in Debug and Release with zero warnings/errors.
+- Built PanelCladdingEditor 1.0.11 and directly verified its assembly plug-in id as
+  `7c1a4d3b-5e29-4f68-9a72-1d8c6b0f4e35`, distinct from MCP_Rhino.
+- Rhino processes 10132 and 71016 were active, so installation safely staged at
+  `C:\Users\nxu\AppData\Local\PanelCladdingEditor\staged\1.0.11-20260805213516016`.
+
+The schema change is implemented and verified. Version 1.0.11 must be activated after all Rhino
+processes close.
+
+### Version 1.0.11 activation
+
+- Activated the staged package after Rhino closed and ran installer validation successfully.
+- Installed RHP:
+  `C:\Users\nxu\AppData\Local\PanelCladdingEditor\plugin\1.0.11\PanelCladdingEditor.rhp`.
+- Registry verification passed with `LoadMode=1`, `IsDotNETPlugIn=1`, and `DirectoryInstall=0`.
+- Direct metadata verification of the installed RHP reported plug-in id
+  `7c1a4d3b-5e29-4f68-9a72-1d8c6b0f4e35`, matching the manifest and remaining distinct from
+  MCP_Rhino.
+
+Version 1.0.11 is installed and ready to load on the next Rhino start.
+
+## Rhino-only Signature key revision (2026-08-05)
+
+- Superseded the prior signature-key decision and renamed Rhino user text from
+  `CW_4.00_CLADDING_SIGNATURE` to the exact key `Signature`.
+- Preserved the `v1:sha256:<digest>` value, digest inputs, workbook index, identical-type reuse, and
+  collision handling unchanged.
+- Successful editor saves now delete both legacy schema keys—`CW_4.00_CLADDING_TYPE` and
+  `CW_4.00_CLADDING_SIGNATURE`—before writing `CW_1.10_CLADDING_TYPE` and `Signature`.
+- Added key/migration regression assertions. Standalone editor and spawn smokes passed in Debug and
+  Release, and full serial solution builds passed in both configurations with zero warnings/errors.
+- Built and directly verified PanelCladdingEditor 1.0.12. Rhino was closed, so the package was
+  installed and registry-validated at
+  `C:\Users\nxu\AppData\Local\PanelCladdingEditor\plugin\1.0.12\PanelCladdingEditor.rhp`.
+- Registry values are `LoadMode=1`, `IsDotNETPlugIn=1`, and `DirectoryInstall=0`. Direct installed
+  RHP metadata reports plug-in id `7c1a4d3b-5e29-4f68-9a72-1d8c6b0f4e35`, matching the manifest
+  and remaining distinct from MCP_Rhino.
+
+Version 1.0.12 is installed and ready for the next Rhino start.

@@ -33,13 +33,14 @@ if (Test-Path -LiteralPath $resolvedFixtureRoot) {
 
 try {
     $productRoot = Join-Path $resolvedFixtureRoot 'product'
-    $rhinoPackageRoot = Join-Path $resolvedFixtureRoot 'rhino-packages'
+    $legacyRhinoPackageRoot = Join-Path $resolvedFixtureRoot 'rhino-packages'
+    $rhinoPluginRoot = Join-Path $productRoot 'plugin'
     $registryTestRoot = 'Registry::HKEY_CURRENT_USER\Software\MCP_Rhino\InstallerTests\RouterOnlyUpgrade\Plug-Ins'
     if (Test-Path -LiteralPath $registryTestRoot) {
         Remove-Item -LiteralPath $registryTestRoot -Recurse -Force
     }
     $legacyBin = Join-Path $productRoot 'bin'
-    $legacyPlugin = Join-Path $rhinoPackageRoot 'MCP_Rhino\1.0.0'
+    $legacyPlugin = Join-Path $legacyRhinoPackageRoot 'MCP_Rhino\1.0.0'
     $legacyRollback = Join-Path $productRoot 'rollback\legacy-snapshot'
     $legacyStage = Join-Path $productRoot 'staged\legacy-bundle'
     New-Item -ItemType Directory -Path $legacyBin, $legacyPlugin, $legacyRollback, $legacyStage -Force | Out-Null
@@ -56,6 +57,7 @@ try {
         product = 'MCP_Rhino'
         productVersion = '1.0.0'
         routeProtocolVersion = 1
+        pluginRoot = $legacyPlugin
         files = @()
         rollbackRoot = $legacyRollback
         rollbackFiles = @(
@@ -66,7 +68,7 @@ try {
     $legacyManifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $productRoot 'install-manifest.json') -Encoding utf8
 
     $installer = Join-Path $BundleRoot 'Installer\Install-McpRhino.ps1'
-    & $installer -Mode Install -BundleRoot $BundleRoot -ProductRoot $productRoot -RhinoPackageRoot $rhinoPackageRoot -RhinoPluginRegistryRoot $registryTestRoot | Out-Null
+    & $installer -Mode Install -BundleRoot $BundleRoot -ProductRoot $productRoot -RhinoPluginRoot $rhinoPluginRoot -LegacyRhinoPackageRoot $legacyRhinoPackageRoot -RhinoPluginRegistryRoot $registryTestRoot | Out-Null
 
     $installedManifestPath = Join-Path $productRoot 'install-manifest.json'
     $installedManifest = Get-Content -LiteralPath $installedManifestPath -Raw | ConvertFrom-Json
@@ -80,7 +82,7 @@ try {
     Require ($retiredFileNames.Count -eq 0) 'Legacy Bridge and Companion executable paths are absent after upgrade.'
 
     $definition = Get-Content -LiteralPath (Join-Path $BundleRoot 'package-manifest.json') -Raw | ConvertFrom-Json
-    $installedPlugin = Join-Path $rhinoPackageRoot "MCP_Rhino\$($definition.productVersion)\MCP_Rhino.Server.rhp"
+    $installedPlugin = Join-Path $rhinoPluginRoot "$($definition.productVersion)\MCP_Rhino.Server.rhp"
     foreach ($symbol in @(
         'Mcpchat',
         'McpDebugBridgeOnlyPluginSmoke',
@@ -91,7 +93,7 @@ try {
         Require (-not (Binary-Contains -Path $installedPlugin -Value $symbol)) "Installed Rhino plugin omits retired command symbol: $symbol"
     }
 
-    & $installer -Mode Validate -BundleRoot $BundleRoot -ProductRoot $productRoot -RhinoPackageRoot $rhinoPackageRoot -RhinoPluginRegistryRoot $registryTestRoot | Out-Null
+    & $installer -Mode Validate -BundleRoot $BundleRoot -ProductRoot $productRoot -RhinoPluginRoot $rhinoPluginRoot -LegacyRhinoPackageRoot $legacyRhinoPackageRoot -RhinoPluginRegistryRoot $registryTestRoot | Out-Null
     Write-Output '[OK] Router-only installed state validates after a simulated legacy upgrade.'
     Write-Output '[OK] router-only-installer-upgrade-smoke-test'
 }

@@ -1,0 +1,42 @@
+# Panel Cladding Surface Sync Test
+
+## Automated smoke
+
+Run from the repository root:
+
+```powershell
+dotnet run --project .\Project_Test\260807_TEST_panel-cladding-surface-sync\PanelCladdingSurfaceSyncSmoke.csproj -c Debug
+dotnet run --project .\Project_Test\260807_TEST_panel-cladding-surface-sync\PanelCladdingSurfaceSyncSmoke.csproj -c Release
+```
+
+The smoke verifies exact canonical PID/CID mapping, layer-derived material values, surface-key and
+panel-change separation, fail-closed mapping/layer errors, one prepared batch workbook with in-batch
+signature reuse, later workbook reuse, standalone dependencies, service contracts, and unique Rhino
+command GUID registration.
+
+## Live Rhino fixture
+
+1. Open and save a Rhino document with at least two configured panel Breps and their spawned
+   cladding surfaces.
+2. Move at least one surface per panel from its existing material leaf layer to another valid leaf
+   beneath `02_Material Surfaces::<matching family>`; for example move a surface from `GL01` to
+   `GL02` below `Surfaces-Glass`.
+3. Optionally make one surface's `Cladding` user text stale without changing its layer.
+4. Select both owning panels before starting the command.
+5. Run `_PanelCladdingSyncFromSurfaces` and type or paste the full path to a closed `.xlsx` typology
+   workbook at the Rhino command line. If the document already stores a workbook path, press Enter
+   to accept it.
+6. Confirm the command finds every expected surface by canonical `CW_1.01_PID` and `CW_1.02_CID`.
+   In particular, `PID_BKT_W3_05_25` must map to CIDs such as `CID_BKT_W3_05_25-0A`.
+7. Confirm each matched surface's `Cladding` value equals its current layer leaf and that no surface
+   geometry, layer assignment, color, PID, or CID changes.
+8. Confirm changed panel cell keys reflect the surface layers and receive new canonical
+   `CW_1.10_CLADDING_TYPE` and `Signature` values; unchanged panel configurations retain their type.
+9. Open the workbook and confirm every changed type has a typology sheet, while equal signatures
+   reuse one type/sheet.
+10. Run Rhino Undo once and confirm the Rhino surface/panel/document metadata batch returns to its
+    prior state. The external workbook update is intentionally not controlled by Rhino Undo.
+11. Close the workbook and rerun without layer changes. Confirm zero panels are updated and no new
+    typology type is created.
+12. Negative checks: duplicate one expected CID, move one expected surface outside the material root,
+    or lock the workbook in Excel. Each case must fail before any Rhino metadata changes.

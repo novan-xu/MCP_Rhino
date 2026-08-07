@@ -43,6 +43,19 @@ internal static class Program
             var renderer = new PanelPreviewRenderer();
             var workbook = new OpenXmlPanelCladdingWorkbookRepository();
 
+            RequirePanelCladding(
+                PanelCladdingKeyService.TypeCodeKey == "CW_1.10_CLADDING_TYPE",
+                "The cladding type key must use the canonical CW_1.10 schema location.");
+            RequirePanelCladding(
+                PanelCladdingKeyService.LegacyTypeCodeKey == "CW_4.00_CLADDING_TYPE",
+                "The legacy type key must remain explicit for save-time migration.");
+            RequirePanelCladding(
+                PanelCladdingKeyService.SignatureKey == "Signature",
+                "The Rhino-only cladding signature key must be named Signature.");
+            RequirePanelCladding(
+                PanelCladdingKeyService.LegacySignatureKey == "CW_4.00_CLADDING_SIGNATURE",
+                "The legacy signature key must remain explicit for save-time migration.");
+
             IReadOnlyDictionary<string, string> userText = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 ["cw_2.03_offset_h0"] = "50",
@@ -62,7 +75,7 @@ internal static class Program
             OperationResponse<PanelCladdingKeySet> gappedResult = keys.Parse(gapped, 100d, 100d, 0.001d);
             RequirePanelCladding(!gappedResult.Success && gappedResult.Message.Contains("GAPPED_H", StringComparison.Ordinal),
                 "Gapped H indices must fail explicitly.");
-            checkpoints.Add("key parsing, ordering, normalization, and hard-error validation");
+            checkpoints.Add("canonical assignment keys, parsing, ordering, normalization, and hard-error validation");
 
             PanelCladdingLayout planar = BuildSmokeLayout(
                 projection, keySet, PanelMesh(planar: true, duplicateDepth: false), 1d, 0.001d);

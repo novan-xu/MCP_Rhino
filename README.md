@@ -7,7 +7,7 @@
 - [src/MCP_Rhino.Server/](src/MCP_Rhino.Server/)：Rhino 插件，构建产出 `MCP_Rhino.Server.rhp`。Debug 与 Release 使用相同的 Router-only 启动形态，并为每个已保存打开文档发布独立 route endpoint。
 - [src/MCP_Rhino.Transport/](src/MCP_Rhino.Transport/)：Server 与 Router 共享的 BCL-only discovery、descriptor、attestation 与 route protocol。
 - [src/MCP_Rhino.Router/](src/MCP_Rhino.Router/)：唯一 MCP stdio gateway；每个 MCP client session 启动自己的 Router，并独立选择目标 Rhino 文档。
-- [src/MCP_Rhino.Server/Tools/](src/MCP_Rhino.Server/Tools/)：几何、编辑、图层、分析、文件、绘图与工作流等 MCP tools。
+- [src/MCP_Rhino.Server/Tools/](src/MCP_Rhino.Server/Tools/)：几何、编辑、图层、分析、Grasshopper、文件、绘图与工作流等 MCP tools。
 
 项目不再构建、安装或支持 fixed debug pipe、stdio Bridge、Companion、`_Mcpchat` 或 panel-bound MCP transport。
 
@@ -41,7 +41,7 @@ dotnet build .\MCP_Rhino.sln -c Release
 - `src\MCP_Rhino.Server\bin\<Configuration>\net8.0\MCP_Rhino.Server.rhp`
 - `src\MCP_Rhino.Router\bin\<Configuration>\net8.0\MCP_Rhino.Router.exe`
 
-Rhino 非默认安装位置时，先更新 [src/MCP_Rhino.Server/MCP_Rhino.Server.csproj](src/MCP_Rhino.Server/MCP_Rhino.Server.csproj) 中 `RhinoCommon` 的 `HintPath`。
+Rhino 非默认安装位置时，先更新 [src/MCP_Rhino.Server/MCP_Rhino.Server.csproj](src/MCP_Rhino.Server/MCP_Rhino.Server.csproj) 中 `RhinoCommon`、`Grasshopper` 与 `GH_IO` 的 `HintPath`。
 
 ### 2. 启动 Rhino 并打开文档
 
@@ -77,6 +77,22 @@ MCP_Rhino routed document endpoint dispatcher started.
 3. 调用普通 Rhino tools。选中的 session 与显式 `filePath` 冲突时，Router 返回 `DOCUMENT_TARGET_CONFLICT`。
 
 多个 agent 可以同时连接同一批 Rhino 文档，并维持互不影响的选择。Route endpoint 绑定 `RhinoDoc.RuntimeSerialNumber`，不依赖当前前台窗口或 active tab。
+
+### Grasshopper authoring
+
+Grasshopper 1 tools use a second explicit target: after selecting the Rhino document through the
+Router, call `StartGrasshopper` or `ListGrasshopperDefinitions`, then pass the returned opaque
+`definitionSessionId` to every graph read, preview, apply, solve, or clear operation. Targeting never
+follows the active Grasshopper canvas.
+
+The authoring surface supports installed components (including installed Python/C#/script-code
+components), number sliders, wires, bounded data inspection, solve diagnostics, and stale-safe
+preview/apply clearing. Script/code components are classified and warned as executable code; the
+relevant tools are open-world. The graph contract does not accept raw script source text.
+
+Grasshopper graph changes use Grasshopper's native undo stack—one undo entry per successful batch—
+instead of creating an empty Rhino document undo record. `.gh`/`.ghx` disk reads and writes are not
+used.
 
 ## 数据路径
 

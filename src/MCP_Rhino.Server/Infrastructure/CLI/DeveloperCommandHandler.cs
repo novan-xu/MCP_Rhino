@@ -64,6 +64,7 @@ public sealed partial class DeveloperCommandHandler
     private readonly BlockLifecycleSkill _blockLifecycleSkill;
     private readonly RhinoTakeoffScheduleService _takeoffScheduleService;
     private readonly TakeoffSpreadsheetAgent _takeoffSpreadsheetAgent;
+    private readonly RhinoGrasshopperAuthoringService _grasshopperAuthoringService;
     private readonly Dictionary<string, Func<string[], bool>> _extensionHandlers = new(StringComparer.OrdinalIgnoreCase);
 
     // Optional hooks for Project_Test partials to register capability-specific smoke
@@ -109,6 +110,7 @@ public sealed partial class DeveloperCommandHandler
     partial void RegisterTakeoffSpreadsheetHandlers();
     partial void RegisterMultiDocumentRhinoRouterHandlers();
     partial void RegisterDirectRhpPluginIdentityHandlers();
+    partial void RegisterGrasshopperAuthoringToolsHandlers();
 
     partial void RegisterExtensionHandlers()
     {
@@ -152,6 +154,7 @@ public sealed partial class DeveloperCommandHandler
         RegisterTakeoffSpreadsheetHandlers();
         RegisterMultiDocumentRhinoRouterHandlers();
         RegisterDirectRhpPluginIdentityHandlers();
+        RegisterGrasshopperAuthoringToolsHandlers();
     }
 
     public DeveloperCommandHandler(
@@ -203,7 +206,8 @@ public sealed partial class DeveloperCommandHandler
         RhinoBlockInspectionService rhinoBlockInspectionService,
         BlockLifecycleSkill blockLifecycleSkill,
         RhinoTakeoffScheduleService takeoffScheduleService,
-        TakeoffSpreadsheetAgent takeoffSpreadsheetAgent)
+        TakeoffSpreadsheetAgent takeoffSpreadsheetAgent,
+        RhinoGrasshopperAuthoringService grasshopperAuthoringService)
     {
         _filterService = filterService;
         _editingService = editingService;
@@ -254,6 +258,7 @@ public sealed partial class DeveloperCommandHandler
         _blockLifecycleSkill = blockLifecycleSkill;
         _takeoffScheduleService = takeoffScheduleService;
         _takeoffSpreadsheetAgent = takeoffSpreadsheetAgent;
+        _grasshopperAuthoringService = grasshopperAuthoringService;
         RegisterExtensionHandlers();
     }
 

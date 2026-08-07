@@ -38,8 +38,32 @@ public sealed class PanelCladdingEditorSmokeCommand : RhinoCommand
             RhinoApp.WriteLine("[FAIL] PanelCladdingEditor command is missing.");
             return Result.Failure;
         }
+        if (assembly.GetType("PanelCladdingEditor.UI.PanelCladdingSpawnCommand") is null)
+        {
+            RhinoApp.WriteLine("[FAIL] PanelCladdingSpawn command is missing.");
+            return Result.Failure;
+        }
+        if (assembly.GetType("PanelCladdingEditor.UI.PanelCladdingMatchCommand") is null)
+        {
+            RhinoApp.WriteLine("[FAIL] PanelCladdingMatch command is missing.");
+            return Result.Failure;
+        }
+        if (assembly.GetType("PanelCladdingEditor.UI.PanelCladdingClearCommand") is null)
+        {
+            RhinoApp.WriteLine("[FAIL] PanelCladdingClear command is missing.");
+            return Result.Failure;
+        }
+        if (assembly.GetType("PanelCladdingEditor.UI.PanelCladdingSyncFromSurfacesCommand") is null)
+        {
+            RhinoApp.WriteLine("[FAIL] PanelCladdingSyncFromSurfaces command is missing.");
+            return Result.Failure;
+        }
 
         RhinoApp.WriteLine("[OK] PanelCladdingEditor is a standalone Rhino plug-in.");
+        RhinoApp.WriteLine("[OK] PanelCladdingSpawn command is registered in the plug-in assembly.");
+        RhinoApp.WriteLine("[OK] PanelCladdingMatch command is registered in the plug-in assembly.");
+        RhinoApp.WriteLine("[OK] PanelCladdingClear command is registered in the plug-in assembly.");
+        RhinoApp.WriteLine("[OK] PanelCladdingSyncFromSurfaces command is registered in the plug-in assembly.");
         RhinoApp.WriteLine("[OK] No MCP_Rhino, Router, Transport, or MCP SDK assembly reference.");
         return Result.Success;
     }
