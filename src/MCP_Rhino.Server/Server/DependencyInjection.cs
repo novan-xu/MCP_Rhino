@@ -8,6 +8,7 @@ using MCP_Rhino.Server.Application.Services.Filters;
 using MCP_Rhino.Server.Infrastructure.CLI;
 using MCP_Rhino.Server.Infrastructure.Rhino;
 using MCP_Rhino.Server.Infrastructure.Rhino.Live;
+using MCP_Rhino.Server.Infrastructure.Rhino.Live.Grasshopper;
 using MCP_Rhino.Server.Infrastructure.Spreadsheet;
 
 namespace MCP_Rhino.Server.Server;
@@ -59,6 +60,10 @@ public static class DependencyInjection
         services.AddSingleton<ILiveRhinoMaterialOperator, LiveRhinoMaterialOperator>();
         services.AddSingleton<ILiveSubDModelingOperator, LiveSubDModelingOperator>();
         services.AddSingleton<ILiveTakeoffMetricReader, LiveTakeoffMetricReader>();
+        services.AddSingleton<GrasshopperDefinitionRegistry>();
+        services.AddSingleton<GrasshopperComponentCatalog>();
+        services.AddSingleton<GrasshopperGraphProjector>();
+        services.AddSingleton<ILiveGrasshopperOperator, LiveGrasshopperOperator>();
         return services;
     }
 
@@ -107,6 +112,10 @@ public static class DependencyInjection
         services.AddSingleton<ILiveRhinoMaterialOperator, LiveRhinoMaterialOperator>();
         services.AddSingleton<ILiveSubDModelingOperator, LiveSubDModelingOperator>();
         services.AddSingleton<ILiveTakeoffMetricReader, LiveTakeoffMetricReader>();
+        services.AddSingleton<GrasshopperDefinitionRegistry>();
+        services.AddSingleton<GrasshopperComponentCatalog>();
+        services.AddSingleton<GrasshopperGraphProjector>();
+        services.AddSingleton<ILiveGrasshopperOperator, LiveGrasshopperOperator>();
         return services;
     }
 
@@ -156,6 +165,7 @@ public static class DependencyInjection
         services.AddSingleton<TakeoffScheduleValidationService>();
         services.AddSingleton<TakeoffScheduleCalculationService>();
         services.AddSingleton<RhinoTakeoffScheduleService>();
+        services.AddSingleton<RhinoGrasshopperAuthoringService>();
         services.AddSingleton<ISpreadsheetWorkbookWriter, CsvSpreadsheetWorkbookWriter>();
         services.AddSingleton<ISpreadsheetWorkbookWriter, XlsxSpreadsheetWorkbookWriter>();
         services.AddSingleton<ICurveEditOrchestrator, CurveEditOrchestrator>();

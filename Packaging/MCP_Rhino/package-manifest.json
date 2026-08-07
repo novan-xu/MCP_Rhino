@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "product": "MCP_Rhino",
-  "productVersion": "1.1.2",
+  "productVersion": "1.2.2",
   "transportMode": "router-only",
   "routeProtocolVersion": 1,
   "rhinoMajorVersion": 8,

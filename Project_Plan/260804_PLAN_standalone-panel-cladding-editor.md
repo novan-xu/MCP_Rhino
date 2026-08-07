@@ -99,3 +99,26 @@ and loads the `.rhp` on the first command invocation. It does not require an alw
 - Add a toolbar/button package.
 - Add configurable system-code rules and cladding-code libraries.
 - Add explicit workbook schema migrations and catalog browsing.
+
+## Revision record (2026-08-05): canonical cladding type key
+
+- Change the panel type-code user-text key from `CW_4.00_CLADDING_TYPE` to
+  `CW_1.10_CLADDING_TYPE`.
+- Keep `CW_4.00_CLADDING_SIGNATURE` unchanged. It remains the versioned SHA-256 fingerprint of the
+  complete normalized geometry/grid/material configuration and is used for deterministic type
+  reuse and collision-safe workbook indexing.
+- On a successful editor save, write only the new type-code key and delete the legacy
+  `CW_4.00_CLADDING_TYPE` key so an edited panel cannot retain both schema versions.
+- Add regression assertions for the canonical key constants and legacy-key migration contract, then
+  rerun standalone editor/spawn smokes and Debug/Release builds before packaging.
+
+## Revision record (2026-08-05): Rhino-only signature key
+
+- Rename the panel signature user-text key from the company-code namespace
+  `CW_4.00_CLADDING_SIGNATURE` to the Rhino-only key `Signature`.
+- Preserve the existing `v1:sha256:<digest>` value format and fingerprint behavior; only the Rhino
+  user-text key changes.
+- On successful save, write `Signature` and delete the legacy `CW_4.00_CLADDING_SIGNATURE` key so a
+  panel cannot retain both schema versions.
+- Keep the workbook index columns and signature values unchanged because they are internal workbook
+  schema rather than Rhino user-text key names.

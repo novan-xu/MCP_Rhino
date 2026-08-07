@@ -33,7 +33,7 @@ public sealed partial class DeveloperCommandHandler
         List<ToolInventoryItem> tools = GetToolInventory();
         Dictionary<string, ToolInventoryItem> byName = tools.ToDictionary(item => item.MethodName, StringComparer.Ordinal);
 
-        RequireOverlapCleanup(tools.Count == 156, $"Expected 156 MCP tools after takeoff spreadsheet additions, found {tools.Count}.");
+        RequireOverlapCleanup(tools.Count == 169, $"Expected 169 MCP tools after Grasshopper authoring additions, found {tools.Count}.");
 
         RequirePresent(byName, "FilterObjects");
         RequirePresent(byName, "GetObjectMetricsByFilter");
@@ -92,7 +92,7 @@ public sealed partial class DeveloperCommandHandler
             "FindLayerCandidates returns a structured OperationResponse list.");
 
         Console.WriteLine("[OK] MCP tool overlap cleanup smoke verified canonical tools and removed duplicate wrappers.");
-        Console.WriteLine("[OK] MCP tool count=156; removed duplicate wrappers=11.");
+        Console.WriteLine("[OK] MCP tool count=169; removed duplicate wrappers=11.");
     }
 
     private static List<ToolInventoryItem> GetToolInventory()

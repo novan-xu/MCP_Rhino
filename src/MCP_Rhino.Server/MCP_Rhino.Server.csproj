@@ -34,6 +34,14 @@
       <HintPath>C:\Program Files\Rhino 8\System\netcore\RhinoCommon.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="Grasshopper">
+      <HintPath>C:\Program Files\Rhino 8\Plug-ins\Grasshopper\Grasshopper.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="GH_IO">
+      <HintPath>C:\Program Files\Rhino 8\Plug-ins\Grasshopper\GH_IO.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
   </ItemGroup>
 
   <ItemGroup>
@@ -43,8 +51,14 @@
                       ..\..\Project_Test\260509_TEST_companion-image-attachments\**\*.cs;
                       ..\..\Project_Test\260729_TEST_multi-document-rhino-router\RouterProtocolSmoke\**\*.cs;
                       ..\..\Project_Test\260804_TEST_panel-cladding-type-editor\**\*.cs;
-                      ..\..\Project_Test\260804_TEST_standalone-panel-cladding-editor\**\*.cs;
-                      ..\..\Project_Test\260804_TEST_direct-rhp-plugin-identity\RhpExecutableProbe\**\*.cs"
+                       ..\..\Project_Test\260804_TEST_standalone-panel-cladding-editor\**\*.cs;
+                       ..\..\Project_Test\260805_TEST_panel-cladding-spawn\**\*.cs;
+                       ..\..\Project_Test\260805_TEST_panel-cladding-match\**\*.cs;
+                       ..\..\Project_Test\260807_TEST_panel-cladding-clear\**\*.cs;
+                       ..\..\Project_Test\260807_TEST_panel-cladding-surface-sync\**\*.cs;
+                       ..\..\Project_Test\260804_TEST_direct-rhp-plugin-identity\RhpExecutableProbe\**\*.cs;
+                      ..\..\Project_Test\260805_TEST_rhino-plugin-assembly-identity\PluginAssemblyIdentityProbe\**\*.cs;
+                      ..\..\Project_Test\260805_TEST_grasshopper-authoring-tools\ApiProbe\**\*.cs"
              LinkBase="Project_Test" />
     <Compile Include="..\..\Project_Archive\Project_Test\**\*.cs"
              Exclude="..\..\Project_Archive\Project_Test\260505_TEST_rhino-claude-code-panel\**\*.cs;
@@ -66,6 +80,12 @@
     <Compile Remove="Infrastructure\Plugin\PluginLoadContext.cs" />
     <Compile Remove="Infrastructure\Plugin\*Command.cs" />
     <Compile Remove="Infrastructure\Plugin\Routing\RoutedDocumentEndpointDispatcher.cs" />
+  </ItemGroup>
+
+  <!-- Only the RHP carries the Rhino plug-in id; the isolated runtime and the CLI host must not
+       repeat it, so that the package can never ship two assemblies claiming one plug-in identity. -->
+  <ItemGroup Condition="'$(McpRhinoIsolatedRuntime)' == 'true' or '$(McpRhinoCliHost)' == 'true'">
+    <Compile Remove="AssemblyInfo.cs" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(McpRhinoCliHost)' != 'true'">

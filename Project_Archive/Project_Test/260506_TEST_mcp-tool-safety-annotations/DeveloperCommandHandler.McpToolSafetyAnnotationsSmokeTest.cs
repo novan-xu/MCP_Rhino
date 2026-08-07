@@ -181,7 +181,15 @@ public sealed partial class DeveloperCommandHandler
         Add(expectations, ToolSafetyExpectation.ReadOnlyClosedWorld,
             "PreviewLotVisualizationExport");
         Add(expectations, ToolSafetyExpectation.ReadOnlyClosedWorld,
-            "SearchRhinoReference");
+            "SearchRhinoReference",
+            "ListGrasshopperDefinitions",
+            "SearchGrasshopperComponents",
+            "GetGrasshopperGraph",
+            "PreviewClearGrasshopperDefinition");
+
+        Add(expectations, ToolSafetyExpectation.ReadOnlyOpenWorld,
+            "DescribeGrasshopperComponent",
+            "PreviewApplyGrasshopperGraph");
 
         Add(expectations, ToolSafetyExpectation.MutationClosedWorld,
             "ApplyDrawingExportStyle",
@@ -246,7 +254,8 @@ public sealed partial class DeveloperCommandHandler
             "ApplyStandardFourPointSurfaceRebuild",
             "ApplyTweakSurfaceDirections",
             "CreateLayers",
-            "ModifyLayers");
+            "ModifyLayers",
+            "StartGrasshopper");
 
         Add(expectations, ToolSafetyExpectation.MutationClosedWorld,
             "RunReferenceImageObjectModelingAgent");
@@ -262,12 +271,15 @@ public sealed partial class DeveloperCommandHandler
             "ReplaceGeometry",
             "ReplaceSplitCurves",
             "DeleteLayers",
-            "PurgeLayers");
+            "PurgeLayers",
+            "ApplyClearGrasshopperDefinition");
 
         Add(expectations, ToolSafetyExpectation.MutationOpenWorld,
             "AppendActivityLog",
             "CreateTexturedRenderMaterials",
-            "UpdateLinkedBlock");
+            "UpdateLinkedBlock",
+            "ApplyGrasshopperGraph",
+            "SolveGrasshopperDefinition");
 
         Add(expectations, ToolSafetyExpectation.DestructiveOpenWorld,
             "ExportDrawingPackage",
@@ -347,6 +359,7 @@ public sealed partial class DeveloperCommandHandler
     private readonly record struct ToolSafetyExpectation(bool ReadOnly, bool Destructive, bool OpenWorld)
     {
         public static ToolSafetyExpectation ReadOnlyClosedWorld => new(true, false, false);
+        public static ToolSafetyExpectation ReadOnlyOpenWorld => new(true, false, true);
         public static ToolSafetyExpectation MutationClosedWorld => new(false, false, false);
         public static ToolSafetyExpectation DestructiveClosedWorld => new(false, true, false);
         public static ToolSafetyExpectation MutationOpenWorld => new(false, false, true);

@@ -23,7 +23,7 @@ internal sealed class PluginLoadContext : AssemblyLoadContext
 
     protected override Assembly? Load(AssemblyName assemblyName)
     {
-        if (assemblyName.Name is "RhinoCommon" or "Rhino.UI" or "Eto" or "Eto.Wpf")
+        if (assemblyName.Name is "RhinoCommon" or "Rhino.UI" or "Eto" or "Eto.Wpf" or "Grasshopper" or "GH_IO")
         {
             RhinoApp.WriteLine($"[MCP_Rhino diag] ALC.Load({assemblyName.Name}) -> share with default context");
             return null;
@@ -52,6 +52,8 @@ internal sealed class PluginLoadContext : AssemblyLoadContext
              or "Microsoft.Extensions.AI"
              or "Microsoft.Extensions.AI.Abstractions"
              or "Microsoft.Extensions.Hosting"
+             or "Grasshopper"
+             or "GH_IO"
              or "ModelContextProtocol"
              or "ModelContextProtocol.Core"
              or "MCP_Rhino.Server.Runtime";

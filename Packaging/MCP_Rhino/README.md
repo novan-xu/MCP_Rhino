@@ -17,10 +17,14 @@ closed for an actual current-user upgrade; if they are active, the bundle is sta
 component is replaced. `-Mode Validate` checks an installation and `-Mode Repair` performs a complete
 compatible-bundle replacement.
 
-The Release plug-in is installed at
-`%APPDATA%\McNeel\Rhinoceros\packages\8.0\MCP_Rhino\<version>` and loads at Rhino startup. External
-executables are installed at `%LOCALAPPDATA%\MCP_Rhino\bin`. An MCP client launches
+The Release plug-in is installed at `%LOCALAPPDATA%\MCP_Rhino\plugin\<version>` and registered under
+the current user's Rhino 8 plug-in key for startup loading. It is intentionally kept outside Rhino
+Package Manager discovery so only one loader owns the plug-in. External executables are installed at
+`%LOCALAPPDATA%\MCP_Rhino\bin`. An MCP client launches
 `MCP_Rhino.Router.exe` over stdio for each session; the Router is not a daemon.
+
+Upgrades migrate installer-owned legacy copies out of
+`%APPDATA%\McNeel\Rhinoceros\packages\8.0\MCP_Rhino` so Package Manager cannot attempt a second load.
 
 Client configuration is opt-in:
 

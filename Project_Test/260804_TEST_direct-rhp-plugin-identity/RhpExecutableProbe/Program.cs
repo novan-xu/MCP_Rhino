@@ -16,14 +16,27 @@ if (args.Length == 3 && string.Equals(args[0], "--rhino-identities", StringCompa
     Type commandBase = rhinoCommon.GetType("Rhino.Commands.Command", throwOnError: true)!;
     Type pluginBase = rhinoCommon.GetType("Rhino.PlugIns.PlugIn", throwOnError: true)!;
 
+    // Rhino.PlugIns.PlugIn.Create derives the plug-in id from the assembly-level GuidAttribute and
+    // falls back to Guid.Empty when it is absent. The [Guid] attribute on the plug-in class is only
+    // reported here so a divergence between the two declarations stays visible.
+    GuidAttribute? assemblyGuid = pluginAssembly.GetCustomAttribute<GuidAttribute>();
+    Guid pluginId = assemblyGuid is null ? Guid.Empty : new Guid(assemblyGuid.Value);
+
     foreach (Type type in pluginAssembly.GetTypes()
         .Where(type => !type.IsAbstract && (commandBase.IsAssignableFrom(type) || pluginBase.IsAssignableFrom(type)))
         .OrderBy(type => type.FullName, StringComparer.Ordinal))
     {
-        string kind = commandBase.IsAssignableFrom(type) ? "COMMAND" : "PLUGIN";
         GuidAttribute? explicitGuid = type.GetCustomAttribute<GuidAttribute>();
+        if (commandBase.IsAssignableFrom(type))
+        {
+            Console.WriteLine(
+                $"RHINO_IDENTITY|kind=COMMAND|guid={type.GUID:D}|explicit={explicitGuid is not null}|type={type.FullName}");
+            continue;
+        }
+
         Console.WriteLine(
-            $"RHINO_IDENTITY|kind={kind}|guid={type.GUID:D}|explicit={explicitGuid is not null}|type={type.FullName}");
+            $"RHINO_IDENTITY|kind=PLUGIN|pluginId={pluginId:D}|declared={assemblyGuid is not null}" +
+            $"|typeGuid={type.GUID:D}|explicitTypeGuid={explicitGuid is not null}|type={type.FullName}");
     }
 
     context.Unload();

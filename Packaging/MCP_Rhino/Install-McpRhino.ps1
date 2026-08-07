@@ -4,7 +4,8 @@ param(
     [string] $Mode = 'Install',
     [string] $BundleRoot = (Split-Path -Parent $PSScriptRoot),
     [string] $ProductRoot = (Join-Path $env:LOCALAPPDATA 'MCP_Rhino'),
-    [string] $RhinoPackageRoot = (Join-Path $env:APPDATA 'McNeel\Rhinoceros\packages\8.0'),
+    [string] $RhinoPluginRoot = (Join-Path $env:LOCALAPPDATA 'MCP_Rhino\plugin'),
+    [string] $LegacyRhinoPackageRoot = (Join-Path $env:APPDATA 'McNeel\Rhinoceros\packages\8.0'),
     [string] $RhinoPluginRegistryRoot = 'Registry::HKEY_CURRENT_USER\Software\McNeel\Rhinoceros\8.0\Plug-Ins',
     [switch] $ConfigureClient,
     [string] $ClientConfigPath
@@ -13,7 +14,8 @@ param(
 $ErrorActionPreference = 'Stop'
 $BundleRoot = [IO.Path]::GetFullPath($BundleRoot)
 $ProductRoot = [IO.Path]::GetFullPath($ProductRoot)
-$RhinoPackageRoot = [IO.Path]::GetFullPath($RhinoPackageRoot)
+$RhinoPluginRoot = [IO.Path]::GetFullPath($RhinoPluginRoot)
+$LegacyRhinoPackageRoot = [IO.Path]::GetFullPath($LegacyRhinoPackageRoot)
 $defaultRhinoPluginRegistryRoot = 'Registry::HKEY_CURRENT_USER\Software\McNeel\Rhinoceros\8.0\Plug-Ins'
 if ($RhinoPluginRegistryRoot.StartsWith('HKCU:\', [StringComparison]::OrdinalIgnoreCase)) {
     $RhinoPluginRegistryRoot = 'Registry::HKEY_CURRENT_USER\' + $RhinoPluginRegistryRoot.Substring('HKCU:\'.Length)
@@ -58,6 +60,10 @@ function Set-McpRhinoPluginRegistration(
 
     $stringValues = [ordered]@{
         Name = 'MCP_Rhino'
+        # Rhino's shorthand registration requires FileName at the plug-in key
+        # root to trigger the first automatic load. Rhino then maintains the
+        # detailed PlugIn\FileName registration used below.
+        FileName = $canonicalRhpPath
         EnglishName = 'MCP_Rhino'
         Organization = 'MCP_Rhino'
         Description = 'Router-only multi-document MCP integration for Rhino 8.'
@@ -95,7 +101,9 @@ function Assert-McpRhinoPluginRegistration(
     $pluginFile = Get-ItemProperty -LiteralPath $pluginFileKey
     $canonicalRhpPath = [IO.Path]::GetFullPath($RhpPath)
     if ([int]$registration.LoadMode -ne 1 -or
+        [int]$registration.DirectoryInstall -ne 0 -or
         [int]$registration.IsDotNETPlugIn -ne 1 -or
+        -not ([IO.Path]::GetFullPath([string]$registration.FileName)).Equals($canonicalRhpPath, [StringComparison]::OrdinalIgnoreCase) -or
         -not ([IO.Path]::GetFullPath([string]$pluginFile.FileName)).Equals($canonicalRhpPath, [StringComparison]::OrdinalIgnoreCase)) {
         throw 'The canonical MCP_Rhino Rhino registration is inconsistent with the active package.'
     }
@@ -210,12 +218,35 @@ function Assert-DirectRhpPackageIdentity([string] $Root) {
     }
 }
 
+function Assert-RegistryOnlyPluginDiscovery(
+    [string] $PluginBase,
+    [string] $ActivePluginRoot,
+    [string] $LegacyPackageProductRoot
+) {
+    $activeRhp = [IO.Path]::GetFullPath((Join-Path $ActivePluginRoot 'MCP_Rhino.Server.rhp'))
+    $registryRootRhps = if (Test-Path -LiteralPath $PluginBase -PathType Container) {
+        @(Get-ChildItem -LiteralPath $PluginBase -Filter 'MCP_Rhino.Server.rhp' -File -Recurse -ErrorAction SilentlyContinue)
+    } else { @() }
+    if ($registryRootRhps.Count -ne 1 -or
+        -not ([IO.Path]::GetFullPath($registryRootRhps[0].FullName)).Equals($activeRhp, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'Registry-only plug-in root must contain exactly one active MCP_Rhino.Server.rhp.'
+    }
+
+    $legacyRhps = if (Test-Path -LiteralPath $LegacyPackageProductRoot -PathType Container) {
+        @(Get-ChildItem -LiteralPath $LegacyPackageProductRoot -Filter 'MCP_Rhino.Server.rhp' -File -Recurse -ErrorAction SilentlyContinue)
+    } else { @() }
+    if ($legacyRhps.Count -gt 0 -or
+        (Test-Path -LiteralPath (Join-Path $LegacyPackageProductRoot 'manifest.txt') -PathType Leaf)) {
+        throw 'Legacy Rhino Package Manager discovery metadata remains after registry-only installation.'
+    }
+}
+
 Assert-DirectRhpPackageIdentity (Join-Path $BundleRoot 'Plugin')
 
 $version = [string]$bundle.productVersion
 $binRoot = Join-Path $ProductRoot 'bin'
-$packageRoot = Join-Path $RhinoPackageRoot ([string]$definition.pluginPackageName)
-$pluginRoot = Join-Path $packageRoot $version
+$pluginRoot = Join-Path $RhinoPluginRoot $version
+$legacyPackageProductRoot = Join-Path $LegacyRhinoPackageRoot ([string]$definition.pluginPackageName)
 $installManifestPath = Join-Path $ProductRoot 'install-manifest.json'
 $priorInstallation = if (Test-Path -LiteralPath $installManifestPath) {
     Get-Content -LiteralPath $installManifestPath -Raw | ConvertFrom-Json
@@ -248,7 +279,11 @@ if ($Mode -eq 'Validate') {
     })
     if ($failures.Count -gt 0) { throw "Installed bundle validation failed for $($failures.Count) file(s)." }
     Assert-DirectRhpPackageIdentity $pluginRoot
-    Assert-McpRhinoPluginRegistration $RhinoPluginRegistryRoot ([string]$definition.pluginId) (Join-Path $pluginRoot 'MCP_Rhino.Server.rhp')
+    Assert-McpRhinoPluginRegistration `
+        $RhinoPluginRegistryRoot `
+        ([string]$definition.pluginId) `
+        (Join-Path $pluginRoot 'MCP_Rhino.Server.rhp')
+    Assert-RegistryOnlyPluginDiscovery $RhinoPluginRoot $pluginRoot $legacyPackageProductRoot
     $router = Join-Path $binRoot ([string]$definition.routerExecutable)
     & $router --validate-install
     if ($LASTEXITCODE -ne 0) { throw 'Installed Router validation failed.' }
@@ -257,7 +292,8 @@ if ($Mode -eq 'Validate') {
 }
 
 $usingDefaultFileRoots = $ProductRoot.Equals([IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'MCP_Rhino')), [StringComparison]::OrdinalIgnoreCase) -and
-    $RhinoPackageRoot.Equals([IO.Path]::GetFullPath((Join-Path $env:APPDATA 'McNeel\Rhinoceros\packages\8.0')), [StringComparison]::OrdinalIgnoreCase)
+    $RhinoPluginRoot.Equals([IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'MCP_Rhino\plugin')), [StringComparison]::OrdinalIgnoreCase) -and
+    $LegacyRhinoPackageRoot.Equals([IO.Path]::GetFullPath((Join-Path $env:APPDATA 'McNeel\Rhinoceros\packages\8.0')), [StringComparison]::OrdinalIgnoreCase)
 $usingDefaultRegistryRoot = $RhinoPluginRegistryRoot.Equals($defaultRhinoPluginRegistryRoot, [StringComparison]::OrdinalIgnoreCase)
 if ($usingDefaultFileRoots -ne $usingDefaultRegistryRoot) {
     throw 'Default filesystem roots and the production Rhino registry root must be used together.'
@@ -291,7 +327,7 @@ if ($active.Count -gt 0) {
     return
 }
 
-if (((Test-Path -LiteralPath $binRoot) -or (Test-Path -LiteralPath $pluginRoot)) -and $null -eq $priorInstallation) {
+if (((Test-Path -LiteralPath $binRoot) -or (Test-Path -LiteralPath $pluginRoot) -or (Test-Path -LiteralPath $legacyPackageProductRoot)) -and $null -eq $priorInstallation) {
     throw 'An unowned MCP_Rhino installation already exists. Refusing to overwrite it without an installer ownership manifest.'
 }
 if (($null -ne $priorInstallation) -and
@@ -299,7 +335,7 @@ if (($null -ne $priorInstallation) -and
     throw 'The existing MCP_Rhino ownership manifest is incompatible.'
 }
 
-$pluginSearchRoots = @($RhinoPackageRoot)
+$pluginSearchRoots = @($LegacyRhinoPackageRoot, $RhinoPluginRoot)
 if ($usingDefaultRoots) {
     $pluginSearchRoots += @(
         (Join-Path $env:APPDATA 'McNeel\Rhinoceros\8.0\Plug-ins'),
@@ -308,14 +344,17 @@ if ($usingDefaultRoots) {
 }
 $otherRhps = @($pluginSearchRoots | Where-Object { Test-Path -LiteralPath $_ -PathType Container } | ForEach-Object {
     Get-ChildItem -LiteralPath $_ -Filter 'MCP_Rhino.Server.rhp' -File -Recurse -ErrorAction SilentlyContinue
-} | Where-Object { -not $_.FullName.StartsWith($packageRoot, [StringComparison]::OrdinalIgnoreCase) })
+} | Where-Object {
+    -not $_.FullName.StartsWith($RhinoPluginRoot.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase) -and
+    -not $_.FullName.StartsWith($legacyPackageProductRoot.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)
+})
 if ($otherRhps.Count -gt 0) {
     throw "Another MCP_Rhino plugin copy is discoverable: $($otherRhps[0].FullName)"
 }
 
 $installId = [Guid]::NewGuid().ToString('N')
 $binStage = Join-Path $ProductRoot ".bin-$installId"
-$pluginStage = Join-Path $packageRoot ".$version-$installId"
+$pluginStage = Join-Path $RhinoPluginRoot ".$version-$installId"
 New-Item -ItemType Directory -Path $binStage, $pluginStage -Force | Out-Null
 foreach ($item in $expected) {
     $stageBase = if ($item.role -eq 'bin') { $binStage } else { $pluginStage }
@@ -336,9 +375,11 @@ if (Test-Path -LiteralPath $pluginRoot -PathType Container) {
 }
 if ($null -ne $priorInstallation -and -not [string]::IsNullOrWhiteSpace([string]$priorInstallation.pluginRoot)) {
     $priorPluginRoot = [IO.Path]::GetFullPath([string]$priorInstallation.pluginRoot)
-    $packagePrefix = $packageRoot.TrimEnd('\') + '\'
-    if (-not $priorPluginRoot.StartsWith($packagePrefix, [StringComparison]::OrdinalIgnoreCase)) {
-        throw "Prior owned plug-in root is outside the MCP_Rhino package root: $priorPluginRoot"
+    $pluginPrefix = $RhinoPluginRoot.TrimEnd('\') + '\'
+    $legacyPrefix = $legacyPackageProductRoot.TrimEnd('\') + '\'
+    if (-not $priorPluginRoot.StartsWith($pluginPrefix, [StringComparison]::OrdinalIgnoreCase) -and
+        -not $priorPluginRoot.StartsWith($legacyPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Prior owned plug-in root is outside the supported MCP_Rhino roots: $priorPluginRoot"
     }
     if ((Test-Path -LiteralPath $priorPluginRoot -PathType Container) -and
         -not ($ownedPluginRoots -contains $priorPluginRoot)) {
@@ -350,27 +391,31 @@ if ((Test-Path -LiteralPath $binRoot) -or $ownedPluginRoots.Count -gt 0) {
     $rollbackRoot = Join-Path $ProductRoot ("rollback\{0}" -f [DateTime]::UtcNow.ToString('yyyyMMddHHmmssfff'))
     New-Item -ItemType Directory -Path $rollbackRoot -Force | Out-Null
     if (Test-Path -LiteralPath $binRoot) { Move-Item -LiteralPath $binRoot -Destination (Join-Path $rollbackRoot 'bin') }
-    foreach ($ownedPluginRoot in $ownedPluginRoots) {
+foreach ($ownedPluginRoot in $ownedPluginRoots) {
         $ownedVersion = Split-Path -Leaf $ownedPluginRoot
         Move-Item -LiteralPath $ownedPluginRoot -Destination (Join-Path $rollbackRoot "Plugin-$ownedVersion")
     }
 }
+
+$legacyManifestPath = Join-Path $legacyPackageProductRoot 'manifest.txt'
+if (Test-Path -LiteralPath $legacyManifestPath -PathType Leaf) {
+    if ($null -eq $rollbackRoot) {
+        $rollbackRoot = Join-Path $ProductRoot ("rollback\{0}" -f [DateTime]::UtcNow.ToString('yyyyMMddHHmmssfff'))
+        New-Item -ItemType Directory -Path $rollbackRoot -Force | Out-Null
+    }
+    Move-Item -LiteralPath $legacyManifestPath -Destination (Join-Path $rollbackRoot 'LegacyPackage-manifest.txt')
+}
+if (Test-Path -LiteralPath $legacyPackageProductRoot -PathType Container) {
+    $remainingLegacyItems = @(Get-ChildItem -LiteralPath $legacyPackageProductRoot -Force)
+    if ($remainingLegacyItems.Count -gt 0) {
+        throw "Unowned content remains in the legacy MCP_Rhino Package Manager root: $legacyPackageProductRoot"
+    }
+    Remove-Item -LiteralPath $legacyPackageProductRoot
+}
 Move-Item -LiteralPath $binStage -Destination $binRoot
 Move-Item -LiteralPath $pluginStage -Destination $pluginRoot
 Assert-DirectRhpPackageIdentity $pluginRoot
-Set-Content -LiteralPath (Join-Path $packageRoot 'manifest.txt') -Value $version -Encoding ascii
-@"
----
-name: MCP_Rhino
-version: $version
-authors:
-- MCP_Rhino
-description: Multi-document MCP integration for Rhino 8.
-keywords:
-- mcp
-- automation
-- guid:$($definition.pluginId.ToString().ToLowerInvariant())
-"@ | Set-Content -LiteralPath (Join-Path $pluginRoot 'manifest.yml') -Encoding utf8
+Assert-RegistryOnlyPluginDiscovery $RhinoPluginRoot $pluginRoot $legacyPackageProductRoot
 
 Set-McpRhinoPluginRegistration `
     $RhinoPluginRegistryRoot `
@@ -406,16 +451,6 @@ if ($ConfigureClient) {
 }
 
 $installedFiles = @($expected | ForEach-Object { [ordered]@{ path = $_.target; sha256 = $_.sha256; role = $_.role } })
-foreach ($generated in @(
-    [pscustomobject]@{ path = (Join-Path $packageRoot 'manifest.txt'); role = 'plugin-metadata' },
-    [pscustomobject]@{ path = (Join-Path $pluginRoot 'manifest.yml'); role = 'plugin-metadata' }
-)) {
-    $installedFiles += [ordered]@{
-        path = $generated.path
-        sha256 = (Get-FileHash -LiteralPath $generated.path -Algorithm SHA256).Hash.ToLowerInvariant()
-        role = $generated.role
-    }
-}
 
 $routerPath = Join-Path $binRoot ([string]$definition.routerExecutable)
 & $routerPath --validate-install
@@ -468,7 +503,9 @@ $manifest = [ordered]@{
     schemaVersion = 1; product = 'MCP_Rhino'; productVersion = $version
     transportMode = 'router-only'; routeProtocolVersion = 1
     installedUtc = [DateTime]::UtcNow.ToString('O'); pluginId = $definition.pluginId
-    binRoot = $binRoot; pluginRoot = $pluginRoot; rollbackRoot = $rollbackRoot
+    pluginRegistrationMode = 'registry-only'
+    binRoot = $binRoot; pluginRoot = $pluginRoot; legacyPackageProductRoot = $legacyPackageProductRoot
+    rhinoPluginRegistryRoot = $RhinoPluginRegistryRoot; rollbackRoot = $rollbackRoot
     files = @($installedFiles); rollbackFiles = @($rollbackFiles); clientAction = $clientAction
 }
 New-Item -ItemType Directory -Path $ProductRoot -Force | Out-Null

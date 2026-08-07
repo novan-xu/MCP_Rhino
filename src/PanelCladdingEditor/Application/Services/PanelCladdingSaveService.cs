@@ -86,6 +86,11 @@ public sealed class PanelCladdingSaveService
                 FilePath = request.FilePath,
                 ObjectId = request.ObjectId,
                 ExpectedGeometryFingerprint = request.ExpectedGeometryFingerprint,
+                UserTextDeletes = new[]
+                {
+                    PanelCladdingKeyService.LegacyTypeCodeKey,
+                    PanelCladdingKeyService.LegacySignatureKey
+                },
                 UserTextWrites = writes,
                 WorkbookPath = request.WorkbookPath
             },

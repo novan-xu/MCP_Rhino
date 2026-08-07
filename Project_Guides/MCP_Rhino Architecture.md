@@ -41,6 +41,10 @@
   - `Tools/File/Reference`：live external-reference state such as worksession attachments and linked block updates.
   - `Tools/Drawing`：drawing-view setup, drawing export state, styling, and packaged drawing export.
   - `Tools/Editing`：object attributes, object user text, and generic object edit preview/apply tools.
+  - `Tools/Grasshopper`：live Grasshopper definition discovery, installed component catalog reads,
+    structured graph reads, preview/apply authoring, solve diagnostics, and preview/apply clear.
+    Every graph operation requires an opaque definition session id bound to the Router-selected
+    Rhino runtime serial; the active Grasshopper canvas is never a target authority.
   - `Tools/Modeling`：thin externally callable wrappers for goal-level modeling agents. These tools only adapt MCP requests to registered Agents/Skills, own safety annotations and routing descriptions, and must not duplicate orchestration or RhinoCommon logic.
   - `Tools/Workflow`：repository workflow support tools such as activity logging.
 - Add a new Tool subfolder only when there are multiple related tools and a stable capability boundary. One-off tools should join the nearest existing family.
@@ -135,6 +139,10 @@
 Every future method-level `[McpServerTool]` must use explicit named safety annotations. Do not rely on `ModelContextProtocol` defaults.
 
 - Read / Filter / Get / Find / Inspect / Measure / Intersect / Resolve / Preview tools must be annotated as `ReadOnly = true, Destructive = false, OpenWorld = false`.
+- A read/preview tool must set `OpenWorld = true` when fulfilling the read can construct or execute
+  installed third-party code. Grasshopper component description and graph-authoring preview are the
+  canonical examples; the operation remains read-only even though component constructors can touch
+  external state.
 - Mutation tools that only change the current live Rhino document must be annotated as `ReadOnly = false, OpenWorld = false`, with `Destructive` set to the actual behavior. Create / transform / edit / set operations are normally `Destructive = false`; delete / replace / purge operations are normally `Destructive = true`.
 - Export, logging, external-reference, or any tool that writes to caller-provided filesystem paths or external state must set `OpenWorld = true`. If it can overwrite or remove external output, set `Destructive = true`.
 - Never mark a mutation or export tool as read-only just to bypass Codex or another MCP client's approval behavior. If a destructive tool needs approval UX, solve that in the panel/client flow.
@@ -164,6 +172,18 @@ Rhino 侧的能力只跑一种模式：经 RhinoCommon 操作运行中的 `Rhino
 - 每次 Apply 调用用 `doc.BeginUndoRecord(...)` / `EndUndoRecord(...)` 包裹，保证"一次写入 Tool 调用 = 一次 Undo 条目"。无实际变更时 Rhino 会丢弃空 Undo record。
 - 修改 Geometry / Attributes 优先使用 RhinoCommon 原生 API（`doc.Objects.Replace` / `doc.Objects.Transform`），保留 attributes 保真度并合并 Undo record。
 - Preview-of-mutation 只读 `RhinoDoc`、不写、不开 Undo record，但必须看见与随后 Apply 相同的 live 文档状态。
+
+### Grasshopper-native mutation exception
+
+- Grasshopper definition state is not Rhino document geometry state. GH-only graph mutations must
+  not open an empty Rhino `BeginUndoRecord`.
+- `ApplyGrasshopperGraph` and `ApplyClearGrasshopperDefinition` use the selected `GH_Document`'s
+  native undo server and create one coherent Grasshopper undo entry per successful call.
+- Graph preview/read/solve-only calls create no graph undo entry. Future baking into `RhinoDoc`
+  remains a separate capability and must use Rhino document Undo.
+- Installed script/code components are valid discovery, preview, placement, and solve targets. They
+  must be classified explicitly, preview must warn about executable code, and construction/solve
+  tools must be `OpenWorld = true`. Arbitrary script-source injection is not part of this contract.
 
 ### CLI 进程入口
 
@@ -197,11 +217,21 @@ Rhino 侧的能力只跑一种模式：经 RhinoCommon 操作运行中的 `Rhino
 - Unsaved documents may be listed as unavailable, but become routable on first Save. Save As keeps
   the document session/pipe and atomically republishes the verified path. Closing marks the
   descriptor unavailable before one bounded aggregate endpoint drain.
-- Installation uses Rhino 8's current-user package layout
-  `%APPDATA%\McNeel\Rhinoceros\packages\8.0\MCP_Rhino\<version>` and installs external executables at
-  `%LOCALAPPDATA%\MCP_Rhino\bin`. Client entries must use the absolute installed Router path and must
-  never point to repository `bin` output. Installer changes to client configuration require explicit
-  opt-in and recorded ownership.
+- Installation uses one registry-owned current-user plug-in root outside Rhino Package Manager
+  discovery: `%LOCALAPPDATA%\MCP_Rhino\plugin\<version>`. The installer registers that exact RHP under
+  HKCU for AtStartup loading and installs external executables at `%LOCALAPPDATA%\MCP_Rhino\bin`.
+  It must not also place MCP_Rhino under `%APPDATA%\McNeel\Rhinoceros\packages` or another Rhino
+  Package Manager discovery root; mixed Package Manager and registry ownership causes duplicate GUID
+  loading. Client entries must use the absolute installed Router path and must never point to
+  repository `bin` output. Installer changes to client configuration require explicit opt-in and
+  recorded ownership.
+- Every RHP this repository ships must declare its plug-in id as an assembly-level
+  `[assembly: Guid("...")]`. `Rhino.PlugIns.PlugIn.Create` reads the plug-in id from the assembly
+  attribute and falls back to `Guid.Empty` when it is absent; the `[Guid]` attribute on the plug-in
+  class is inert for plug-in identity and only `Rhino.Commands.Command` ids come from the type GUID.
+  Two RHPs without an assembly GUID both resolve to `Guid.Empty`, and Rhino rejects the second with
+  `ID already in use`. The declared id must equal the plug-in class `[Guid]`, the product's
+  `package-manifest.json` `pluginId`, and the installed HKCU registration key.
 
 ## 命名指南
 
@@ -221,6 +251,12 @@ Rhino 侧的能力只跑一种模式：经 RhinoCommon 操作运行中的 `Rhino
 - **`Packaging/MCP_Rhino/`** owns Release staging, current-user install/repair/uninstall, owned hashes,
   rollback state, and opt-in client configuration templates. Deployment code must not contain Rhino
   document routing or MCP business logic.
+- **`Packaging/PanelCladdingEditor/`** owns the standalone editor's Release staging,
+  current-user install/repair/uninstall, owned hashes, and Package Manager migration. Its RHP must be
+  installed under `%LOCALAPPDATA%\PanelCladdingEditor\plugin\<version>` and registered once under
+  HKCU with `DirectoryInstall=0`; neither `PanelCladdingEditor` nor
+  `BayHealthPanelCladdingEditor` may remain under Rhino Package Manager discovery. The plug-in loads
+  at startup so its commands are registered before invocation.
 - 任何新增功能都必须先判断归属，再决定目录位置。
 - 如果某个 Tool 开始承担复杂流程，应考虑将流程下沉到 `Application/` 或升级为 `Skill`。
 - 如果某个 Skill 开始出现目标判断与动态策略，应考虑升级为 `Agent`。

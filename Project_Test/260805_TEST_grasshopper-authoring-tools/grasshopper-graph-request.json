@@ -1,0 +1,46 @@
+{
+  "nodes": [
+    {
+      "clientKey": "x",
+      "kind": 2,
+      "canvasX": 20,
+      "canvasY": 20,
+      "sliderMinimum": 0,
+      "sliderMaximum": 10,
+      "sliderValue": 2,
+      "sliderDecimalPlaces": 2
+    },
+    {
+      "clientKey": "y",
+      "kind": 2,
+      "canvasX": 20,
+      "canvasY": 100,
+      "sliderMinimum": 0,
+      "sliderMaximum": 10,
+      "sliderValue": 3,
+      "sliderDecimalPlaces": 2
+    },
+    {
+      "clientKey": "add",
+      "kind": 1,
+      "componentGuid": "00000000-0000-0000-0000-000000000000",
+      "canvasX": 240,
+      "canvasY": 60
+    }
+  ],
+  "wires": [
+    {
+      "sourceNodeKey": "x",
+      "sourceParameter": { "index": 0 },
+      "destinationNodeKey": "add",
+      "destinationParameter": { "index": 0 }
+    },
+    {
+      "sourceNodeKey": "y",
+      "sourceParameter": { "index": 0 },
+      "destinationNodeKey": "add",
+      "destinationParameter": { "index": 1 }
+    }
+  ],
+  "solveAfterApply": true
+}

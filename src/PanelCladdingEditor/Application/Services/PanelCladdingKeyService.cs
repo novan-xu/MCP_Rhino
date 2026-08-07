@@ -7,8 +7,10 @@ namespace PanelCladdingEditor.Application.Services.PanelCladding;
 
 public sealed partial class PanelCladdingKeyService
 {
-    public const string TypeCodeKey = "CW_4.00_CLADDING_TYPE";
-    public const string SignatureKey = "CW_4.00_CLADDING_SIGNATURE";
+    public const string TypeCodeKey = "CW_1.10_CLADDING_TYPE";
+    public const string LegacyTypeCodeKey = "CW_4.00_CLADDING_TYPE";
+    public const string SignatureKey = "Signature";
+    public const string LegacySignatureKey = "CW_4.00_CLADDING_SIGNATURE";
     public const string WorkbookPathDocumentKey = "PanelCladdingEditor.WorkbookPath";
 
     public OperationResponse<PanelCladdingKeySet> Parse(
@@ -72,6 +74,20 @@ public sealed partial class PanelCladdingKeyService
     public string NormalizeCladdingValue(string value)
     {
         return (value ?? string.Empty).Trim().ToUpperInvariant();
+    }
+
+    public bool IsClearableCladdingAssignmentKey(string key)
+    {
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            return false;
+        }
+
+        return CladdingCellRegex().IsMatch(key) ||
+            string.Equals(key, TypeCodeKey, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(key, LegacyTypeCodeKey, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(key, SignatureKey, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(key, LegacySignatureKey, StringComparison.OrdinalIgnoreCase);
     }
 
     public static string GetCellKey(int column, string rowLabel)
@@ -167,5 +183,8 @@ public sealed partial class PanelCladdingKeyService
 
     [GeneratedRegex(@"^CW_2\.04_OFFSET_V(\d+)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex VerticalOffsetRegex();
+
+    [GeneratedRegex(@"^CW_\d+\.\d{2}_CLADDING_\d+[A-Z]+$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex CladdingCellRegex();
 }
 

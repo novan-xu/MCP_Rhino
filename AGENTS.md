@@ -92,6 +92,13 @@ Follow `Project_Guides/` and:
 - Do not bypass `Project_Guides` when constructing new capabilities.
 - Do not disguise a capability gap as an executable runtime task.
 - Do not use Computer Use or any other Windows UI automation unless the user explicitly requests Computer Use or Windows UI automation in the current request. Mentioning an application or file, or asking to "open" or "go to" one, does not by itself authorize UI automation.
+- **Rhino plug-in GUID memo:** Every managed `.rhp` project must emit a non-empty assembly-level
+  `[assembly: Guid("...")]` matching its manifest, plug-in class declaration, and Rhino registry
+  key. Rhino derives the plug-in identity from the assembly attribute; a `[Guid]` on the `PlugIn`
+  class does not supply it, and an SDK-style project does not generate it automatically. Before
+  packaging or installation, verify the compiled RHP's assembly metadata directly and reject
+  missing, empty, mismatched, or shared plug-in IDs. Follow the full contract and regression rules
+  in `Project_Guides/MCP_Rhino Architecture.md`.
 
 ## Document Priority
 
