@@ -232,3 +232,73 @@ Created the complete versioned distribution archive at
   installer, uninstaller, RHP, dependency assemblies, and three manifests.
 - Archive size: 2,314,267 bytes.
 - SHA-256: `DC7CC7E70BDA0D39850B86B2C4CA6358AF53E80D6E834F46F2036A45A4102268`.
+
+## Different-sized target correction (2026-08-07)
+
+Live use showed that the original match planner incorrectly treated overall panel size and curved
+depth profile as part of cladding-configuration compatibility.
+
+- Removed source/target width, height, planar/curved class, and depth-profile equality checks.
+- Kept exact, unscaled source H/V offset transfer.
+- Reused the canonical key parser against each target extent so horizontal offsets must fit the
+  target height and vertical offsets must fit the target width under model tolerance.
+- Continued rejecting unsupported target projections and retained whole-match-batch preflight: one
+  target that cannot contain the copied offsets prevents all target mutation.
+- Updated the dedicated smoke and live fixture for differently sized/profiled supported targets and
+  undersized-target rejection.
+
+Validation completed:
+
+- dedicated match smoke: Debug and Release passed;
+- standalone editor, spawn, clear, and surface-sync regressions: Debug and Release passed;
+- full solution serial builds: Debug and Release passed with zero warnings/errors;
+- PanelCladdingEditor 1.0.19 package build passed;
+- direct package assembly verification reported plug-in id
+  `7c1a4d3b-5e29-4f68-9a72-1d8c6b0f4e35`, matching the manifest and remaining distinct from
+  MCP_Rhino.
+
+Rhino process 64172 was active, so the installer staged version 1.0.19 at
+`C:\Users\nxu\AppData\Local\PanelCladdingEditor\staged\1.0.19-20260807202424001`.
+Close every Rhino window and activate that staged bundle before running the revised live fixture.
+
+## Version 1.0.19 activation (2026-08-07)
+
+After all Rhino processes were closed, the staged bundle was activated successfully.
+
+- Installed RHP: `C:\Users\nxu\AppData\Local\PanelCladdingEditor\plugin\1.0.19\PanelCladdingEditor.rhp`.
+- Installer registry-only validation passed.
+- Independent installed-assembly verification reported PanelCladdingEditor plug-in id
+  `7c1a4d3b-5e29-4f68-9a72-1d8c6b0f4e35`, matching the manifest and remaining distinct from
+  MCP_Rhino plug-in id `7a3fc2f0-24a8-4b79-be58-5a08cfb0d10a`.
+
+Version 1.0.19 is active for the next Rhino launch. Run the revised match fixture with differently
+sized supported targets and an undersized non-fitting target.
+
+## Cladding-only transfer correction (2026-08-07)
+
+The prior different-size correction still copied source H/V values, which incorrectly treated panel
+layout data as cladding configuration.
+
+- Removed every H/V offset from Match writes and cleanup deletes.
+- Source and target H/V values are now parsed only to establish their ordered logical cell labels.
+  Equal topology is required, but divider distances are never compared or transferred.
+- Target offsets, dimensions, geometry, identity metadata, and unrelated user text remain untouched.
+- Match continues copying normalized cell materials plus the source's canonical type/signature. A
+  source saved by version 1.0.20 carries the new offset-independent v2 identity; historical v1
+  sources can be resaved once in `_PanelCladdingEditor` before matching if v2 migration is required.
+- Updated dedicated coverage proves different valid target offset distances work, even when source
+  offsets would not fit the target, and proves Match contains no offset writes or deletes.
+
+Validation completed:
+
+- dedicated match, standalone editor, surface-sync, spawn, and clear smokes passed in Debug and
+  Release;
+- full serial solution builds passed in Debug and Release with zero warnings/errors;
+- PanelCladdingEditor 1.0.20 package build passed;
+- packaged and installed RHP identity verification reported plug-in id
+  `7c1a4d3b-5e29-4f68-9a72-1d8c6b0f4e35`, matching the manifest and remaining distinct from
+  MCP_Rhino.
+
+Rhino was closed, so version 1.0.20 installed directly at
+`C:\Users\nxu\AppData\Local\PanelCladdingEditor\plugin\1.0.20\PanelCladdingEditor.rhp`.
+Registry-only installer validation passed. Version 1.0.20 is active for the next Rhino launch.

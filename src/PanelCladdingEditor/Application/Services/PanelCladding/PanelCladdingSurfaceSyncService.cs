@@ -51,21 +51,11 @@ public sealed class PanelCladdingSurfaceSyncService : IPanelCladdingSurfaceSyncS
         PanelCladdingSurfaceSyncSurfacePlan[] changedSurfaces = plan.Surfaces
             .Where(surface => surface.CladdingKeyChanged)
             .ToArray();
-
-        if (changedPanels.Length == 0)
-        {
-            return _liveRepository.Commit(
-                new PanelCladdingSurfaceSyncCommitRequest
-                {
-                    FilePath = filePath,
-                    SelectedPanelIds = plan.Panels.Select(panel => panel.ObjectId).ToArray(),
-                    SurfaceWrites = changedSurfaces,
-                    PanelWrites = Array.Empty<PanelCladdingSurfaceSyncPanelWrite>()
-                },
-                () => OperationResponse.Ok("No changed panel types to export."),
-                Array.Empty<PanelCladdingSurfaceSyncTypeResult>(),
-                plan.Surfaces.Count);
-        }
+        Guid[] skippedPanelIds = plan.Issues
+            .Select(issue => issue.PanelObjectId)
+            .Where(objectId => objectId != Guid.Empty)
+            .Distinct()
+            .ToArray();
 
         var upserts = new List<PanelCladdingWorkbookUpsert>(changedPanels.Length);
         foreach (PanelCladdingSurfaceSyncPanelPlan panel in changedPanels)
@@ -97,12 +87,21 @@ public sealed class PanelCladdingSurfaceSyncService : IPanelCladdingSurfaceSyncS
             });
         }
 
+        var changedPanelIds = changedPanels
+            .Select(panel => panel.ObjectId)
+            .ToHashSet();
+        PanelCladdingWorkbookTypeReference[] retainedTypes = (read.Data.ModelTypeAssignments ??
+                Array.Empty<PanelCladdingWorkbookTypeReference>())
+            .Where(reference => !changedPanelIds.Contains(reference.ObjectId))
+            .ToArray();
         OperationResponse<IPreparedPanelCladdingWorkbookBatchUpdate> preparedResponse =
             _workbookRepository.PrepareBatchUpsert(new PanelCladdingWorkbookBatchUpsert
             {
                 WorkbookPath = workbookPath,
                 AllowCreate = allowCreateWorkbook,
-                Items = upserts
+                Items = upserts,
+                PruneUnusedTypes = true,
+                RetainedTypes = retainedTypes
             });
         if (!preparedResponse.Success || preparedResponse.Data is null)
         {
@@ -110,7 +109,9 @@ public sealed class PanelCladdingSurfaceSyncService : IPanelCladdingSurfaceSyncS
         }
 
         using IPreparedPanelCladdingWorkbookBatchUpdate prepared = preparedResponse.Data;
-        string finalWorkbookPath = prepared.Results[0].Result.WorkbookPath;
+        string finalWorkbookPath = prepared.Results.Count > 0
+            ? prepared.Results[0].Result.WorkbookPath
+            : Path.GetFullPath(workbookPath);
         var resultsByPanel = prepared.Results.ToDictionary(item => item.ObjectId);
         if (resultsByPanel.Count != changedPanels.Length ||
             changedPanels.Any(panel => !resultsByPanel.ContainsKey(panel.ObjectId)))
@@ -148,7 +149,10 @@ public sealed class PanelCladdingSurfaceSyncService : IPanelCladdingSurfaceSyncS
             {
                 FilePath = filePath,
                 WorkbookPath = finalWorkbookPath,
-                SelectedPanelIds = plan.Panels.Select(panel => panel.ObjectId).ToArray(),
+                SelectedPanelIds = plan.SelectedPanelIds,
+                SkippedPanelIds = skippedPanelIds,
+                Issues = plan.Issues,
+                RemovedWorkbookTypeCodes = prepared.RemovedTypeCodes,
                 SurfaceWrites = changedSurfaces,
                 PanelWrites = panelWrites
             },

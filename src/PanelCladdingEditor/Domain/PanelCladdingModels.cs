@@ -231,14 +231,33 @@ public sealed class PanelCladdingSurfaceSyncSurfaceSnapshot
     public string CladdingValue { get; init; } = string.Empty;
 }
 
+public sealed class PanelCladdingSurfaceSyncIssue
+{
+    public Guid PanelObjectId { get; init; }
+    public string PanelId { get; init; } = string.Empty;
+    public string Message { get; init; } = string.Empty;
+}
+
+public sealed class PanelCladdingWorkbookTypeReference
+{
+    public Guid ObjectId { get; init; }
+    public string TypeCode { get; init; } = string.Empty;
+    public string StoredSignature { get; init; } = string.Empty;
+}
+
 public sealed class PanelCladdingSurfaceSyncSnapshot
 {
     public string DocumentPath { get; init; } = string.Empty;
     public string WorkbookPath { get; init; } = string.Empty;
+    public IReadOnlyList<Guid> SelectedPanelIds { get; init; } = Array.Empty<Guid>();
     public IReadOnlyList<PanelCladdingSurfaceSyncPanelSnapshot> Panels { get; init; } =
         Array.Empty<PanelCladdingSurfaceSyncPanelSnapshot>();
     public IReadOnlyList<PanelCladdingSurfaceSyncSurfaceSnapshot> Surfaces { get; init; } =
         Array.Empty<PanelCladdingSurfaceSyncSurfaceSnapshot>();
+    public IReadOnlyList<PanelCladdingSurfaceSyncIssue> Issues { get; init; } =
+        Array.Empty<PanelCladdingSurfaceSyncIssue>();
+    public IReadOnlyList<PanelCladdingWorkbookTypeReference> ModelTypeAssignments { get; init; } =
+        Array.Empty<PanelCladdingWorkbookTypeReference>();
 }
 
 public sealed class PanelCladdingSurfaceSyncSurfacePlan
@@ -265,10 +284,13 @@ public sealed class PanelCladdingSurfaceSyncPanelPlan
 
 public sealed class PanelCladdingSurfaceSyncPlan
 {
+    public IReadOnlyList<Guid> SelectedPanelIds { get; init; } = Array.Empty<Guid>();
     public IReadOnlyList<PanelCladdingSurfaceSyncPanelPlan> Panels { get; init; } =
         Array.Empty<PanelCladdingSurfaceSyncPanelPlan>();
     public IReadOnlyList<PanelCladdingSurfaceSyncSurfacePlan> Surfaces { get; init; } =
         Array.Empty<PanelCladdingSurfaceSyncSurfacePlan>();
+    public IReadOnlyList<PanelCladdingSurfaceSyncIssue> Issues { get; init; } =
+        Array.Empty<PanelCladdingSurfaceSyncIssue>();
 }
 
 public sealed class PanelCladdingSurfaceSyncPanelWrite
@@ -286,6 +308,10 @@ public sealed class PanelCladdingSurfaceSyncCommitRequest
     public string FilePath { get; init; } = string.Empty;
     public string WorkbookPath { get; init; } = string.Empty;
     public IReadOnlyList<Guid> SelectedPanelIds { get; init; } = Array.Empty<Guid>();
+    public IReadOnlyList<Guid> SkippedPanelIds { get; init; } = Array.Empty<Guid>();
+    public IReadOnlyList<PanelCladdingSurfaceSyncIssue> Issues { get; init; } =
+        Array.Empty<PanelCladdingSurfaceSyncIssue>();
+    public IReadOnlyList<string> RemovedWorkbookTypeCodes { get; init; } = Array.Empty<string>();
     public IReadOnlyList<PanelCladdingSurfaceSyncSurfacePlan> SurfaceWrites { get; init; } =
         Array.Empty<PanelCladdingSurfaceSyncSurfacePlan>();
     public IReadOnlyList<PanelCladdingSurfaceSyncPanelWrite> PanelWrites { get; init; } =
@@ -304,12 +330,16 @@ public sealed class PanelCladdingSurfaceSyncTypeResult
 public sealed class PanelCladdingSurfaceSyncResult
 {
     public IReadOnlyList<Guid> SelectedPanelIds { get; init; } = Array.Empty<Guid>();
+    public IReadOnlyList<Guid> SkippedPanelIds { get; init; } = Array.Empty<Guid>();
     public IReadOnlyList<Guid> ChangedPanelIds { get; init; } = Array.Empty<Guid>();
     public IReadOnlyList<Guid> RefreshedSurfaceIds { get; init; } = Array.Empty<Guid>();
     public int MatchedSurfaceCount { get; init; }
     public string WorkbookPath { get; init; } = string.Empty;
     public IReadOnlyList<PanelCladdingSurfaceSyncTypeResult> Types { get; init; } =
         Array.Empty<PanelCladdingSurfaceSyncTypeResult>();
+    public IReadOnlyList<PanelCladdingSurfaceSyncIssue> Issues { get; init; } =
+        Array.Empty<PanelCladdingSurfaceSyncIssue>();
+    public IReadOnlyList<string> RemovedWorkbookTypeCodes { get; init; } = Array.Empty<string>();
 }
 
 public sealed class PanelCladdingWorkbookBatchUpsert
@@ -318,6 +348,9 @@ public sealed class PanelCladdingWorkbookBatchUpsert
     public bool AllowCreate { get; init; }
     public IReadOnlyList<PanelCladdingWorkbookUpsert> Items { get; init; } =
         Array.Empty<PanelCladdingWorkbookUpsert>();
+    public bool PruneUnusedTypes { get; init; }
+    public IReadOnlyList<PanelCladdingWorkbookTypeReference> RetainedTypes { get; init; } =
+        Array.Empty<PanelCladdingWorkbookTypeReference>();
 }
 
 public sealed class PanelCladdingWorkbookBatchItemResult

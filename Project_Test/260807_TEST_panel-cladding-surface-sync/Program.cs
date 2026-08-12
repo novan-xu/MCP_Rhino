@@ -1,9 +1,11 @@
 using System.Reflection;
+using DocumentFormat.OpenXml.Packaging;
 using PanelCladdingEditor.Application.Interfaces;
 using PanelCladdingEditor.Application.Services.PanelCladding;
 using PanelCladdingEditor.Contracts.Responses;
 using PanelCladdingEditor.Domain.Models.PanelCladding;
 using PanelCladdingEditor.Infrastructure.PanelCladding;
+using S = DocumentFormat.OpenXml.Spreadsheet;
 
 namespace PanelCladdingSurfaceSyncSmoke;
 
@@ -49,14 +51,17 @@ internal static class Program
         VerifySurfaceOnlyRefresh(planner);
         Console.WriteLine("[OK] stale surface key refresh without unnecessary panel type regeneration");
 
-        VerifyFailClosedMappings(planner, snapshot);
-        Console.WriteLine("[OK] missing, duplicate, unexpected, wrong-PID, layer, family, and selected-PID failures");
+        VerifyIsolatedMappings(planner, snapshot);
+        Console.WriteLine("[OK] mapping failures are isolated to their owning panels");
+
+        VerifyPartialBatchPlanning(planner, snapshot);
+        Console.WriteLine("[OK] valid panels continue when another selected panel has a missing CID");
 
         VerifyWorkflow(keys, snapshot);
-        Console.WriteLine("[OK] end-to-end orchestration, final panel writes, surface writes, and workbook commit");
+        Console.WriteLine("[OK] end-to-end orchestration, writes, workbook commit, and no-change model pruning");
 
         VerifyBatchWorkbook(keys, plan);
-        Console.WriteLine("[OK] one prepared workbook batch, in-batch signature reuse, commit, and reopen reuse");
+        Console.WriteLine("[OK] workbook reuse plus managed-type pruning with unrelated-sheet preservation");
 
         VerifyAssemblyContract();
         Console.WriteLine("[OK] standalone sync command/services, batch contract, and unique GUID");
@@ -81,7 +86,7 @@ internal static class Program
             "Noncanonical surface Cladding text should be refreshed from its layer.");
     }
 
-    private static void VerifyFailClosedMappings(
+    private static void VerifyIsolatedMappings(
         PanelCladdingSurfaceSyncPlanningService planner,
         PanelCladdingSurfaceSyncSnapshot source)
     {
@@ -90,16 +95,16 @@ internal static class Program
             .Where(surface => surface.PanelId == panel.PanelId)
             .ToArray();
 
-        RequireFailure(
+        RequireIsolatedIssue(
             planner.CreatePlan(Snapshot(new[] { panel }, own.Skip(1).ToArray())),
             "SURFACE_MISSING");
-        RequireFailure(
+        RequireIsolatedIssue(
             planner.CreatePlan(Snapshot(new[] { panel }, own.Concat(new[]
             {
                 Surface(Guid.NewGuid(), own[0].PanelId, own[0].Cid, own[0].LayerPath, own[0].CladdingValue)
             }).ToArray())),
             "DUPLICATE_CID");
-        RequireFailure(
+        RequireIsolatedIssue(
             planner.CreatePlan(Snapshot(new[] { panel }, own.Concat(new[]
             {
                 Surface(Guid.NewGuid(), panel.PanelId,
@@ -114,7 +119,7 @@ internal static class Program
             own[0].Cid,
             own[0].LayerPath,
             own[0].CladdingValue);
-        RequireFailure(
+        RequireIsolatedIssue(
             planner.CreatePlan(Snapshot(new[] { panel }, new[] { wrongPid }.Concat(own.Skip(1)).ToArray())),
             "SURFACE_PID_MISMATCH");
 
@@ -124,7 +129,7 @@ internal static class Program
             own[0].Cid,
             "Manual::Surfaces-Glass::GL01",
             own[0].CladdingValue);
-        RequireFailure(
+        RequireIsolatedIssue(
             planner.CreatePlan(Snapshot(new[] { panel }, new[] { wrongRoot }.Concat(own.Skip(1)).ToArray())),
             "LAYER_INVALID");
 
@@ -134,11 +139,11 @@ internal static class Program
             own[0].Cid,
             "02_Material Surfaces::Surfaces-Metal::GL01",
             own[0].CladdingValue);
-        RequireFailure(
+        RequireIsolatedIssue(
             planner.CreatePlan(Snapshot(new[] { panel }, new[] { wrongFamily }.Concat(own.Skip(1)).ToArray())),
             "MATERIAL_FAMILY_MISMATCH");
 
-        RequireFailure(
+        RequireIsolatedIssue(
             planner.CreatePlan(Snapshot(
                 new[]
                 {
@@ -146,7 +151,54 @@ internal static class Program
                     Panel(PanelTwoId, panel.PanelId, BuildLayout(PanelTwoId, FinalMaterials))
                 },
                 own)),
-            "DUPLICATE_SELECTED_PID");
+            "DUPLICATE_SELECTED_PID",
+            expectedIssueCount: 2);
+
+        PanelCladdingSurfaceSyncPlan readFailurePlan = RequireData(
+            planner.CreatePlan(new PanelCladdingSurfaceSyncSnapshot
+            {
+                DocumentPath = source.DocumentPath,
+                SelectedPanelIds = new[] { PanelOneId },
+                Issues = new[]
+                {
+                    new PanelCladdingSurfaceSyncIssue
+                    {
+                        PanelObjectId = PanelOneId,
+                        Message = $"PANEL_CLADDING_SURFACE_SYNC_PANEL_READ_FAILED: {PanelOneId:D}"
+                    }
+                }
+            }),
+            "Create all-skipped read-failure plan");
+        Require(readFailurePlan.Panels.Count == 0 && readFailurePlan.Surfaces.Count == 0 &&
+                readFailurePlan.Issues.Count == 1,
+            "An all-skipped selection must complete with no mutation plans and one issue.");
+    }
+
+    private static void VerifyPartialBatchPlanning(
+        PanelCladdingSurfaceSyncPlanningService planner,
+        PanelCladdingSurfaceSyncSnapshot source)
+    {
+        PanelCladdingSurfaceSyncPanelSnapshot badPanel = source.Panels[0];
+        PanelCladdingSurfaceSyncPanelSnapshot goodPanel = source.Panels[1];
+        string missingCid = PanelCladdingSpawnPlanningService.BuildSurfaceCid(
+            badPanel.PanelId,
+            badPanel.Layout.Cells[0].ShortLabel);
+        PanelCladdingSurfaceSyncPlan plan = RequireData(
+            planner.CreatePlan(Snapshot(
+                source.Panels,
+                source.Surfaces.Where(surface => !string.Equals(
+                    surface.Cid,
+                    missingCid,
+                    StringComparison.OrdinalIgnoreCase)).ToArray())),
+            "Create partial-batch plan");
+        Require(plan.Panels.Count == 1 && plan.Panels[0].ObjectId == goodPanel.ObjectId,
+            "Only the fully mapped panel should receive a panel plan.");
+        Require(plan.Surfaces.Count == goodPanel.Layout.Cells.Count &&
+                plan.Surfaces.All(surface => surface.PanelObjectId == goodPanel.ObjectId),
+            "A skipped panel must not contribute partial surface writes.");
+        Require(plan.Issues.Count == 1 && plan.Issues[0].PanelObjectId == badPanel.ObjectId &&
+                plan.Issues[0].Message.Contains("SURFACE_MISSING", StringComparison.Ordinal),
+            "The missing-CID panel must be returned as the sole skipped issue.");
     }
 
     private static void VerifyBatchWorkbook(
@@ -180,6 +232,7 @@ internal static class Program
             }
 
             var workbook = new OpenXmlPanelCladdingWorkbookRepository();
+            PanelCladdingWorkbookCommitResult retainedResult;
             using (IPreparedPanelCladdingWorkbookBatchUpdate prepared = RequireData(
                 workbook.PrepareBatchUpsert(new PanelCladdingWorkbookBatchUpsert
                 {
@@ -197,6 +250,7 @@ internal static class Program
                 Require(!prepared.Results[0].Result.ReusedExistingType &&
                         prepared.Results[1].Result.ReusedExistingType,
                     "The second equal signature must reuse the first in-batch type.");
+                retainedResult = prepared.Results[0].Result;
                 Require(prepared.Commit().Success, "Workbook batch commit failed.");
             }
             Require(File.Exists(workbookPath) && new FileInfo(workbookPath).Length > 0,
@@ -214,6 +268,70 @@ internal static class Program
             Require(reopened.Results[0].Result.ReusedExistingType,
                 "Existing workbook signature must be reused on a later batch.");
             Require(reopened.Commit().Success, "No-op workbook reuse commit failed.");
+
+            PanelCladdingSurfaceSyncPanelPlan sourcePanel = plan.Panels[0];
+            var unusedValues = new Dictionary<string, string>(
+                sourcePanel.CellValues,
+                StringComparer.OrdinalIgnoreCase)
+            {
+                [sourcePanel.Layout.Cells[0].UserTextKey] = "GL99"
+            };
+            PanelCladdingTypeIdentity unusedIdentity = RequireData(
+                signatures.Create(sourcePanel.Layout, unusedValues, "WT01"),
+                "Create unused workbook identity");
+            PanelCladdingWorkbookCommitResult unusedResult;
+            using (IPreparedPanelCladdingWorkbookBatchUpdate addUnused = RequireData(
+                workbook.PrepareBatchUpsert(new PanelCladdingWorkbookBatchUpsert
+                {
+                    WorkbookPath = workbookPath,
+                    AllowCreate = false,
+                    Items = new[]
+                    {
+                        new PanelCladdingWorkbookUpsert
+                        {
+                            WorkbookPath = workbookPath,
+                            Layout = sourcePanel.Layout,
+                            Identity = unusedIdentity,
+                            PreviewPng = items[0].PreviewPng,
+                            AllowCreate = false
+                        }
+                    }
+                }),
+                "Add unused workbook type"))
+            {
+                unusedResult = addUnused.Results[0].Result;
+                Require(addUnused.Commit().Success, "Unused workbook type commit failed.");
+            }
+            AddUnrelatedWorksheet(workbookPath, "Project Notes");
+            using (IPreparedPanelCladdingWorkbookBatchUpdate prune = RequireData(
+                workbook.PrepareBatchUpsert(new PanelCladdingWorkbookBatchUpsert
+                {
+                    WorkbookPath = workbookPath,
+                    AllowCreate = false,
+                    Items = Array.Empty<PanelCladdingWorkbookUpsert>(),
+                    PruneUnusedTypes = true,
+                    RetainedTypes = new[]
+                    {
+                        new PanelCladdingWorkbookTypeReference
+                        {
+                            TypeCode = retainedResult.Identity.TypeCode,
+                            StoredSignature = retainedResult.Identity.StoredSignature
+                        }
+                    }
+                }),
+                "Prepare unused workbook type pruning"))
+            {
+                Require(prune.Results.Count == 0,
+                    "A prune-only batch must not invent upsert results.");
+                Require(prune.RemovedTypeCodes.SequenceEqual(new[] { unusedResult.Identity.TypeCode }),
+                    "Prune-only batch did not report the unused managed type.");
+                Require(prune.Commit().Success, "Unused workbook type pruning commit failed.");
+            }
+            VerifyPrunedWorkbook(
+                workbookPath,
+                retainedResult.SheetName,
+                unusedResult.SheetName,
+                retainedResult.Identity.TypeCode);
 
             RequireFailure(
                 workbook.PrepareBatchUpsert(new PanelCladdingWorkbookBatchUpsert
@@ -265,7 +383,7 @@ internal static class Program
             Require(request.PanelWrites.All(write =>
                     write.CellValues.Values.SequenceEqual(FinalMaterials) &&
                     !string.IsNullOrWhiteSpace(write.TypeCode) &&
-                    write.StoredSignature.StartsWith("v1:sha256:", StringComparison.Ordinal)),
+                    write.StoredSignature.StartsWith("v2:sha256:", StringComparison.Ordinal)),
                 "Final panel writes must carry normalized cells, type codes, and signatures.");
             Require(result.MatchedSurfaceCount == 8 && result.ChangedPanelIds.Count == 2 &&
                     result.RefreshedSurfaceIds.Count == 2 && result.Types.Count == 2,
@@ -273,6 +391,122 @@ internal static class Program
             Require(result.Types.Select(type => type.TypeCode).Distinct().Count() == 1,
                 "Equal final configurations must reuse one type in the workflow batch.");
             Require(File.Exists(workbookPath), "Workflow did not commit the typology workbook.");
+
+            PanelCladdingSurfaceSyncTypeResult usedType = result.Types[0];
+            PanelCladdingLayout unusedLayout = BuildLayout(PanelOneId, FinalMaterials);
+            var unusedValues = unusedLayout.Cells.ToDictionary(
+                cell => cell.UserTextKey,
+                cell => cell.Value,
+                StringComparer.OrdinalIgnoreCase);
+            unusedValues[unusedLayout.Cells[0].UserTextKey] = "GL99";
+            PanelCladdingTypeIdentity unusedIdentity = RequireData(
+                new PanelCladdingTypeSignatureService(keys).Create(unusedLayout, unusedValues, "WT01"),
+                "Create workflow unused identity");
+            string unusedTypeCode;
+            var workbookRepository = new OpenXmlPanelCladdingWorkbookRepository();
+            using (IPreparedPanelCladdingWorkbookBatchUpdate addUnused = RequireData(
+                workbookRepository.PrepareBatchUpsert(new PanelCladdingWorkbookBatchUpsert
+                {
+                    WorkbookPath = workbookPath,
+                    AllowCreate = false,
+                    Items = new[]
+                    {
+                        new PanelCladdingWorkbookUpsert
+                        {
+                            WorkbookPath = workbookPath,
+                            Layout = unusedLayout,
+                            Identity = unusedIdentity,
+                            PreviewPng = RequireData(
+                                new PanelPreviewRenderer().RenderPng(unusedLayout, 480, 320),
+                                "Render workflow unused preview"),
+                            AllowCreate = false
+                        }
+                    }
+                }),
+                "Add workflow unused type"))
+            {
+                unusedTypeCode = addUnused.Results[0].Result.Identity.TypeCode;
+                Require(addUnused.Commit().Success, "Workflow unused type commit failed.");
+            }
+
+            PanelCladdingSurfaceSyncPanelSnapshot[] unchangedPanels =
+            {
+                Panel(PanelOneId, "PID_PANEL_01", BuildLayout(PanelOneId, FinalMaterials)),
+                Panel(PanelTwoId, "PID_PANEL_02", BuildLayout(
+                    PanelTwoId,
+                    FinalMaterials,
+                    horizontalOffset: 30d,
+                    verticalOffset: 70d))
+            };
+            PanelCladdingSurfaceSyncSnapshot unchangedSnapshot = Snapshot(
+                unchangedPanels,
+                BuildSurfaces("PID_PANEL_01", FinalMaterials)
+                    .Concat(BuildSurfaces("PID_PANEL_02", FinalMaterials))
+                    .ToArray(),
+                unchangedPanels.Select(panel => new PanelCladdingWorkbookTypeReference
+                {
+                    ObjectId = panel.ObjectId,
+                    TypeCode = usedType.TypeCode,
+                    StoredSignature = usedType.StoredSignature
+                }).ToArray());
+            var pruneLive = new CapturingLiveRepository(unchangedSnapshot);
+            IPanelCladdingSurfaceSyncService pruneService = new PanelCladdingSurfaceSyncService(
+                pruneLive,
+                workbookRepository,
+                new PanelPreviewRenderer(),
+                new PanelCladdingTypeSignatureService(keys),
+                new PanelCladdingSurfaceSyncPlanningService(keys));
+            PanelCladdingSurfaceSyncResult pruneResult = RequireData(
+                pruneService.Sync(
+                    unchangedSnapshot.DocumentPath,
+                    unchangedSnapshot.SelectedPanelIds,
+                    workbookPath,
+                    allowCreateWorkbook: false),
+                "Run no-change workbook-pruning workflow");
+            PanelCladdingSurfaceSyncCommitRequest pruneRequest = pruneLive.LastCommitRequest ??
+                throw new InvalidOperationException("No-change pruning did not invoke live commit.");
+            Require(pruneRequest.PanelWrites.Count == 0 && pruneRequest.SurfaceWrites.Count == 0,
+                "No-change pruning must not invent Rhino attribute writes.");
+            Require(pruneResult.RemovedWorkbookTypeCodes.SequenceEqual(new[] { unusedTypeCode }),
+                "No-change sync did not remove the workbook type unused by the Rhino model.");
+
+            PanelCladdingSurfaceSyncPanelSnapshot badPanel = snapshot.Panels[0];
+            string missingCid = PanelCladdingSpawnPlanningService.BuildSurfaceCid(
+                badPanel.PanelId,
+                badPanel.Layout.Cells[0].ShortLabel);
+            PanelCladdingSurfaceSyncSnapshot partialSnapshot = Snapshot(
+                snapshot.Panels,
+                snapshot.Surfaces.Where(surface => !string.Equals(
+                    surface.Cid,
+                    missingCid,
+                    StringComparison.OrdinalIgnoreCase)).ToArray());
+            var partialLive = new CapturingLiveRepository(partialSnapshot);
+            IPanelCladdingSurfaceSyncService partialService = new PanelCladdingSurfaceSyncService(
+                partialLive,
+                new OpenXmlPanelCladdingWorkbookRepository(),
+                new PanelPreviewRenderer(),
+                new PanelCladdingTypeSignatureService(keys),
+                new PanelCladdingSurfaceSyncPlanningService(keys));
+            string partialWorkbookPath = Path.Combine(directory, "Typology-partial.xlsx");
+            PanelCladdingSurfaceSyncResult partialResult = RequireData(
+                partialService.Sync(
+                    partialSnapshot.DocumentPath,
+                    partialSnapshot.SelectedPanelIds,
+                    partialWorkbookPath,
+                    allowCreateWorkbook: true),
+                "Run partial surface sync workflow");
+            PanelCladdingSurfaceSyncCommitRequest partialRequest = partialLive.LastCommitRequest ??
+                throw new InvalidOperationException("Partial live commit was not invoked.");
+            Require(partialRequest.PanelWrites.Count == 1 && partialRequest.SurfaceWrites.Count == 1,
+                "The valid panel must still commit its panel and stale-surface writes.");
+            Require(partialRequest.SkippedPanelIds.SequenceEqual(new[] { badPanel.ObjectId }) &&
+                    partialRequest.Issues.Count == 1,
+                "The skipped panel and issue must reach the live commit request.");
+            Require(partialResult.SkippedPanelIds.SequenceEqual(new[] { badPanel.ObjectId }) &&
+                    partialResult.Issues.Count == 1 && partialResult.MatchedSurfaceCount == 4,
+                "The partial workflow result must expose skipped-panel details and valid matches.");
+            Require(File.Exists(partialWorkbookPath),
+                "The valid panel's typology workbook was not committed in the partial workflow.");
         }
         finally
         {
@@ -281,6 +515,74 @@ internal static class Program
                 Directory.Delete(directory, recursive: true);
             }
         }
+    }
+
+    private static void AddUnrelatedWorksheet(string workbookPath, string sheetName)
+    {
+        using SpreadsheetDocument document = SpreadsheetDocument.Open(workbookPath, true);
+        WorkbookPart workbookPart = document.WorkbookPart ??
+            throw new InvalidOperationException("WorkbookPart is missing.");
+        S.Workbook workbook = workbookPart.Workbook ??
+            throw new InvalidOperationException("Workbook is missing.");
+        S.Sheets sheets = workbook.GetFirstChild<S.Sheets>() ??
+            workbook.AppendChild(new S.Sheets());
+        WorksheetPart worksheetPart = workbookPart.AddNewPart<WorksheetPart>();
+        worksheetPart.Worksheet = new S.Worksheet(new S.SheetData(new S.Row(
+            new S.Cell
+            {
+                CellReference = "A1",
+                DataType = S.CellValues.InlineString,
+                InlineString = new S.InlineString(new S.Text("Preserve this project worksheet"))
+            }) { RowIndex = 1U }));
+        worksheetPart.Worksheet.Save();
+        uint sheetId = sheets.Elements<S.Sheet>()
+            .Select(sheet => sheet.SheetId?.Value ?? 0U)
+            .DefaultIfEmpty()
+            .Max() + 1U;
+        sheets.Append(new S.Sheet
+        {
+            Id = workbookPart.GetIdOfPart(worksheetPart),
+            SheetId = sheetId,
+            Name = sheetName
+        });
+        workbook.Save();
+    }
+
+    private static void VerifyPrunedWorkbook(
+        string workbookPath,
+        string retainedSheetName,
+        string removedSheetName,
+        string retainedTypeCode)
+    {
+        using SpreadsheetDocument document = SpreadsheetDocument.Open(workbookPath, false);
+        WorkbookPart workbookPart = document.WorkbookPart ??
+            throw new InvalidOperationException("WorkbookPart is missing.");
+        S.Workbook workbook = workbookPart.Workbook ??
+            throw new InvalidOperationException("Workbook is missing.");
+        S.Sheets sheets = workbook.GetFirstChild<S.Sheets>() ??
+            throw new InvalidOperationException("Workbook sheets are missing.");
+        string[] sheetNames = sheets.Elements<S.Sheet>()
+            .Select(sheet => sheet.Name?.Value ?? string.Empty)
+            .ToArray();
+        Require(sheetNames.Contains(retainedSheetName, StringComparer.OrdinalIgnoreCase),
+            "The model-used managed type worksheet was deleted.");
+        Require(!sheetNames.Contains(removedSheetName, StringComparer.OrdinalIgnoreCase),
+            "The unused managed type worksheet was not deleted.");
+        Require(sheetNames.Contains("Project Notes", StringComparer.OrdinalIgnoreCase),
+            "An unrelated project worksheet was deleted during pruning.");
+        S.Sheet indexSheet = sheets.Elements<S.Sheet>().Single(sheet =>
+            string.Equals(sheet.Name?.Value, "_CLADDING_INDEX", StringComparison.OrdinalIgnoreCase));
+        WorksheetPart indexPart = (WorksheetPart)workbookPart.GetPartById(indexSheet.Id!);
+        S.Worksheet indexWorksheet = indexPart.Worksheet ??
+            throw new InvalidOperationException("Index worksheet is missing.");
+        string[] indexedTypeCodes = (indexWorksheet.GetFirstChild<S.SheetData>()?.Elements<S.Row>() ??
+                Enumerable.Empty<S.Row>())
+            .Skip(1)
+            .Select(row => row.Elements<S.Cell>().FirstOrDefault()?.InnerText ?? string.Empty)
+            .Where(value => value.Length > 0)
+            .ToArray();
+        Require(indexedTypeCodes.SequenceEqual(new[] { retainedTypeCode }, StringComparer.OrdinalIgnoreCase),
+            "The hidden cladding index does not match the remaining managed type worksheet.");
     }
 
     private static void VerifyAssemblyContract()
@@ -301,12 +603,31 @@ internal static class Program
                 matchCommand.GUID, clearCommand.GUID, smokeCommand.GUID
             }.Distinct().Count() == 6,
             "All PanelCladdingEditor Rhino command GUIDs must be unique.");
-        Require(assembly.GetType(
-                "PanelCladdingEditor.Infrastructure.Rhino.Live.PanelCladding.LivePanelCladdingSurfaceSyncRepository") is not null,
-            "Live surface sync repository is missing.");
+        Type liveRepository = RequireType(
+            assembly,
+            "PanelCladdingEditor.Infrastructure.Rhino.Live.PanelCladding.LivePanelCladdingSurfaceSyncRepository");
+        MethodInfo enumeratorFactory = liveRepository.GetMethod(
+                "CreateSurfaceEnumeratorSettings",
+                BindingFlags.NonPublic | BindingFlags.Static) ??
+            throw new InvalidOperationException("Hidden-surface enumerator settings factory is missing.");
+        object enumeratorSettings = enumeratorFactory.Invoke(null, null) ??
+            throw new InvalidOperationException("Hidden-surface enumerator settings factory returned null.");
+        foreach (string enabledProperty in new[]
+        {
+            "NormalObjects", "LockedObjects", "HiddenObjects", "ActiveObjects"
+        })
+        {
+            bool enabled = (bool)(enumeratorSettings.GetType().GetProperty(enabledProperty)?.GetValue(enumeratorSettings) ?? false);
+            Require(enabled, $"Surface enumeration must enable {enabledProperty}.");
+        }
+        bool referenceObjects = (bool)(enumeratorSettings.GetType().GetProperty("ReferenceObjects")?.GetValue(enumeratorSettings) ?? true);
+        Require(!referenceObjects, "Surface enumeration must continue excluding reference objects.");
         Require(typeof(IPanelCladdingWorkbookRepository).GetMethod(
                 nameof(IPanelCladdingWorkbookRepository.PrepareBatchUpsert)) is not null,
             "Batch workbook preparation contract is missing.");
+        Require(typeof(IPreparedPanelCladdingWorkbookBatchUpdate).GetProperty(
+                nameof(IPreparedPanelCladdingWorkbookBatchUpdate.RemovedTypeCodes)) is not null,
+            "Prepared workbook pruning results are missing.");
         MethodInfo sync = typeof(IPanelCladdingSurfaceSyncService).GetMethod(
                 nameof(IPanelCladdingSurfaceSyncService.Sync)) ??
             throw new InvalidOperationException("Surface sync service contract is missing.");
@@ -343,12 +664,20 @@ internal static class Program
             new[]
             {
                 Panel(PanelOneId, "PID_PANEL_01", BuildLayout(PanelOneId, originalsOne)),
-                Panel(PanelTwoId, "PID_PANEL_02", BuildLayout(PanelTwoId, originalsTwo))
+                Panel(PanelTwoId, "PID_PANEL_02", BuildLayout(
+                    PanelTwoId,
+                    originalsTwo,
+                    horizontalOffset: 30d,
+                    verticalOffset: 70d))
             },
             surfacesOne.Concat(surfacesTwo).ToArray());
     }
 
-    private static PanelCladdingLayout BuildLayout(Guid objectId, IReadOnlyList<string> materials)
+    private static PanelCladdingLayout BuildLayout(
+        Guid objectId,
+        IReadOnlyList<string> materials,
+        double horizontalOffset = 50d,
+        double verticalOffset = 50d)
     {
         var cells = new List<PanelCladdingCell>();
         int materialIndex = 0;
@@ -380,8 +709,8 @@ internal static class Program
             Height = 100d,
             ModelTolerance = 0.001d,
             ModelUnitScaleToMillimeters = 1d,
-            HorizontalOffsets = new[] { 50d },
-            VerticalOffsets = new[] { 50d },
+            HorizontalOffsets = new[] { horizontalOffset },
+            VerticalOffsets = new[] { verticalOffset },
             Cells = cells,
             Preview = BuildPreview(cells)
         };
@@ -476,13 +805,16 @@ internal static class Program
 
     private static PanelCladdingSurfaceSyncSnapshot Snapshot(
         IReadOnlyList<PanelCladdingSurfaceSyncPanelSnapshot> panels,
-        IReadOnlyList<PanelCladdingSurfaceSyncSurfaceSnapshot> surfaces)
+        IReadOnlyList<PanelCladdingSurfaceSyncSurfaceSnapshot> surfaces,
+        IReadOnlyList<PanelCladdingWorkbookTypeReference>? modelTypeAssignments = null)
     {
         return new PanelCladdingSurfaceSyncSnapshot
         {
             DocumentPath = "C:\\tests\\surface-sync.3dm",
+            SelectedPanelIds = panels.Select(panel => panel.ObjectId).ToArray(),
             Panels = panels,
-            Surfaces = surfaces
+            Surfaces = surfaces,
+            ModelTypeAssignments = modelTypeAssignments ?? Array.Empty<PanelCladdingWorkbookTypeReference>()
         };
     }
 
@@ -514,6 +846,19 @@ internal static class Program
     {
         Require(!response.Success && response.Message.Contains(token, StringComparison.Ordinal),
             $"Expected failure containing {token}, got: {response.Message}");
+    }
+
+    private static void RequireIsolatedIssue(
+        OperationResponse<PanelCladdingSurfaceSyncPlan> response,
+        string token,
+        int expectedIssueCount = 1)
+    {
+        PanelCladdingSurfaceSyncPlan plan = RequireData(response, $"Create isolated {token} plan");
+        Require(plan.Panels.Count == 0 && plan.Surfaces.Count == 0,
+            $"A panel with {token} must not contribute panel or surface writes.");
+        Require(plan.Issues.Count == expectedIssueCount && plan.Issues.Any(issue =>
+                issue.Message.Contains(token, StringComparison.Ordinal)),
+            $"Expected {expectedIssueCount} isolated issue(s) containing {token}.");
     }
 
     private static void Require(bool condition, string message)
@@ -558,11 +903,14 @@ internal static class Program
                 new PanelCladdingSurfaceSyncResult
                 {
                     SelectedPanelIds = request.SelectedPanelIds,
+                    SkippedPanelIds = request.SkippedPanelIds,
                     ChangedPanelIds = request.PanelWrites.Select(write => write.ObjectId).ToArray(),
                     RefreshedSurfaceIds = request.SurfaceWrites.Select(write => write.ObjectId).ToArray(),
                     MatchedSurfaceCount = matchedSurfaceCount,
                     WorkbookPath = request.WorkbookPath,
-                    Types = types
+                    Types = types,
+                    Issues = request.Issues,
+                    RemovedWorkbookTypeCodes = request.RemovedWorkbookTypeCodes
                 });
         }
     }

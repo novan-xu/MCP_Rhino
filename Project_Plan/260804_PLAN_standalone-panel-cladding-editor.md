@@ -122,3 +122,22 @@ and loads the `.rhp` on the first command invocation. It does not require an alw
   panel cannot retain both schema versions.
 - Keep the workbook index columns and signature values unchanged because they are internal workbook
   schema rather than Rhino user-text key names.
+
+## Revision record (2026-08-07): cladding-only type identity
+
+Cladding type identity must describe only the logical material assignment, not panel geometry or the
+H/V values that position its divisions.
+
+- Introduce signature schema version 2 with canonical payload made only from ordered logical cell
+  labels and normalized cladding material values.
+- Exclude width, height, geometry class, curvature/depth samples, units, tolerance, horizontal
+  offsets, and vertical offsets from both the digest input and type-code classification.
+- Derive the displayed grid topology from the logical cell collection, not from offset arrays, and
+  use a neutral `CL` type-code marker instead of planar/curved `P`/`C`.
+- Store new signatures as `v2:sha256:<digest>` so existing geometry-sensitive v1 workbook records do
+  not masquerade as the new identity schema.
+- Prove that equal logical cell/material assignments with different dimensions, H/V values,
+  geometry classes, and depth profiles produce the same type code and signature; a changed material
+  must still produce a different identity.
+- Keep H/V parsing and panel preview/workbook presentation available for panel layout and spawning;
+  only cladding identity/reuse is decoupled from those values.

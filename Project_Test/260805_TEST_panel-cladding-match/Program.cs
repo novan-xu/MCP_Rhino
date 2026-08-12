@@ -29,7 +29,8 @@ internal static class Program
                 ["Plane"] = "target-frame",
                 ["CustomNote"] = "preserve me",
                 ["CW_2.03_OFFSET_H0"] = "25",
-                ["CW_2.03_OFFSET_H7"] = "999",
+                ["CW_2.04_OFFSET_V0"] = "20",
+                ["CW_2.04_OFFSET_V1"] = "65",
                 [PanelCladdingKeyService.GetCellKey(0, "A")] = " ",
                 [PanelCladdingKeyService.TypeCodeKey] = string.Empty,
                 [PanelCladdingKeyService.SignatureKey] = " "
@@ -40,7 +41,10 @@ internal static class Program
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 ["CW_1.01_PID"] = "TARGET-02",
-                ["Unrelated"] = "keep"
+                ["Unrelated"] = "keep",
+                ["CW_2.03_OFFSET_H0"] = "55",
+                ["CW_2.04_OFFSET_V0"] = "35",
+                ["CW_2.04_OFFSET_V1"] = "85"
             });
 
         PanelCladdingMatchPlan plan = RequireData(
@@ -50,8 +54,9 @@ internal static class Program
         Require(plan.Targets.Select(target => target.ObjectId).SequenceEqual(new[] { TargetOneId, TargetTwoId }),
             "Targets must remain ordered and duplicate ids must collapse.");
         VerifyConfigurationWrites(plan.Targets[0].UserTextWrites);
-        Require(plan.Targets[0].UserTextDeletes.Contains("CW_2.03_OFFSET_H7", StringComparer.OrdinalIgnoreCase),
-            "Stale higher-index offset keys must be deleted.");
+        Require(!plan.Targets[0].UserTextDeletes.Any(key => key.Contains("OFFSET", StringComparison.OrdinalIgnoreCase)) &&
+                !plan.Targets[0].UserTextWrites.Keys.Any(key => key.Contains("OFFSET", StringComparison.OrdinalIgnoreCase)),
+            "Match must neither delete nor write target offset keys.");
         Require(plan.Targets[0].UserTextDeletes.Contains(PanelCladdingKeyService.GetCellKey(0, "A"), StringComparer.OrdinalIgnoreCase),
             "Existing blank cladding keys must be deleted before replacement.");
         Require(plan.Targets[0].UserTextDeletes.Contains(PanelCladdingKeyService.LegacyTypeCodeKey, StringComparer.OrdinalIgnoreCase) &&
@@ -59,7 +64,8 @@ internal static class Program
             "Legacy type/signature keys must be included in cleanup.");
         foreach (string preserved in new[]
         {
-            "CW_1.01_PID", "CW_1.05_RELEASE", "CW_1.07_WALL_TYPE", "CW_1.02_CID", "Plane", "CustomNote"
+            "CW_1.01_PID", "CW_1.05_RELEASE", "CW_1.07_WALL_TYPE", "CW_1.02_CID", "Plane", "CustomNote",
+            "CW_2.03_OFFSET_H0", "CW_2.04_OFFSET_V0", "CW_2.04_OFFSET_V1"
         })
         {
             Require(!plan.Targets[0].UserTextDeletes.Contains(preserved, StringComparer.OrdinalIgnoreCase),
@@ -67,19 +73,23 @@ internal static class Program
             Require(!plan.Targets[0].UserTextWrites.ContainsKey(preserved),
                 $"Identity/unrelated key {preserved} must not be overwritten.");
         }
-        Console.WriteLine("[OK] multi-target transfer, canonical writes, stale cleanup, and identity preservation");
+        Console.WriteLine("[OK] multi-target cladding transfer, offset preservation, stale cladding cleanup, and identity preservation");
 
         PanelCladdingMatchPanelSnapshot oneCellSource = Snapshot(
             SourceId,
             PlanarGeometry(),
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
-                [PanelCladdingKeyService.TypeCodeKey] = "WT01-P-1X1-ABCDEF12",
-                [PanelCladdingKeyService.SignatureKey] = "v1:sha256:onecell",
+                [PanelCladdingKeyService.TypeCodeKey] = "WT01-CL-1X1-ABCDEF12",
+                [PanelCladdingKeyService.SignatureKey] = "v2:sha256:onecell",
                 [PanelCladdingKeyService.GetCellKey(0, "A")] = "gl01"
             });
+        PanelCladdingMatchPanelSnapshot oneCellTarget = Snapshot(
+            TargetTwoId,
+            PlanarGeometry(),
+            new Dictionary<string, string> { ["CW_1.01_PID"] = "TARGET-ONE-CELL" });
         PanelCladdingMatchPlan oneCellPlan = RequireData(
-            planner.CreatePlan(oneCellSource, new[] { targetTwo }),
+            planner.CreatePlan(oneCellSource, new[] { oneCellTarget }),
             "Create one-cell match plan");
         Require(!oneCellPlan.Targets[0].UserTextWrites.Keys.Any(key =>
                 key.Contains("OFFSET", StringComparison.OrdinalIgnoreCase)),
@@ -89,10 +99,10 @@ internal static class Program
         Console.WriteLine("[OK] one-cell configuration without divider offsets");
 
         VerifyEligibilityFailures(planner, source, targetOne, targetTwo);
-        Console.WriteLine("[OK] configured-target, source, overlap, and geometry failures are fail-closed");
+        Console.WriteLine("[OK] configured-target, source, overlap, and unsupported-target failures are fail-closed");
 
-        VerifyCurvedCompatibility(planner);
-        Console.WriteLine("[OK] deterministic curved-profile compatibility within tolerance");
+        VerifyTargetOwnedOffsetsAndTopology(planner);
+        Console.WriteLine("[OK] target-owned offsets may differ while logical cladding topology remains enforced");
 
         VerifyAssemblyContract();
         Console.WriteLine("[OK] standalone PanelCladdingMatch command/service contract and unique GUID");
@@ -100,9 +110,8 @@ internal static class Program
 
     private static void VerifyConfigurationWrites(IReadOnlyDictionary<string, string> writes)
     {
-        Require(writes["CW_2.03_OFFSET_H0"] == "40", "H0 was not copied canonically.");
-        Require(writes["CW_2.04_OFFSET_V0"] == "30", "V0 was not copied canonically.");
-        Require(writes["CW_2.04_OFFSET_V1"] == "70", "V1 was not copied canonically.");
+        Require(!writes.Keys.Any(key => key.Contains("OFFSET", StringComparison.OrdinalIgnoreCase)),
+            "Cladding configuration writes must not contain offsets.");
         string[] expectedMaterials = { "GL01", "GL02", "STN01", "STN02", "TER01", "TER02" };
         int materialIndex = 0;
         for (int column = 0; column < 3; column++)
@@ -113,9 +122,9 @@ internal static class Program
                 Require(writes[key] == expectedMaterials[materialIndex++], $"Material write mismatch for {key}.");
             }
         }
-        Require(writes[PanelCladdingKeyService.TypeCodeKey] == "WT01-P-3X2-ABCDEF12",
+        Require(writes[PanelCladdingKeyService.TypeCodeKey] == "WT01-CL-3X2-ABCDEF12",
             "Canonical type code was not copied.");
-        Require(writes[PanelCladdingKeyService.SignatureKey] == "v1:sha256:configured",
+        Require(writes[PanelCladdingKeyService.SignatureKey] == "v2:sha256:configured",
             "Canonical Signature was not copied.");
         Require(!writes.ContainsKey(PanelCladdingKeyService.LegacyTypeCodeKey) &&
                 !writes.ContainsKey(PanelCladdingKeyService.LegacySignatureKey),
@@ -163,34 +172,43 @@ internal static class Program
         RequireFailure(
             planner.CreatePlan(
                 source,
-                new[] { Snapshot(TargetOneId, PlanarGeometry(width: 101d), targetOne.UserText) }),
-            "GEOMETRY_MISMATCH");
-
-        RequireFailure(
-            planner.CreatePlan(
-                source,
-                new[] { Snapshot(TargetOneId, CurvedGeometry(Enumerable.Repeat(0d, 25).ToArray()), targetOne.UserText) }),
+                new[] { Snapshot(TargetOneId, UnsupportedGeometry(), targetOne.UserText) }),
             "GEOMETRY_MISMATCH");
     }
 
-    private static void VerifyCurvedCompatibility(PanelCladdingMatchPlanningService planner)
+    private static void VerifyTargetOwnedOffsetsAndTopology(PanelCladdingMatchPlanningService planner)
     {
         double[] sourceDepths = Enumerable.Range(0, 25).Select(index => index * 0.1d).ToArray();
-        double[] withinTolerance = sourceDepths.Select(value => value + 0.0005d).ToArray();
-        double[] outsideTolerance = sourceDepths.ToArray();
-        outsideTolerance[12] += 0.1d;
-        PanelCladdingMatchPanelSnapshot source = BuildConfiguredSource(
+        PanelCladdingMatchPanelSnapshot planarSource = BuildConfiguredSource(SourceId, PlanarGeometry());
+        RequireData(
+            planner.CreatePlan(
+                planarSource,
+                new[] { Snapshot(TargetOneId, PlanarGeometry(width: 140d, height: 80d), TargetGrid("20", "30", "100")) }),
+            "Different-sized planar target plan");
+        RequireData(
+            planner.CreatePlan(
+                planarSource,
+                new[] { Snapshot(TargetOneId, CurvedGeometry(sourceDepths, width: 125d, height: 85d), TargetGrid("45", "25", "90")) }),
+            "Different-profile curved target plan");
+
+        PanelCladdingMatchPanelSnapshot curvedSource = BuildConfiguredSource(
             SourceId,
             CurvedGeometry(sourceDepths));
-        PanelCladdingMatchPanelSnapshot target = Snapshot(
-            TargetOneId,
-            CurvedGeometry(withinTolerance),
-            new Dictionary<string, string>());
-        RequireData(planner.CreatePlan(source, new[] { target }), "Curved compatible plan");
+        RequireData(
+            planner.CreatePlan(
+                curvedSource,
+                new[] { Snapshot(TargetOneId, PlanarGeometry(width: 50d, height: 30d), TargetGrid("10", "10", "35")) }),
+            "Curved-source to planar-target plan");
+
         RequireFailure(
             planner.CreatePlan(
-                source,
-                new[] { Snapshot(TargetOneId, CurvedGeometry(outsideTolerance), new Dictionary<string, string>()) }),
+                planarSource,
+                new[] { Snapshot(TargetOneId, PlanarGeometry(width: 70d, height: 100d), new Dictionary<string, string>()) }),
+            "GEOMETRY_MISMATCH");
+        RequireFailure(
+            planner.CreatePlan(
+                planarSource,
+                new[] { Snapshot(TargetTwoId, PlanarGeometry(), TargetGrid("40", "30", "120")) }),
             "GEOMETRY_MISMATCH");
     }
 
@@ -233,8 +251,8 @@ internal static class Program
             ["CW_2.03_OFFSET_H0"] = "40",
             ["CW_2.04_OFFSET_V0"] = "30",
             ["CW_2.04_OFFSET_V1"] = "70",
-            [PanelCladdingKeyService.TypeCodeKey] = "WT01-P-3X2-ABCDEF12",
-            [PanelCladdingKeyService.SignatureKey] = "v1:sha256:configured",
+            [PanelCladdingKeyService.TypeCodeKey] = "WT01-CL-3X2-ABCDEF12",
+            [PanelCladdingKeyService.SignatureKey] = "v2:sha256:configured",
             ["CW_1.01_PID"] = "SOURCE"
         };
         string[] materials = { "gl01", "gl02", "stn01", "stn02", "ter01", "ter02" };
@@ -248,6 +266,19 @@ internal static class Program
             }
         }
         return Snapshot(objectId, geometry, userText);
+    }
+
+    private static IReadOnlyDictionary<string, string> TargetGrid(
+        string horizontal,
+        string verticalZero,
+        string verticalOne)
+    {
+        return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["CW_2.03_OFFSET_H0"] = horizontal,
+            ["CW_2.04_OFFSET_V0"] = verticalZero,
+            ["CW_2.04_OFFSET_V1"] = verticalOne
+        };
     }
 
     private static PanelCladdingMatchPanelSnapshot Snapshot(
@@ -277,15 +308,29 @@ internal static class Program
         };
     }
 
-    private static PanelCladdingMatchGeometryDescriptor CurvedGeometry(IReadOnlyList<double> depths)
+    private static PanelCladdingMatchGeometryDescriptor CurvedGeometry(
+        IReadOnlyList<double> depths,
+        double width = 100d,
+        double height = 100d)
     {
         return new PanelCladdingMatchGeometryDescriptor
         {
             GeometryClass = PanelGeometryClass.Curved,
-            Width = 100d,
-            Height = 100d,
+            Width = width,
+            Height = height,
             ModelTolerance = 0.001d,
             DepthSamples = depths
+        };
+    }
+
+    private static PanelCladdingMatchGeometryDescriptor UnsupportedGeometry()
+    {
+        return new PanelCladdingMatchGeometryDescriptor
+        {
+            GeometryClass = PanelGeometryClass.UnsupportedProjection,
+            Width = 100d,
+            Height = 100d,
+            ModelTolerance = 0.001d
         };
     }
 

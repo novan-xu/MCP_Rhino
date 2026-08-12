@@ -67,6 +67,7 @@ public interface IPreparedPanelCladdingWorkbookUpdate : IDisposable
 public interface IPreparedPanelCladdingWorkbookBatchUpdate : IDisposable
 {
     IReadOnlyList<PanelCladdingWorkbookBatchItemResult> Results { get; }
+    IReadOnlyList<string> RemovedTypeCodes { get; }
     OperationResponse Commit();
 }
 

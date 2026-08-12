@@ -6,6 +6,8 @@ using PanelCladdingEditor.Contracts.Responses;
 using PanelCladdingEditor.Domain.Models.PanelCladding;
 using Brep = rhinocommon::Rhino.Geometry.Brep;
 using ObjectAttributes = rhinocommon::Rhino.DocObjects.ObjectAttributes;
+using ObjectEnumeratorSettings = rhinocommon::Rhino.DocObjects.ObjectEnumeratorSettings;
+using ObjectType = rhinocommon::Rhino.DocObjects.ObjectType;
 using RhinoDoc = rhinocommon::Rhino.RhinoDoc;
 using RhinoObject = rhinocommon::Rhino.DocObjects.RhinoObject;
 
@@ -43,21 +45,33 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
         RhinoDoc document = resolved.Data;
 
         var panels = new List<PanelCladdingSurfaceSyncPanelSnapshot>(selectedIds.Length);
+        var issues = new List<PanelCladdingSurfaceSyncIssue>();
         var expectedCids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (Guid objectId in selectedIds)
         {
             RhinoObject? rhinoObject = document.Objects.FindId(objectId);
             if (rhinoObject?.Geometry is not Brep)
             {
-                return OperationResponse<PanelCladdingSurfaceSyncSnapshot>.Fail(
-                    $"PANEL_CLADDING_SURFACE_SYNC_PANEL_BREP_NOT_FOUND: {objectId:D}");
+                issues.Add(new PanelCladdingSurfaceSyncIssue
+                {
+                    PanelObjectId = objectId,
+                    Message = $"PANEL_CLADDING_SURFACE_SYNC_PANEL_BREP_NOT_FOUND: {objectId:D}"
+                });
+                continue;
             }
 
             OperationResponse<PanelCladdingLayout> layout = _layouts.ReadLayout(filePath, objectId);
             if (!layout.Success || layout.Data is null)
             {
-                return OperationResponse<PanelCladdingSurfaceSyncSnapshot>.Fail(
-                    $"PANEL_CLADDING_SURFACE_SYNC_PANEL_READ_FAILED: {objectId:D}: {layout.Message}");
+                issues.Add(new PanelCladdingSurfaceSyncIssue
+                {
+                    PanelObjectId = objectId,
+                    PanelId = GetCanonicalUserText(
+                        rhinoObject.Attributes,
+                        PanelCladdingSpawnPlanningService.PanelIdUserTextKey).Trim(),
+                    Message = $"PANEL_CLADDING_SURFACE_SYNC_PANEL_READ_FAILED: {objectId:D}: {layout.Message}"
+                });
+                continue;
             }
             string pid = GetCanonicalUserText(
                 rhinoObject.Attributes,
@@ -80,11 +94,28 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
         }
 
         var surfaces = new List<PanelCladdingSurfaceSyncSurfaceSnapshot>();
-        foreach (RhinoObject rhinoObject in document.Objects)
+        var modelTypeAssignments = new List<PanelCladdingWorkbookTypeReference>();
+        foreach (RhinoObject rhinoObject in document.Objects.GetObjectList(
+            CreateSurfaceEnumeratorSettings()))
         {
             if (rhinoObject.Geometry is not Brep)
             {
                 continue;
+            }
+            string typeCode = GetCanonicalUserText(
+                rhinoObject.Attributes,
+                PanelCladdingKeyService.TypeCodeKey).Trim();
+            string storedSignature = GetCanonicalUserText(
+                rhinoObject.Attributes,
+                PanelCladdingKeyService.SignatureKey).Trim();
+            if (typeCode.Length > 0 || storedSignature.Length > 0)
+            {
+                modelTypeAssignments.Add(new PanelCladdingWorkbookTypeReference
+                {
+                    ObjectId = rhinoObject.Id,
+                    TypeCode = typeCode,
+                    StoredSignature = storedSignature
+                });
             }
             string cid = GetCanonicalUserText(
                 rhinoObject.Attributes,
@@ -117,8 +148,11 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
                 DocumentPath = document.Path,
                 WorkbookPath = document.Strings.GetValue(
                     PanelCladdingKeyService.WorkbookPathDocumentKey) ?? string.Empty,
+                SelectedPanelIds = selectedIds,
                 Panels = panels,
-                Surfaces = surfaces
+                Surfaces = surfaces,
+                Issues = issues,
+                ModelTypeAssignments = modelTypeAssignments
             });
     }
 
@@ -213,14 +247,17 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
         if (prepared.Count == 0)
         {
             OperationResponse externalOnly = finalizeWorkbook();
-            return externalOnly.Success
-                ? OperationResponse<PanelCladdingSurfaceSyncResult>.Ok(BuildResult(
-                    request,
-                    surfaceWrites,
-                    panelWrites,
-                    types,
-                    matchedSurfaceCount))
-                : OperationResponse<PanelCladdingSurfaceSyncResult>.Fail(externalOnly.Message);
+            if (!externalOnly.Success)
+            {
+                return OperationResponse<PanelCladdingSurfaceSyncResult>.Fail(externalOnly.Message);
+            }
+            SelectSkippedPanels(document, request.SkippedPanelIds);
+            return OperationResponse<PanelCladdingSurfaceSyncResult>.Ok(BuildResult(
+                request,
+                surfaceWrites,
+                panelWrites,
+                types,
+                matchedSurfaceCount));
         }
 
         string? oldWorkbookPath = document.Strings.GetValue(
@@ -262,6 +299,7 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
                     $"{external.Message}{rollback}");
             }
 
+            SelectSkippedPanels(document, request.SkippedPanelIds);
             document.Views.Redraw();
             return OperationResponse<PanelCladdingSurfaceSyncResult>.Ok(BuildResult(
                 request,
@@ -297,12 +335,44 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
         return new PanelCladdingSurfaceSyncResult
         {
             SelectedPanelIds = request.SelectedPanelIds,
+            SkippedPanelIds = request.SkippedPanelIds,
             ChangedPanelIds = panelWrites.Select(item => item.ObjectId).ToArray(),
             RefreshedSurfaceIds = surfaceWrites.Select(item => item.ObjectId).ToArray(),
             MatchedSurfaceCount = matchedSurfaceCount,
-            WorkbookPath = panelWrites.Count > 0 ? request.WorkbookPath : string.Empty,
-            Types = types
+            WorkbookPath = request.WorkbookPath,
+            Types = types,
+            Issues = request.Issues,
+            RemovedWorkbookTypeCodes = request.RemovedWorkbookTypeCodes
         };
+    }
+
+    private static ObjectEnumeratorSettings CreateSurfaceEnumeratorSettings()
+    {
+        return new ObjectEnumeratorSettings
+        {
+            NormalObjects = true,
+            LockedObjects = true,
+            HiddenObjects = true,
+            ActiveObjects = true,
+            ReferenceObjects = false,
+            ObjectTypeFilter = ObjectType.Brep
+        };
+    }
+
+    private static void SelectSkippedPanels(RhinoDoc document, IReadOnlyList<Guid> skippedPanelIds)
+    {
+        Guid[] distinctIds = (skippedPanelIds ?? Array.Empty<Guid>())
+            .Where(objectId => objectId != Guid.Empty)
+            .Distinct()
+            .ToArray();
+        if (distinctIds.Length == 0)
+        {
+            return;
+        }
+
+        document.Objects.UnselectAll();
+        document.Objects.Select(distinctIds);
+        document.Views.Redraw();
     }
 
     private static string GetCanonicalUserText(ObjectAttributes attributes, string canonicalKey)

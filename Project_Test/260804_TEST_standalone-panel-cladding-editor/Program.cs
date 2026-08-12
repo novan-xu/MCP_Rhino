@@ -95,16 +95,52 @@ internal static class Program
             PanelCladdingTypeIdentity curvedIdentity = RequireData(signatureService.Create(curved, requested, "WT01"), "Curved signature");
             RequirePanelCladding(planarIdentity.FullDigest == planarIdentityAgain.FullDigest,
                 "Identical normalized panels must produce identical signatures.");
-            RequirePanelCladding(planarIdentity.FullDigest != curvedIdentity.FullDigest,
-                "Planar and curved panels must not share a signature.");
+            RequirePanelCladding(planarIdentity.FullDigest == curvedIdentity.FullDigest,
+                "Equal cladding assignments must share a signature across planar and curved panels.");
+            IReadOnlyDictionary<string, string> alternateGridText = new Dictionary<string, string>(userText, StringComparer.OrdinalIgnoreCase)
+            {
+                ["cw_2.03_offset_h0"] = "25",
+                ["CW_2.04_OFFSET_V0"] = "75"
+            };
+            PanelCladdingKeySet alternateGrid = RequireData(
+                keys.Parse(alternateGridText, 100d, 100d, 0.001d),
+                "Parse alternate offset grid");
+            PanelCladdingLayout alternateOffsetLayout = BuildSmokeLayout(
+                projection,
+                alternateGrid,
+                PanelMesh(planar: false, duplicateDepth: false),
+                1d,
+                0.001d);
+            PanelCladdingTypeIdentity alternateOffsetIdentity = RequireData(
+                signatureService.Create(alternateOffsetLayout, requested, "WT01"),
+                "Alternate-offset signature");
+            RequirePanelCladding(planarIdentity.FullDigest == alternateOffsetIdentity.FullDigest,
+                "Equal cladding assignments must ignore H/V offset values.");
             PanelCladdingLayout curvedMeters = ScaleLayout(curved, 0.001d, 1000d, 0.000001d);
             PanelCladdingTypeIdentity curvedMetersIdentity = RequireData(
                 signatureService.Create(curvedMeters, requested, "WT01"), "Unit-independent signature");
             RequirePanelCladding(curvedIdentity.FullDigest == curvedMetersIdentity.FullDigest,
                 "Equivalent millimeter and meter layouts must share a signature.");
+            var changedMaterial = new Dictionary<string, string>(requested, StringComparer.OrdinalIgnoreCase)
+            {
+                [PanelCladdingKeyService.GetCellKey(0, "A")] = "GL99"
+            };
+            PanelCladdingTypeIdentity changedMaterialIdentity = RequireData(
+                signatureService.Create(curvedMeters, changedMaterial, "WT01"),
+                "Changed-material signature");
+            RequirePanelCladding(planarIdentity.FullDigest != changedMaterialIdentity.FullDigest,
+                "A changed cladding material must produce a different signature.");
+            RequirePanelCladding(
+                planarIdentity.SchemaVersion == 2 &&
+                planarIdentity.StoredSignature.StartsWith("v2:sha256:", StringComparison.Ordinal) &&
+                planarIdentity.TypeCode.Contains("-CL-", StringComparison.Ordinal) &&
+                planarIdentity.CanonicalPayload.StartsWith("v=2|cells=", StringComparison.Ordinal) &&
+                !new[] { "|g=", "|w=", "|h=", "|H=", "|V=", "|depth=" }.Any(token =>
+                    planarIdentity.CanonicalPayload.Contains(token, StringComparison.Ordinal)),
+                "Cladding identity must use v2 cell-only payload with no geometry or offset tokens.");
             OperationResponse<PanelCladdingTypeIdentity> unsupportedIdentity = signatureService.Create(unsupported, requested, "WT01");
             RequirePanelCladding(!unsupportedIdentity.Success, "Unsupported projection must disable type creation.");
-            checkpoints.Add("deterministic, curvature-sensitive, unit-independent SHA-256 type identity");
+            checkpoints.Add("deterministic v2 cell-only SHA-256 type identity independent of geometry and offsets");
 
             byte[] previewPng = RequireData(renderer.RenderPng(curved, 900, 620), "Render curved preview");
             RequirePanelCladding(previewPng.Length > 8 && previewPng.Take(8).SequenceEqual(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }),

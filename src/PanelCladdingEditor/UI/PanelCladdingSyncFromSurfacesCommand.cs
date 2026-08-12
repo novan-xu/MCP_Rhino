@@ -106,12 +106,23 @@ public sealed class PanelCladdingSyncFromSurfacesCommand : RhinoCommand
             return Result.Failure;
         }
 
+        foreach (PanelCladdingSurfaceSyncIssue issue in response.Data.Issues)
+        {
+            RhinoApp.WriteLine(issue.Message);
+        }
         int reusedTypes = response.Data.Types.Count(type => type.ReusedExistingType);
+        int processedPanels = response.Data.SelectedPanelIds.Count - response.Data.SkippedPanelIds.Count;
         RhinoApp.WriteLine(
-            $"PanelCladdingSyncFromSurfaces matched {response.Data.MatchedSurfaceCount} surface(s), " +
+            $"PanelCladdingSyncFromSurfaces processed {processedPanels} panel(s), skipped " +
+            $"{response.Data.SkippedPanelIds.Count} panel(s), matched {response.Data.MatchedSurfaceCount} surface(s), " +
             $"refreshed {response.Data.RefreshedSurfaceIds.Count} surface Cladding value(s), " +
             $"updated {response.Data.ChangedPanelIds.Count} panel(s), and exported " +
-            $"{response.Data.Types.Count} type assignment(s) ({reusedTypes} reused).");
+            $"{response.Data.Types.Count} type assignment(s) ({reusedTypes} reused); removed " +
+            $"{response.Data.RemovedWorkbookTypeCodes.Count} unused workbook type(s).");
+        if (response.Data.SkippedPanelIds.Count > 0)
+        {
+            RhinoApp.WriteLine("Skipped panels are selected for inspection.");
+        }
         return Result.Success;
     }
 }

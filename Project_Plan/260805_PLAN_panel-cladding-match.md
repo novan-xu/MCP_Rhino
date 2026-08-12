@@ -52,9 +52,8 @@ copies the source grid and material assignment to every compatible target.
 
 ### Geometry compatibility and mapping
 
-- Matching is exact configuration transfer, not automatic stretching. Source and target must have
-  the same local width and height within model tolerance, the same planar/curved classification,
-  and a compatible fixed-sample local depth profile for curved panels.
+- Matching is exact configuration transfer, not automatic stretching. Supported source and target
+  panels may have different local extents, planar/curved classifications, and depth profiles.
 - Use the existing stable panel-frame rules. Rotation and translation in the Rhino document are
   allowed because comparison and mapping happen in panel-local coordinates.
 - The source's `H<n>` and `V<n>` distances are copied exactly. Cell material values are copied by
@@ -63,8 +62,9 @@ copies the source grid and material assignment to every compatible target.
 - Mirroring is not inferred from proximity. A target's stored `Plane` user string, when present,
   remains the orientation authority. Otherwise the existing deterministic frame orientation is
   used.
-- Differently sized panels or materially different curved profiles fail with a geometry mismatch.
-  A future proportional-transfer mode can be reviewed separately.
+- Each copied horizontal offset must fit strictly inside the target height, and each copied vertical
+  offset must fit strictly inside the target width under model tolerance. A target whose extents do
+  not contain the copied offsets fails with a geometry mismatch.
 
 ### Attribute mutation contract
 
@@ -113,7 +113,7 @@ Use stable, contextual errors, including:
 
 1. Run `_PanelCladdingMatch`.
 2. At the first prompt, select all unconfigured target panel Breps and press Enter.
-3. At the second prompt, select one geometrically compatible configured source panel Brep.
+3. At the second prompt, select one configured source panel Brep.
 4. Review the updated-target count.
 5. Optionally run `_PanelCladdingSpawn` on the matched targets.
 
@@ -126,7 +126,7 @@ Use stable, contextual errors, including:
 - Target PID, release, wall type, CID, name, layer, geometry, and unrelated user text remain
   unchanged.
 - A configured target, unconfigured source, source/target identity overlap, unsupported projection,
-  or incompatible geometry prevents all mutation.
+  or target that cannot contain the copied offsets prevents all mutation.
 - Stale target H/V, cell, type, and signature keys are removed before the source snapshot is applied.
 - A successful multi-target invocation creates exactly one Rhino Undo entry, and one Undo restores
   every target's prior attributes.
@@ -145,8 +145,9 @@ Use stable, contextual errors, including:
   - canonical key-set replacement and stale-key removal;
   - preservation of `CW_1.*`, `Plane`, and unrelated user text;
   - one-cell configuration without divider offsets;
-  - assigned-target, unconfigured-source, source-is-target, and geometry-mismatch rejection;
-  - deterministic curved-profile compatibility within tolerance.
+  - assigned-target, unconfigured-source, source-is-target, and unsupported-target rejection;
+  - differently sized/profiled supported targets whose extents contain the copied offsets;
+  - undersized targets whose extents do not contain the copied offsets.
 - Assembly contract:
   - `_PanelCladdingMatch` command exists with a unique GUID;
   - live service accepts one source id and multiple target ids;
@@ -163,8 +164,8 @@ Use stable, contextual errors, including:
 - Local-frame orientation can make a visually mirrored panel map differently. The command uses the
   stored `Plane` when available and otherwise reports the deterministic frame behavior; it does not
   guess mirror intent.
-- Copying configuration onto a differently sized panel would make offsets misleading. Initial scope
-  rejects size/profile differences rather than scaling silently.
+- Copied offsets can fall outside a smaller target. Validate them against each target extent and fail
+  the match batch before mutation; never scale the stored source distances silently.
 - Attribute deletion must not affect identity metadata. Matching is restricted to the explicit
   `CW_2.03_OFFSET_H*`, `CW_2.04_OFFSET_V*`, cladding cell, type, and signature key families, with
   preservation assertions in automated tests.
@@ -174,8 +175,8 @@ Use stable, contextual errors, including:
 
 ## Future extension directions
 
-- Add an explicit proportional mode that maps normalized source boundaries onto differently sized
-  targets and recomputes type/signature/workbook records.
+- Add an explicit proportional mode if future workflows need scaled offsets and recomputed
+  type/signature/workbook records instead of exact distance transfer.
 - Add an explicit mirror-X or mirror-Y option when panel orientation conventions require it.
 - Allow matching from an existing cladding surface set by resolving its source PID/type metadata.
 - Add a preview/report mode for mixed selections before applying any attributes.
@@ -193,3 +194,36 @@ geometry to that callback, causing otherwise valid owning Breps to be rejected.
   planning/live service contract.
 - Re-run dedicated match, editor, and spawn regressions plus full Debug/Release builds before
   packaging the correction.
+
+## Revision record (2026-08-07): different-sized target panels
+
+Production use requires configuration transfer between panels whose overall dimensions and surface
+profiles differ. The copied H/V offsets define the cladding division locations; panel width and
+height are not configuration-identity constraints.
+
+- Remove source/target width, height, geometry-class, and curved-depth equality requirements.
+- Continue rejecting unsupported target projections.
+- Validate the copied horizontal offsets against each target's usable height and the copied vertical
+  offsets against each target's usable width. Every divider must remain strictly inside the target
+  bounds under the established geometry tolerance.
+- Preserve the source offset numbers exactly; do not scale or normalize them for the target.
+- Keep batch planning fail-closed for match: if any selected target cannot contain the copied
+  offsets, mutate none of the targets and report the incompatible target.
+- Add dedicated coverage proving that differently sized and differently profiled supported targets
+  accept the same configuration when its offsets fit, while undersized targets are rejected.
+
+## Revision record (2026-08-07): cladding-only transfer
+
+H/V offsets are panel layout data and must never be transferred by `_PanelCladdingMatch`.
+
+- Copy only normalized cladding cell assignments plus canonical cladding type/signature metadata.
+- Do not write or delete any `CW_2.03_OFFSET_H<n>` or `CW_2.04_OFFSET_V<n>` key on a target.
+- Parse source and target H/V data only to establish their logical cell topology. Require the same
+  ordered cell labels, but do not compare or copy offset distances.
+- Preserve every target offset value exactly, including configurations whose divider positions and
+  panel dimensions differ from the source.
+- Keep unsupported-target and topology-mismatch rejection fail-closed for the whole selected batch.
+- Align copied type/signature values with the cladding-only v2 identity schema generated by the
+  standalone editor and surface-sync workflows.
+- Add regression coverage proving target offsets are neither deleted nor written and that different
+  valid target offset distances accept the same cladding assignment.

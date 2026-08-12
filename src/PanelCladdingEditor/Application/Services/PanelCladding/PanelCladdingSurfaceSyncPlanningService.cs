@@ -15,51 +15,96 @@ public sealed class PanelCladdingSurfaceSyncPlanningService
     public OperationResponse<PanelCladdingSurfaceSyncPlan> CreatePlan(
         PanelCladdingSurfaceSyncSnapshot snapshot)
     {
+        Guid[] selectedPanelIds = (snapshot.SelectedPanelIds ?? Array.Empty<Guid>())
+            .Where(objectId => objectId != Guid.Empty)
+            .Distinct()
+            .ToArray();
         PanelCladdingSurfaceSyncPanelSnapshot[] panels = (snapshot.Panels ??
                 Array.Empty<PanelCladdingSurfaceSyncPanelSnapshot>())
             .Where(panel => panel.ObjectId != Guid.Empty)
             .GroupBy(panel => panel.ObjectId)
             .Select(group => group.First())
             .ToArray();
-        if (panels.Length == 0)
+        if (selectedPanelIds.Length == 0)
+        {
+            selectedPanelIds = panels.Select(panel => panel.ObjectId).ToArray();
+        }
+        if (selectedPanelIds.Length == 0)
         {
             return OperationResponse<PanelCladdingSurfaceSyncPlan>.Fail(
                 "PANEL_CLADDING_SURFACE_SYNC_SELECTION_REQUIRED");
         }
 
+        var issues = (snapshot.Issues ?? Array.Empty<PanelCladdingSurfaceSyncIssue>())
+            .Where(issue => issue.PanelObjectId != Guid.Empty)
+            .ToList();
+        var skippedPanelIds = issues
+            .Select(issue => issue.PanelObjectId)
+            .ToHashSet();
+        void AddIssue(Guid objectId, string panelId, string message)
+        {
+            if (!skippedPanelIds.Add(objectId))
+            {
+                return;
+            }
+            issues.Add(new PanelCladdingSurfaceSyncIssue
+            {
+                PanelObjectId = objectId,
+                PanelId = panelId,
+                Message = message
+            });
+        }
+
+        var candidatePanels = new List<PanelCladdingSurfaceSyncPanelSnapshot>(panels.Length);
         foreach (PanelCladdingSurfaceSyncPanelSnapshot panel in panels)
         {
+            if (skippedPanelIds.Contains(panel.ObjectId))
+            {
+                continue;
+            }
             if (string.IsNullOrWhiteSpace(panel.PanelId))
             {
-                return OperationResponse<PanelCladdingSurfaceSyncPlan>.Fail(
+                AddIssue(panel.ObjectId, string.Empty,
                     $"PANEL_CLADDING_SURFACE_SYNC_PID_REQUIRED: {panel.ObjectId:D}: expected {PanelCladdingSpawnPlanningService.PanelIdUserTextKey}.");
+                continue;
             }
             if (panel.Layout.ObjectId != panel.ObjectId)
             {
-                return OperationResponse<PanelCladdingSurfaceSyncPlan>.Fail(
+                AddIssue(panel.ObjectId, panel.PanelId.Trim(),
                     $"PANEL_CLADDING_SURFACE_SYNC_LAYOUT_MISMATCH: {panel.ObjectId:D}");
+                continue;
             }
             if (!panel.Layout.CanSave)
             {
-                return OperationResponse<PanelCladdingSurfaceSyncPlan>.Fail(
+                AddIssue(panel.ObjectId, panel.PanelId.Trim(),
                     $"PANEL_CLADDING_SURFACE_SYNC_UNSUPPORTED_PROJECTION: {panel.ObjectId:D}: {panel.Layout.GeometryDiagnostic}");
+                continue;
             }
             if (panel.Layout.Cells.Count == 0)
             {
-                return OperationResponse<PanelCladdingSurfaceSyncPlan>.Fail(
+                AddIssue(panel.ObjectId, panel.PanelId.Trim(),
                     $"PANEL_CLADDING_SURFACE_SYNC_CELLS_REQUIRED: {panel.ObjectId:D}");
+                continue;
+            }
+            candidatePanels.Add(panel);
+        }
+
+        foreach (IGrouping<string, PanelCladdingSurfaceSyncPanelSnapshot> duplicatePidGroup in candidatePanels
+            .GroupBy(panel => panel.PanelId.Trim(), StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Count() > 1))
+        {
+            foreach (PanelCladdingSurfaceSyncPanelSnapshot panel in duplicatePidGroup)
+            {
+                AddIssue(panel.ObjectId, duplicatePidGroup.Key,
+                    $"PANEL_CLADDING_SURFACE_SYNC_DUPLICATE_SELECTED_PID: {duplicatePidGroup.Key}");
             }
         }
 
-        string? duplicatePid = panels
-            .GroupBy(panel => panel.PanelId.Trim(), StringComparer.OrdinalIgnoreCase)
-            .Where(group => group.Count() > 1)
-            .Select(group => group.Key)
-            .FirstOrDefault();
-        if (duplicatePid is not null)
+        foreach (Guid missingPanelId in selectedPanelIds.Where(objectId =>
+            panels.All(panel => panel.ObjectId != objectId) && !skippedPanelIds.Contains(objectId)))
         {
-            return OperationResponse<PanelCladdingSurfaceSyncPlan>.Fail(
-                $"PANEL_CLADDING_SURFACE_SYNC_DUPLICATE_SELECTED_PID: {duplicatePid}");
+            AddIssue(missingPanelId, string.Empty,
+                $"PANEL_CLADDING_SURFACE_SYNC_PANEL_READ_FAILED: {missingPanelId:D}");
         }
 
         PanelCladdingSurfaceSyncSurfaceSnapshot[] surfaces = (snapshot.Surfaces ??
@@ -70,10 +115,14 @@ public sealed class PanelCladdingSurfaceSyncPlanningService
             .GroupBy(surface => surface.Cid.Trim(), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.OrdinalIgnoreCase);
 
-        var panelPlans = new List<PanelCladdingSurfaceSyncPanelPlan>(panels.Length);
+        var panelPlans = new List<PanelCladdingSurfaceSyncPanelPlan>(candidatePanels.Count);
         var surfacePlans = new List<PanelCladdingSurfaceSyncSurfacePlan>();
-        foreach (PanelCladdingSurfaceSyncPanelSnapshot panel in panels)
+        foreach (PanelCladdingSurfaceSyncPanelSnapshot panel in candidatePanels)
         {
+            if (skippedPanelIds.Contains(panel.ObjectId))
+            {
+                continue;
+            }
             string pid = panel.PanelId.Trim();
             PanelCladdingCell[] orderedCells = panel.Layout.Cells
                 .OrderBy(cell => cell.Column)
@@ -87,12 +136,15 @@ public sealed class PanelCladdingSurfaceSyncPlanningService
                 !expectedCids.Contains(surface.Cid.Trim()));
             if (unexpected is not null)
             {
-                return OperationResponse<PanelCladdingSurfaceSyncPlan>.Fail(
+                AddIssue(panel.ObjectId, pid,
                     $"PANEL_CLADDING_SURFACE_SYNC_UNEXPECTED_CID: {pid}: {unexpected.Cid.Trim()}");
+                continue;
             }
 
             bool panelChanged = false;
             var cellValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var panelSurfacePlans = new List<PanelCladdingSurfaceSyncSurfacePlan>(orderedCells.Length);
+            string? panelIssue = null;
             foreach (PanelCladdingCell cell in orderedCells)
             {
                 string expectedCid = PanelCladdingSpawnPlanningService.BuildSurfaceCid(
@@ -100,26 +152,27 @@ public sealed class PanelCladdingSurfaceSyncPlanningService
                     cell.ShortLabel);
                 if (!surfacesByCid.TryGetValue(expectedCid, out PanelCladdingSurfaceSyncSurfaceSnapshot[]? matches))
                 {
-                    return OperationResponse<PanelCladdingSurfaceSyncPlan>.Fail(
-                        $"PANEL_CLADDING_SURFACE_SYNC_SURFACE_MISSING: {expectedCid}");
+                    panelIssue = $"PANEL_CLADDING_SURFACE_SYNC_SURFACE_MISSING: {expectedCid}";
+                    break;
                 }
                 if (matches.Length != 1)
                 {
-                    return OperationResponse<PanelCladdingSurfaceSyncPlan>.Fail(
-                        $"PANEL_CLADDING_SURFACE_SYNC_DUPLICATE_CID: {expectedCid}: {matches.Length} surfaces");
+                    panelIssue = $"PANEL_CLADDING_SURFACE_SYNC_DUPLICATE_CID: {expectedCid}: {matches.Length} surfaces";
+                    break;
                 }
 
                 PanelCladdingSurfaceSyncSurfaceSnapshot surface = matches[0];
                 if (!string.Equals(surface.PanelId.Trim(), pid, StringComparison.OrdinalIgnoreCase))
                 {
-                    return OperationResponse<PanelCladdingSurfaceSyncPlan>.Fail(
-                        $"PANEL_CLADDING_SURFACE_SYNC_SURFACE_PID_MISMATCH: {expectedCid}: expected {pid}, found {surface.PanelId.Trim()}");
+                    panelIssue = $"PANEL_CLADDING_SURFACE_SYNC_SURFACE_PID_MISMATCH: {expectedCid}: expected {pid}, found {surface.PanelId.Trim()}";
+                    break;
                 }
 
                 OperationResponse<string> material = ResolveLayerMaterial(surface.LayerPath, expectedCid);
                 if (!material.Success || material.Data is null)
                 {
-                    return OperationResponse<PanelCladdingSurfaceSyncPlan>.Fail(material.Message);
+                    panelIssue = material.Message;
+                    break;
                 }
 
                 string materialCode = material.Data;
@@ -129,7 +182,7 @@ public sealed class PanelCladdingSurfaceSyncPlanningService
                     materialCode,
                     StringComparison.Ordinal);
                 cellValues[cell.UserTextKey] = materialCode;
-                surfacePlans.Add(new PanelCladdingSurfaceSyncSurfacePlan
+                panelSurfacePlans.Add(new PanelCladdingSurfaceSyncSurfacePlan
                 {
                     ObjectId = surface.ObjectId,
                     PanelObjectId = panel.ObjectId,
@@ -145,6 +198,13 @@ public sealed class PanelCladdingSurfaceSyncPlanningService
                 });
             }
 
+            if (panelIssue is not null)
+            {
+                AddIssue(panel.ObjectId, pid, panelIssue);
+                continue;
+            }
+
+            surfacePlans.AddRange(panelSurfacePlans);
             panelPlans.Add(new PanelCladdingSurfaceSyncPanelPlan
             {
                 ObjectId = panel.ObjectId,
@@ -157,8 +217,10 @@ public sealed class PanelCladdingSurfaceSyncPlanningService
 
         return OperationResponse<PanelCladdingSurfaceSyncPlan>.Ok(new PanelCladdingSurfaceSyncPlan
         {
+            SelectedPanelIds = selectedPanelIds,
             Panels = panelPlans,
-            Surfaces = surfacePlans
+            Surfaces = surfacePlans,
+            Issues = issues
         });
     }
 
