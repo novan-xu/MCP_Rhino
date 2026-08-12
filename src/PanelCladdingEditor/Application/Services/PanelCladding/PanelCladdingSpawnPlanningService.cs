@@ -5,17 +5,17 @@ namespace PanelCladdingEditor.Application.Services.PanelCladding;
 
 public sealed class PanelCladdingSpawnPlanningService
 {
-    public const string MaterialSurfaceRootLayer = "02_Material Surfaces";
+    public const string MaterialSurfaceRootLayer = "03_Material Surfaces (STEP)";
     public const string PanelIdUserTextKey = "CW_1.01_PID";
     public const string CidUserTextKey = "CW_1.02_CID";
     public const string ReleaseUserTextKey = "CW_1.05_RELEASE";
     public const string WallTypeUserTextKey = "CW_1.07_WALL_TYPE";
 
-    private readonly PanelCladdingKeyService _keys;
+    private readonly PanelCladdingRegionService _regions;
 
     public PanelCladdingSpawnPlanningService(PanelCladdingKeyService keys)
     {
-        _keys = keys;
+        _regions = new PanelCladdingRegionService(keys);
     }
 
     public OperationResponse<PanelCladdingSpawnPlan> CreatePlan(
@@ -56,31 +56,32 @@ public sealed class PanelCladdingSpawnPlanningService
             [release.Data.Key] = release.Data.Value.Trim(),
             [wallType.Data.Key] = wallType.Data.Value.Trim()
         };
-        var cells = new List<PanelCladdingSpawnCellPlan>();
-        foreach (PanelCladdingCell cell in keySet.Cells)
+        OperationResponse<PanelCladdingRegionSet> regionResponse = _regions.Resolve(keySet.Cells);
+        if (!regionResponse.Success || regionResponse.Data is null)
         {
-            string material = _keys.NormalizeCladdingValue(cell.Value);
-            if (material.Length == 0)
-            {
-                continue;
-            }
+            return OperationResponse<PanelCladdingSpawnPlan>.Fail(regionResponse.Message);
+        }
+
+        var regions = new List<PanelCladdingSpawnRegionPlan>();
+        foreach (PanelCladdingRegion region in regionResponse.Data.Regions)
+        {
+            string material = region.MaterialCode;
             if (!IsValidLayerSegment(material))
             {
                 return OperationResponse<PanelCladdingSpawnPlan>.Fail(
-                    $"PANEL_CLADDING_MATERIAL_LAYER_NAME_INVALID: {cell.ShortLabel} material '{material}' cannot be used as a Rhino layer name.");
+                    $"PANEL_CLADDING_MATERIAL_LAYER_NAME_INVALID: {region.OwnerCellLabel} material '{material}' cannot be used as a Rhino layer name.");
             }
 
-            string cid = BuildSurfaceCid(pid, cell.ShortLabel);
+            string cid = BuildSurfaceCid(pid, region.OwnerCellLabel);
             var writes = new Dictionary<string, string>(inherited, StringComparer.Ordinal)
             {
                 [CidUserTextKey] = cid,
                 ["Cladding"] = material
             };
-            cells.Add(new PanelCladdingSpawnCellPlan
+            regions.Add(new PanelCladdingSpawnRegionPlan
             {
-                Column = cell.Column,
-                Row = cell.Row,
-                CellLabel = cell.ShortLabel,
+                OwnerCellLabel = region.OwnerCellLabel,
+                Cells = region.Cells,
                 CladdingCode = material,
                 Cid = cid,
                 LayerPath = $"{MaterialSurfaceRootLayer}::{ResolveMaterialFamilyLayer(material)}::{material}",
@@ -89,12 +90,12 @@ public sealed class PanelCladdingSpawnPlanningService
             });
         }
 
-        if (cells.Count == 0)
+        if (regions.Count == 0)
         {
             return OperationResponse<PanelCladdingSpawnPlan>.Fail(
                 "PANEL_CLADDING_NO_POPULATED_CELLS: no cladding surfaces were planned.");
         }
-        if (cells.Select(cell => cell.Cid).Distinct(StringComparer.OrdinalIgnoreCase).Count() != cells.Count)
+        if (regions.Select(region => region.Cid).Distinct(StringComparer.OrdinalIgnoreCase).Count() != regions.Count)
         {
             return OperationResponse<PanelCladdingSpawnPlan>.Fail("PANEL_CLADDING_DUPLICATE_PLANNED_CID");
         }
@@ -102,7 +103,7 @@ public sealed class PanelCladdingSpawnPlanningService
         return OperationResponse<PanelCladdingSpawnPlan>.Ok(new PanelCladdingSpawnPlan
         {
             PanelId = pid,
-            Cells = cells
+            Regions = regions
         });
     }
 
@@ -138,6 +139,14 @@ public sealed class PanelCladdingSpawnPlanningService
             return "Surfaces-Wood";
         }
         return "Surfaces-Other";
+    }
+
+    public static bool IsSupportedMaterialSurfaceRoot(string layerName)
+    {
+        return string.Equals(
+            layerName?.Trim(),
+            MaterialSurfaceRootLayer,
+            StringComparison.OrdinalIgnoreCase);
     }
 
     public static string BuildSurfaceCid(string panelId, string cellLabel)

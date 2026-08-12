@@ -315,8 +315,8 @@ public sealed class OpenXmlPanelCladdingWorkbookRepository : IPanelCladdingWorkb
         }
 
         uint metadataRow = (uint)(8 + layout.RowCount);
-        sheetData.Append(CreateRow(metadataRow, ("A", "H offsets"), ("B", string.Join(", ", layout.HorizontalOffsets.Select(value => value.ToString("0.######", CultureInfo.InvariantCulture))))));
-        sheetData.Append(CreateRow(metadataRow + 1, ("A", "V offsets"), ("B", string.Join(", ", layout.VerticalOffsets.Select(value => value.ToString("0.######", CultureInfo.InvariantCulture))))));
+        sheetData.Append(CreateRow(metadataRow, ("A", "H offsets"), ("B", string.Join(", ", layout.HorizontalOffsets.Select(PanelCladdingKeyService.FormatOffset)))));
+        sheetData.Append(CreateRow(metadataRow + 1, ("A", "V offsets"), ("B", string.Join(", ", layout.VerticalOffsets.Select(PanelCladdingKeyService.FormatOffset)))));
         sheetData.Append(CreateRow(metadataRow + 2, ("A", "Signature"), ("B", identity.StoredSignature)));
         worksheet.Append(sheetData);
         if (layout.ColumnCount > 1)

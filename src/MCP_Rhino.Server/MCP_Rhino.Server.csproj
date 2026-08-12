@@ -56,6 +56,8 @@
                        ..\..\Project_Test\260805_TEST_panel-cladding-match\**\*.cs;
                        ..\..\Project_Test\260807_TEST_panel-cladding-clear\**\*.cs;
                        ..\..\Project_Test\260807_TEST_panel-cladding-surface-sync\**\*.cs;
+                       ..\..\Project_Test\260812_TEST_panel-cladding-regions\**\*.cs;
+                       ..\..\Project_Test\260812_TEST_panel-cladding-offset-sync\**\*.cs;
                        ..\..\Project_Test\260804_TEST_direct-rhp-plugin-identity\RhpExecutableProbe\**\*.cs;
                       ..\..\Project_Test\260805_TEST_rhino-plugin-assembly-identity\PluginAssemblyIdentityProbe\**\*.cs;
                       ..\..\Project_Test\260805_TEST_grasshopper-authoring-tools\ApiProbe\**\*.cs"

@@ -84,7 +84,7 @@ public sealed class PanelCladdingSyncFromSurfacesCommand : RhinoCommand
         var projection = new PanelAxonometricProjectionService();
         ILivePanelCladdingRepository layouts = new LivePanelCladdingRepository(keys, projection);
         ILivePanelCladdingSurfaceSyncRepository live =
-            new LivePanelCladdingSurfaceSyncRepository(layouts);
+            new LivePanelCladdingSurfaceSyncRepository(layouts, keys, projection);
         var planning = new PanelCladdingSurfaceSyncPlanningService(keys);
         var signature = new PanelCladdingTypeSignatureService(keys);
         var renderer = new PanelPreviewRenderer();
@@ -116,7 +116,7 @@ public sealed class PanelCladdingSyncFromSurfacesCommand : RhinoCommand
             $"PanelCladdingSyncFromSurfaces processed {processedPanels} panel(s), skipped " +
             $"{response.Data.SkippedPanelIds.Count} panel(s), matched {response.Data.MatchedSurfaceCount} surface(s), " +
             $"refreshed {response.Data.RefreshedSurfaceIds.Count} surface Cladding value(s), " +
-            $"updated {response.Data.ChangedPanelIds.Count} panel(s), and exported " +
+            $"updated {response.Data.ChangedPanelIds.Count} panel offset/cladding set(s), and exported " +
             $"{response.Data.Types.Count} type assignment(s) ({reusedTypes} reused); removed " +
             $"{response.Data.RemovedWorkbookTypeCodes.Count} unused workbook type(s).");
         if (response.Data.SkippedPanelIds.Count > 0)

@@ -109,11 +109,10 @@ public sealed class PanelCladdingSurfaceSyncPlanningService
 
         PanelCladdingSurfaceSyncSurfaceSnapshot[] surfaces = (snapshot.Surfaces ??
                 Array.Empty<PanelCladdingSurfaceSyncSurfaceSnapshot>())
-            .Where(surface => surface.ObjectId != Guid.Empty && !string.IsNullOrWhiteSpace(surface.Cid))
+            .Where(surface => surface.ObjectId != Guid.Empty)
+            .GroupBy(surface => surface.ObjectId)
+            .Select(group => group.First())
             .ToArray();
-        var surfacesByCid = surfaces
-            .GroupBy(surface => surface.Cid.Trim(), StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.OrdinalIgnoreCase);
 
         var panelPlans = new List<PanelCladdingSurfaceSyncPanelPlan>(candidatePanels.Count);
         var surfacePlans = new List<PanelCladdingSurfaceSyncSurfacePlan>();
@@ -128,47 +127,80 @@ public sealed class PanelCladdingSurfaceSyncPlanningService
                 .OrderBy(cell => cell.Column)
                 .ThenBy(cell => cell.Row)
                 .ToArray();
+            var cellsByLabel = orderedCells.ToDictionary(
+                cell => cell.ShortLabel,
+                StringComparer.OrdinalIgnoreCase);
             var expectedCids = orderedCells
                 .Select(cell => PanelCladdingSpawnPlanningService.BuildSurfaceCid(pid, cell.ShortLabel))
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
-            PanelCladdingSurfaceSyncSurfaceSnapshot? unexpected = surfaces.FirstOrDefault(surface =>
-                string.Equals(surface.PanelId.Trim(), pid, StringComparison.OrdinalIgnoreCase) &&
-                !expectedCids.Contains(surface.Cid.Trim()));
-            if (unexpected is not null)
+            PanelCladdingSurfaceSyncSurfaceSnapshot? wrongPid = surfaces.FirstOrDefault(surface =>
+                expectedCids.Contains(surface.Cid.Trim()) &&
+                !string.Equals(surface.PanelId.Trim(), pid, StringComparison.OrdinalIgnoreCase));
+            if (wrongPid is not null)
             {
                 AddIssue(panel.ObjectId, pid,
-                    $"PANEL_CLADDING_SURFACE_SYNC_UNEXPECTED_CID: {pid}: {unexpected.Cid.Trim()}");
+                    $"PANEL_CLADDING_SURFACE_SYNC_SURFACE_PID_MISMATCH: {wrongPid.Cid.Trim()}: expected {pid}, found {wrongPid.PanelId.Trim()}");
                 continue;
             }
 
-            bool panelChanged = false;
-            var cellValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            var panelSurfacePlans = new List<PanelCladdingSurfaceSyncSurfacePlan>(orderedCells.Length);
-            string? panelIssue = null;
-            foreach (PanelCladdingCell cell in orderedCells)
-            {
-                string expectedCid = PanelCladdingSpawnPlanningService.BuildSurfaceCid(
+            PanelCladdingSurfaceSyncSurfaceSnapshot[] panelSurfaces = surfaces
+                .Where(surface => string.Equals(
+                    surface.PanelId.Trim(),
                     pid,
-                    cell.ShortLabel);
-                if (!surfacesByCid.TryGetValue(expectedCid, out PanelCladdingSurfaceSyncSurfaceSnapshot[]? matches))
+                    StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+            if (panelSurfaces.Length == 0)
+            {
+                AddIssue(panel.ObjectId, pid,
+                    $"PANEL_CLADDING_SURFACE_SYNC_SURFACE_MISSING: {PanelCladdingSpawnPlanningService.BuildSurfaceCid(pid, orderedCells[0].ShortLabel)}");
+                continue;
+            }
+            IGrouping<string, PanelCladdingSurfaceSyncSurfaceSnapshot>? duplicateCid = panelSurfaces
+                .Where(surface => !string.IsNullOrWhiteSpace(surface.Cid))
+                .GroupBy(surface => surface.Cid.Trim(), StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault(group => group.Count() > 1 && group.Any(surface =>
+                    (surface.CoveredCellLabels ?? Array.Empty<string>()).Count == 0));
+            if (duplicateCid is not null)
+            {
+                AddIssue(panel.ObjectId, pid,
+                    $"PANEL_CLADDING_SURFACE_SYNC_DUPLICATE_CID: {duplicateCid.Key}: {duplicateCid.Count()} surfaces");
+                continue;
+            }
+
+            var cellValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var claimedCells = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+            var panelSurfacePlans = new List<PanelCladdingSurfaceSyncSurfacePlan>(panelSurfaces.Length);
+            string? panelIssue = null;
+            foreach (PanelCladdingSurfaceSyncSurfaceSnapshot surface in panelSurfaces)
+            {
+                OperationResponse<IReadOnlyList<string>> coverage = ResolveCoverageLabels(
+                    surface,
+                    pid,
+                    cellsByLabel);
+                if (!coverage.Success || coverage.Data is null)
                 {
-                    panelIssue = $"PANEL_CLADDING_SURFACE_SYNC_SURFACE_MISSING: {expectedCid}";
+                    panelIssue = coverage.Message;
                     break;
                 }
-                if (matches.Length != 1)
+                string[] coveredLabels = coverage.Data
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+                if (!IsEdgeConnected(coveredLabels, cellsByLabel))
                 {
-                    panelIssue = $"PANEL_CLADDING_SURFACE_SYNC_DUPLICATE_CID: {expectedCid}: {matches.Length} surfaces";
+                    panelIssue = $"PANEL_CLADDING_SURFACE_SYNC_REGION_DISCONNECTED: {surface.ObjectId:D}: {string.Join(",", coveredLabels)}";
+                    break;
+                }
+                string? overlap = coveredLabels.FirstOrDefault(claimedCells.ContainsKey);
+                if (overlap is not null)
+                {
+                    panelIssue = $"PANEL_CLADDING_SURFACE_SYNC_CELL_OVERLAP: {overlap}: {claimedCells[overlap]:D}, {surface.ObjectId:D}";
                     break;
                 }
 
-                PanelCladdingSurfaceSyncSurfaceSnapshot surface = matches[0];
-                if (!string.Equals(surface.PanelId.Trim(), pid, StringComparison.OrdinalIgnoreCase))
-                {
-                    panelIssue = $"PANEL_CLADDING_SURFACE_SYNC_SURFACE_PID_MISMATCH: {expectedCid}: expected {pid}, found {surface.PanelId.Trim()}";
-                    break;
-                }
-
-                OperationResponse<string> material = ResolveLayerMaterial(surface.LayerPath, expectedCid);
+                string surfaceIdentity = string.IsNullOrWhiteSpace(surface.Cid)
+                    ? surface.ObjectId.ToString("D")
+                    : surface.Cid.Trim();
+                OperationResponse<string> material = ResolveLayerMaterial(surface.LayerPath, surfaceIdentity);
                 if (!material.Success || material.Data is null)
                 {
                     panelIssue = material.Message;
@@ -176,34 +208,63 @@ public sealed class PanelCladdingSurfaceSyncPlanningService
                 }
 
                 string materialCode = material.Data;
-                string currentPanelValue = _keys.NormalizeCladdingValue(cell.Value);
-                panelChanged |= !string.Equals(
-                    currentPanelValue,
-                    materialCode,
-                    StringComparison.Ordinal);
-                cellValues[cell.UserTextKey] = materialCode;
+                PanelCladdingCell owner = coveredLabels
+                    .Select(label => cellsByLabel[label])
+                    .OrderBy(cell => cell.Row)
+                    .ThenBy(cell => cell.Column)
+                    .First();
+                foreach (string label in coveredLabels)
+                {
+                    PanelCladdingCell cell = cellsByLabel[label];
+                    claimedCells[label] = surface.ObjectId;
+                    cellValues[cell.UserTextKey] = string.Equals(
+                        label,
+                        owner.ShortLabel,
+                        StringComparison.OrdinalIgnoreCase)
+                        ? materialCode
+                        : owner.ShortLabel;
+                }
+                string desiredCid = PanelCladdingSpawnPlanningService.BuildSurfaceCid(
+                    pid,
+                    owner.ShortLabel);
                 panelSurfacePlans.Add(new PanelCladdingSurfaceSyncSurfacePlan
                 {
                     ObjectId = surface.ObjectId,
                     PanelObjectId = panel.ObjectId,
                     PanelId = pid,
-                    Cid = expectedCid,
-                    CellKey = cell.UserTextKey,
+                    ExpectedCid = surface.Cid.Trim(),
+                    DesiredCid = desiredCid,
+                    CellKey = owner.UserTextKey,
+                    CoveredCellLabels = coveredLabels,
                     ExpectedLayerPath = surface.LayerPath,
                     MaterialCode = materialCode,
                     CladdingKeyChanged = !string.Equals(
                         surface.CladdingValue.Trim(),
                         materialCode,
+                        StringComparison.Ordinal),
+                    CidChanged = !string.Equals(
+                        surface.Cid.Trim(),
+                        desiredCid,
                         StringComparison.Ordinal)
                 });
             }
 
+            PanelCladdingCell? uncovered = orderedCells.FirstOrDefault(cell =>
+                !claimedCells.ContainsKey(cell.ShortLabel));
+            if (panelIssue is null && uncovered is not null)
+            {
+                panelIssue = $"PANEL_CLADDING_SURFACE_SYNC_SURFACE_MISSING: {PanelCladdingSpawnPlanningService.BuildSurfaceCid(pid, uncovered.ShortLabel)}";
+            }
             if (panelIssue is not null)
             {
                 AddIssue(panel.ObjectId, pid, panelIssue);
                 continue;
             }
 
+            bool panelChanged = panel.GridChanged || orderedCells.Any(cell => !string.Equals(
+                _keys.NormalizeCladdingValue(cell.Value),
+                cellValues[cell.UserTextKey],
+                StringComparison.Ordinal));
             surfacePlans.AddRange(panelSurfacePlans);
             panelPlans.Add(new PanelCladdingSurfaceSyncPanelPlan
             {
@@ -224,19 +285,85 @@ public sealed class PanelCladdingSurfaceSyncPlanningService
         });
     }
 
+    private static OperationResponse<IReadOnlyList<string>> ResolveCoverageLabels(
+        PanelCladdingSurfaceSyncSurfaceSnapshot surface,
+        string panelId,
+        IReadOnlyDictionary<string, PanelCladdingCell> cellsByLabel)
+    {
+        string[] supplied = (surface.CoveredCellLabels ?? Array.Empty<string>())
+            .Select(label => (label ?? string.Empty).Trim().ToUpperInvariant())
+            .Where(label => label.Length > 0)
+            .ToArray();
+        if (supplied.Length > 0)
+        {
+            string? unknown = supplied.FirstOrDefault(label => !cellsByLabel.ContainsKey(label));
+            return unknown is null
+                ? OperationResponse<IReadOnlyList<string>>.Ok(supplied)
+                : OperationResponse<IReadOnlyList<string>>.Fail(
+                    $"PANEL_CLADDING_SURFACE_SYNC_COVERAGE_CELL_UNKNOWN: {surface.ObjectId:D}: {unknown}");
+        }
+
+        PanelCladdingCell? legacyCell = cellsByLabel.Values.FirstOrDefault(cell => string.Equals(
+            PanelCladdingSpawnPlanningService.BuildSurfaceCid(panelId, cell.ShortLabel),
+            surface.Cid.Trim(),
+            StringComparison.OrdinalIgnoreCase));
+        if (legacyCell is not null)
+        {
+            return OperationResponse<IReadOnlyList<string>>.Ok(new[] { legacyCell.ShortLabel });
+        }
+        return OperationResponse<IReadOnlyList<string>>.Fail(
+            $"PANEL_CLADDING_SURFACE_SYNC_UNEXPECTED_CID: {panelId}: {surface.Cid.Trim()}");
+    }
+
+    private static bool IsEdgeConnected(
+        IReadOnlyList<string> labels,
+        IReadOnlyDictionary<string, PanelCladdingCell> cellsByLabel)
+    {
+        var coordinates = labels
+            .Select(label => cellsByLabel[label])
+            .Select(cell => (cell.Column, cell.Row))
+            .ToHashSet();
+        if (coordinates.Count <= 1)
+        {
+            return true;
+        }
+        var visited = new HashSet<(int Column, int Row)>();
+        var pending = new Queue<(int Column, int Row)>();
+        pending.Enqueue(coordinates.First());
+        while (pending.Count > 0)
+        {
+            (int column, int row) = pending.Dequeue();
+            if (!visited.Add((column, row)))
+            {
+                continue;
+            }
+            foreach ((int nextColumn, int nextRow) in new[]
+            {
+                (column - 1, row), (column + 1, row),
+                (column, row - 1), (column, row + 1)
+            })
+            {
+                if (coordinates.Contains((nextColumn, nextRow)) &&
+                    !visited.Contains((nextColumn, nextRow)))
+                {
+                    pending.Enqueue((nextColumn, nextRow));
+                }
+            }
+        }
+        return visited.Count == coordinates.Count;
+    }
+
     private static OperationResponse<string> ResolveLayerMaterial(string layerPath, string cid)
     {
         string[] segments = (layerPath ?? string.Empty).Split(
             new[] { "::" },
             StringSplitOptions.None);
         if (segments.Length != 3 ||
-            !string.Equals(
-                segments[0].Trim(),
-                PanelCladdingSpawnPlanningService.MaterialSurfaceRootLayer,
-                StringComparison.OrdinalIgnoreCase))
+            !PanelCladdingSpawnPlanningService.IsSupportedMaterialSurfaceRoot(segments[0]))
         {
             return OperationResponse<string>.Fail(
-                $"PANEL_CLADDING_SURFACE_SYNC_LAYER_INVALID: {cid}: expected 02_Material Surfaces::<family>::<material>, found '{layerPath}'.");
+                $"PANEL_CLADDING_SURFACE_SYNC_LAYER_INVALID: {cid}: expected " +
+                $"{PanelCladdingSpawnPlanningService.MaterialSurfaceRootLayer}::<family>::<material>, found '{layerPath}'.");
         }
 
         string material = (segments[2] ?? string.Empty).Trim().ToUpperInvariant();

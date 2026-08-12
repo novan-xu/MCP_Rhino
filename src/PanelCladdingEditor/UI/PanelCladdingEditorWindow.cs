@@ -64,7 +64,7 @@ public sealed class PanelCladdingEditorWindow : Form
         layout.AddRow(new Label { Text = "Geometry" }, _classificationLabel, null, new Label { Text = "System" }, _systemEditor);
         layout.Add(_preview, yscale: true);
         layout.AddRow(new Label { Text = "Cell", Font = new Font(SystemFont.Bold, 10f) }, _cellLabel, _previousButton, _nextButton);
-        layout.AddRow(new Label { Text = "Cladding code" }, _cellEditor);
+        layout.AddRow(new Label { Text = "Material or owner cell" }, _cellEditor);
         layout.AddRow(new Label { Text = "Rhino key" }, _keyLabel);
         layout.AddRow(new Label { Text = "Workbook" }, _workbookEditor, _browseButton);
         layout.AddSeparateRow(_loadSelectedButton, _reloadButton, null, _statusLabel, null, _saveButton, _closeButton);

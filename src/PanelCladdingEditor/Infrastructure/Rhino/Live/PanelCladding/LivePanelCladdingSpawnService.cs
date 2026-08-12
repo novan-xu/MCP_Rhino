@@ -1,24 +1,15 @@
 extern alias rhinocommon;
 
-using System.Globalization;
-using System.Text.RegularExpressions;
 using PanelCladdingEditor.Application.Interfaces;
 using PanelCladdingEditor.Application.Services.PanelCladding;
 using PanelCladdingEditor.Contracts.Responses;
 using PanelCladdingEditor.Domain.Models.PanelCladding;
-using AreaMassProperties = rhinocommon::Rhino.Geometry.AreaMassProperties;
 using Brep = rhinocommon::Rhino.Geometry.Brep;
 using Layer = rhinocommon::Rhino.DocObjects.Layer;
-using Mesh = rhinocommon::Rhino.Geometry.Mesh;
-using MeshingParameters = rhinocommon::Rhino.Geometry.MeshingParameters;
 using ObjectAttributes = rhinocommon::Rhino.DocObjects.ObjectAttributes;
 using ObjectColorSource = rhinocommon::Rhino.DocObjects.ObjectColorSource;
-using Plane = rhinocommon::Rhino.Geometry.Plane;
-using PlaneFitResult = rhinocommon::Rhino.Geometry.PlaneFitResult;
-using Point3d = rhinocommon::Rhino.Geometry.Point3d;
 using RhinoDoc = rhinocommon::Rhino.RhinoDoc;
 using RhinoObject = rhinocommon::Rhino.DocObjects.RhinoObject;
-using Vector3d = rhinocommon::Rhino.Geometry.Vector3d;
 
 namespace PanelCladdingEditor.Infrastructure.Rhino.Live.PanelCladding;
 
@@ -57,12 +48,12 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
             return OperationResponse<PanelCladdingSpawnResult>.Fail("PANEL_CLADDING_PANEL_SELECTION_REQUIRED");
         }
 
-        var prepared = new List<PreparedCell>();
+        var prepared = new List<PreparedRegion>();
         try
         {
             foreach (Guid sourcePanelId in sourcePanelIds)
             {
-                OperationResponse<IReadOnlyList<PreparedCell>> panel = PreparePanel(
+                OperationResponse<IReadOnlyList<PreparedRegion>> panel = PreparePanel(
                     document,
                     filePath,
                     sourcePanelId);
@@ -75,7 +66,7 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
             }
 
             string? duplicateCid = prepared
-                .GroupBy(item => item.Cell.Cid, StringComparer.OrdinalIgnoreCase)
+                .GroupBy(item => item.Region.Cid, StringComparer.OrdinalIgnoreCase)
                 .FirstOrDefault(group => group.Count() > 1)
                 ?.Key;
             if (duplicateCid is not null)
@@ -83,16 +74,16 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
                 return OperationResponse<PanelCladdingSpawnResult>.Fail(
                     $"PANEL_CLADDING_DUPLICATE_BATCH_CID: {duplicateCid}");
             }
-            foreach (PreparedCell item in prepared)
+            foreach (PreparedRegion item in prepared)
             {
                 RhinoObject[]? existing = document.Objects.FindByUserString(
                     PanelCladdingSpawnPlanningService.CidUserTextKey,
-                    item.Cell.Cid,
+                    item.Region.Cid,
                     caseSensitive: false);
                 if (existing is { Length: > 0 })
                 {
                     return OperationResponse<PanelCladdingSpawnResult>.Fail(
-                        $"PANEL_CLADDING_CID_ALREADY_EXISTS: {item.Cell.Cid}");
+                        $"PANEL_CLADDING_CID_ALREADY_EXISTS: {item.Region.Cid}");
                 }
             }
 
@@ -100,9 +91,9 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
             var createdIds = new List<Guid>(prepared.Count);
             try
             {
-                foreach (PreparedCell item in prepared)
+                foreach (PreparedRegion item in prepared)
                 {
-                    OperationResponse<int> layer = EnsureMaterialLayer(document, item.Cell);
+                    OperationResponse<int> layer = EnsureMaterialLayer(document, item.Region);
                     if (!layer.Success)
                     {
                         RollBackCreatedObjects(document, createdIds);
@@ -111,11 +102,11 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
 
                     var attributes = new ObjectAttributes
                     {
-                        Name = item.Cell.Cid,
+                        Name = item.Region.Cid,
                         LayerIndex = layer.Data,
                         ColorSource = ObjectColorSource.ColorFromLayer
                     };
-                    foreach ((string key, string value) in item.Cell.UserTextWrites)
+                    foreach ((string key, string value) in item.Region.UserTextWrites)
                     {
                         attributes.SetUserString(key, value);
                     }
@@ -125,7 +116,7 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
                     {
                         RollBackCreatedObjects(document, createdIds);
                         return OperationResponse<PanelCladdingSpawnResult>.Fail(
-                            $"PANEL_CLADDING_OBJECT_CREATE_FAILED: {item.Cell.Cid}");
+                            $"PANEL_CLADDING_OBJECT_CREATE_FAILED: {item.Region.Cid}");
                     }
                     createdIds.Add(createdId);
                 }
@@ -135,7 +126,7 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
                 {
                     SourcePanelIds = sourcePanelIds,
                     CreatedObjectIds = createdIds.ToArray(),
-                    Cids = prepared.Select(item => item.Cell.Cid).ToArray()
+                    Cids = prepared.Select(item => item.Region.Cid).ToArray()
                 });
             }
             catch (Exception ex)
@@ -154,14 +145,14 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
         }
         finally
         {
-            foreach (PreparedCell item in prepared)
+            foreach (PreparedRegion item in prepared)
             {
                 item.Geometry.Dispose();
             }
         }
     }
 
-    private OperationResponse<IReadOnlyList<PreparedCell>> PreparePanel(
+    private OperationResponse<IReadOnlyList<PreparedRegion>> PreparePanel(
         RhinoDoc document,
         string filePath,
         Guid objectId)
@@ -169,18 +160,18 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
         RhinoObject? sourceObject = document.Objects.FindId(objectId);
         if (sourceObject?.Geometry is not Brep sourceBrep)
         {
-            return OperationResponse<IReadOnlyList<PreparedCell>>.Fail("PANEL_CLADDING_BREP_NOT_FOUND");
+            return OperationResponse<IReadOnlyList<PreparedRegion>>.Fail("PANEL_CLADDING_BREP_NOT_FOUND");
         }
 
         OperationResponse<PanelCladdingLayout> layoutResponse = _layoutRepository.ReadLayout(filePath, objectId);
         if (!layoutResponse.Success || layoutResponse.Data is null)
         {
-            return OperationResponse<IReadOnlyList<PreparedCell>>.Fail(layoutResponse.Message);
+            return OperationResponse<IReadOnlyList<PreparedRegion>>.Fail(layoutResponse.Message);
         }
         PanelCladdingLayout layout = layoutResponse.Data;
         if (!layout.CanSave)
         {
-            return OperationResponse<IReadOnlyList<PreparedCell>>.Fail(
+            return OperationResponse<IReadOnlyList<PreparedRegion>>.Fail(
                 $"PANEL_CLADDING_UNSUPPORTED_PROJECTION: {layout.GeometryDiagnostic}");
         }
 
@@ -192,63 +183,51 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
             layout.ModelTolerance);
         if (!keySetResponse.Success || keySetResponse.Data is null)
         {
-            return OperationResponse<IReadOnlyList<PreparedCell>>.Fail(keySetResponse.Message);
+            return OperationResponse<IReadOnlyList<PreparedRegion>>.Fail(keySetResponse.Message);
         }
         PanelCladdingKeySet keySet = keySetResponse.Data;
 
         OperationResponse<PanelCladdingSpawnPlan> planResponse = _planning.CreatePlan(userText, keySet);
         if (!planResponse.Success || planResponse.Data is null)
         {
-            return OperationResponse<IReadOnlyList<PreparedCell>>.Fail(planResponse.Message);
+            return OperationResponse<IReadOnlyList<PreparedRegion>>.Fail(planResponse.Message);
         }
         PanelCladdingSpawnPlan plan = planResponse.Data;
 
-        OperationResponse<LocalPanelFrame> frameResponse = BuildLocalFrame(sourceBrep, layout.ModelTolerance);
-        if (!frameResponse.Success || frameResponse.Data is null)
-        {
-            return OperationResponse<IReadOnlyList<PreparedCell>>.Fail(frameResponse.Message);
-        }
-        LocalPanelFrame local = frameResponse.Data;
-
-        var xBoundaries = new List<double> { local.XMin };
-        xBoundaries.AddRange(keySet.VerticalOffsets.Select(offset => local.XMin + offset));
-        xBoundaries.Add(local.XMax);
-        var yBoundaries = new List<double> { local.YMin };
-        yBoundaries.AddRange(keySet.HorizontalOffsets.Select(offset => local.YMin + offset));
-        yBoundaries.Add(local.YMax);
-
-        var prepared = new List<PreparedCell>(plan.Cells.Count);
-        foreach (PanelCladdingSpawnCellPlan cell in plan.Cells)
-        {
-            OperationResponse<Brep> geometry = CreateCellGeometry(
+        OperationResponse<LivePanelCladdingGeometryGrid> gridResponse =
+            LivePanelCladdingGeometryPartitionService.CreateGrid(
                 sourceBrep,
-                local.Frame,
-                xBoundaries[cell.Column],
-                xBoundaries[cell.Column + 1],
-                yBoundaries[cell.Row],
-                yBoundaries[cell.Row + 1],
-                cell,
+                keySet,
+                layout.ModelTolerance);
+        if (!gridResponse.Success || gridResponse.Data is null)
+        {
+            return OperationResponse<IReadOnlyList<PreparedRegion>>.Fail(gridResponse.Message);
+        }
+        using LivePanelCladdingGeometryGrid grid = gridResponse.Data;
+        var prepared = new List<PreparedRegion>(plan.Regions.Count);
+        foreach (PanelCladdingSpawnRegionPlan region in plan.Regions)
+        {
+            OperationResponse<Brep> geometry = LivePanelCladdingGeometryPartitionService.JoinRegion(
+                grid,
+                region.Cells,
                 layout.ModelTolerance,
-                cell.Column > 0,
-                cell.Column < keySet.VerticalOffsets.Count,
-                cell.Row > 0,
-                cell.Row < keySet.HorizontalOffsets.Count);
+                region.Cid);
             if (!geometry.Success || geometry.Data is null)
             {
-                foreach (PreparedCell item in prepared)
+                foreach (PreparedRegion item in prepared)
                 {
                     item.Geometry.Dispose();
                 }
-                return OperationResponse<IReadOnlyList<PreparedCell>>.Fail(geometry.Message);
+                return OperationResponse<IReadOnlyList<PreparedRegion>>.Fail(geometry.Message);
             }
-            prepared.Add(new PreparedCell(objectId, cell, geometry.Data));
+            prepared.Add(new PreparedRegion(objectId, region, geometry.Data));
         }
-        return OperationResponse<IReadOnlyList<PreparedCell>>.Ok(prepared);
+        return OperationResponse<IReadOnlyList<PreparedRegion>>.Ok(prepared);
     }
 
     private static OperationResponse<int> EnsureMaterialLayer(
         RhinoDoc document,
-        PanelCladdingSpawnCellPlan cell)
+        PanelCladdingSpawnRegionPlan cell)
     {
         int layerIndex = document.Layers.FindByFullPath(cell.LayerPath, -1);
         if (layerIndex < 0)
@@ -281,214 +260,6 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
             }
         }
         return OperationResponse<int>.Ok(layerIndex);
-    }
-
-    private static OperationResponse<Brep> CreateCellGeometry(
-        Brep source,
-        Plane frame,
-        double left,
-        double right,
-        double bottom,
-        double top,
-        PanelCladdingSpawnCellPlan cell,
-        double tolerance,
-        bool trimLeft,
-        bool trimRight,
-        bool trimBottom,
-        bool trimTop)
-    {
-        var pieces = new List<Brep> { source.DuplicateBrep() };
-        try
-        {
-            if (trimLeft)
-            {
-                TrimPieces(pieces, new Plane(frame.PointAt(left, bottom), -frame.XAxis), tolerance);
-            }
-            if (trimRight)
-            {
-                TrimPieces(pieces, new Plane(frame.PointAt(right, bottom), frame.XAxis), tolerance);
-            }
-            if (trimBottom)
-            {
-                TrimPieces(pieces, new Plane(frame.PointAt(left, bottom), -frame.YAxis), tolerance);
-            }
-            if (trimTop)
-            {
-                TrimPieces(pieces, new Plane(frame.PointAt(left, top), frame.YAxis), tolerance);
-            }
-
-            var meaningful = new List<Brep>();
-            foreach (Brep piece in pieces)
-            {
-                using AreaMassProperties? area = AreaMassProperties.Compute(piece);
-                if (area is not null && area.Area > tolerance * tolerance)
-                {
-                    meaningful.Add(piece);
-                }
-            }
-            if (meaningful.Count != 1)
-            {
-                return OperationResponse<Brep>.Fail(
-                    $"PANEL_CLADDING_CELL_GEOMETRY_AMBIGUOUS: {cell.Cid} produced {meaningful.Count} surface pieces.");
-            }
-
-            Brep result = meaningful[0];
-            using AreaMassProperties properties = AreaMassProperties.Compute(result);
-            if (properties is null)
-            {
-                return OperationResponse<Brep>.Fail(
-                    $"PANEL_CLADDING_CELL_AREA_FAILED: {cell.Cid}");
-            }
-            Vector3d delta = properties.Centroid - frame.Origin;
-            double x = delta * frame.XAxis;
-            double y = delta * frame.YAxis;
-            if (x < left - tolerance || x > right + tolerance ||
-                y < bottom - tolerance || y > top + tolerance)
-            {
-                return OperationResponse<Brep>.Fail(
-                    $"PANEL_CLADDING_CELL_CENTROID_OUTSIDE: {cell.Cid}");
-            }
-
-            foreach (Brep piece in pieces.Where(piece => !ReferenceEquals(piece, result)))
-            {
-                piece.Dispose();
-            }
-            pieces.Clear();
-            return OperationResponse<Brep>.Ok(result);
-        }
-        finally
-        {
-            foreach (Brep piece in pieces)
-            {
-                piece.Dispose();
-            }
-        }
-    }
-
-    private static void TrimPieces(List<Brep> pieces, Plane cutter, double tolerance)
-    {
-        var trimmed = new List<Brep>();
-        foreach (Brep piece in pieces)
-        {
-            Brep[] results = piece.Trim(cutter, tolerance);
-            if (results.Length > 0)
-            {
-                trimmed.AddRange(results);
-            }
-            piece.Dispose();
-        }
-        pieces.Clear();
-        pieces.AddRange(trimmed);
-    }
-
-    private static OperationResponse<LocalPanelFrame> BuildLocalFrame(Brep brep, double tolerance)
-    {
-        Mesh[] pieces = Mesh.CreateFromBrep(brep, MeshingParameters.FastRenderMesh);
-        if (pieces.Length == 0)
-        {
-            pieces = Mesh.CreateFromBrep(brep, MeshingParameters.Default);
-        }
-        if (pieces.Length == 0)
-        {
-            return OperationResponse<LocalPanelFrame>.Fail("PANEL_CLADDING_SPAWN_MESH_FAILED");
-        }
-
-        using var combined = new Mesh();
-        foreach (Mesh piece in pieces)
-        {
-            combined.Append(piece);
-            piece.Dispose();
-        }
-        combined.Compact();
-        if (combined.Vertices.Count < 3 || combined.Faces.Count == 0)
-        {
-            return OperationResponse<LocalPanelFrame>.Fail("PANEL_CLADDING_SPAWN_MESH_EMPTY");
-        }
-
-        Plane frame;
-        if (TryParseStoredPlane(brep.GetUserString("Plane"), out Plane stored))
-        {
-            frame = OrientFrame(stored);
-        }
-        else if (brep.Faces.Count > 0 && brep.Faces[0].TryGetPlane(out Plane planar, tolerance))
-        {
-            frame = OrientFrame(planar);
-        }
-        else
-        {
-            Point3d[] samples = combined.Vertices.Select(vertex => new Point3d(vertex)).ToArray();
-            PlaneFitResult fit = Plane.FitPlaneToPoints(samples, out Plane fitted);
-            if (fit == PlaneFitResult.Failure || !fitted.IsValid)
-            {
-                return OperationResponse<LocalPanelFrame>.Fail("PANEL_CLADDING_REFERENCE_PLANE_FAILED");
-            }
-            frame = OrientFrame(fitted);
-        }
-
-        var localPoints = new List<(double X, double Y)>(combined.Vertices.Count);
-        foreach (var vertex in combined.Vertices)
-        {
-            Vector3d delta = new Point3d(vertex) - frame.Origin;
-            localPoints.Add((delta * frame.XAxis, delta * frame.YAxis));
-        }
-        return OperationResponse<LocalPanelFrame>.Ok(new LocalPanelFrame
-        {
-            Frame = frame,
-            XMin = localPoints.Min(point => point.X),
-            XMax = localPoints.Max(point => point.X),
-            YMin = localPoints.Min(point => point.Y),
-            YMax = localPoints.Max(point => point.Y)
-        });
-    }
-
-    private static Plane OrientFrame(Plane source)
-    {
-        Vector3d normal = source.ZAxis;
-        normal.Unitize();
-        Vector3d up = Vector3d.ZAxis - (Vector3d.ZAxis * normal) * normal;
-        if (!up.Unitize())
-        {
-            up = source.YAxis;
-            up.Unitize();
-        }
-        if (up * Vector3d.ZAxis < 0d)
-        {
-            up.Reverse();
-        }
-        Vector3d right = Vector3d.CrossProduct(up, normal);
-        right.Unitize();
-        Vector3d referenceRight = source.XAxis - (source.XAxis * normal) * normal -
-            (source.XAxis * up) * up;
-        if (referenceRight.Unitize() && right * referenceRight < 0d)
-        {
-            right.Reverse();
-        }
-        return new Plane(source.Origin, right, up);
-    }
-
-    private static bool TryParseStoredPlane(string? raw, out Plane plane)
-    {
-        plane = Plane.Unset;
-        if (string.IsNullOrWhiteSpace(raw))
-        {
-            return false;
-        }
-        double[] values = NumberRegex().Matches(raw)
-            .Select(match => double.Parse(match.Value, CultureInfo.InvariantCulture))
-            .ToArray();
-        if (values.Length < 9)
-        {
-            return false;
-        }
-        var origin = new Point3d(values[0], values[1], values[2]);
-        var right = new Vector3d(values[3], values[4], values[5]);
-        var up = new Vector3d(values[6], values[7], values[8]);
-        if (!right.Unitize() || !up.Unitize())
-        {
-            return false;
-        }
-        plane = new Plane(origin, right, up);
-        return plane.IsValid;
     }
 
     private static IReadOnlyDictionary<string, string> ReadUserText(RhinoObject rhinoObject)
@@ -545,20 +316,9 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
         }
     }
 
-    [GeneratedRegex(@"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?", RegexOptions.CultureInvariant)]
-    private static partial Regex NumberRegex();
-
-    private sealed record PreparedCell(
+    private sealed record PreparedRegion(
         Guid SourcePanelId,
-        PanelCladdingSpawnCellPlan Cell,
+        PanelCladdingSpawnRegionPlan Region,
         Brep Geometry);
 
-    private sealed class LocalPanelFrame
-    {
-        public Plane Frame { get; init; } = Plane.Unset;
-        public double XMin { get; init; }
-        public double XMax { get; init; }
-        public double YMin { get; init; }
-        public double YMax { get; init; }
-    }
 }

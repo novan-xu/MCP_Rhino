@@ -7,6 +7,7 @@ namespace PanelCladdingEditor.Application.Services.PanelCladding;
 
 public sealed partial class PanelCladdingKeyService
 {
+    public const int OffsetDecimalPlaces = 5;
     public const string TypeCodeKey = "CW_1.10_CLADDING_TYPE";
     public const string LegacyTypeCodeKey = "CW_4.00_CLADDING_TYPE";
     public const string SignatureKey = "Signature";
@@ -41,6 +42,42 @@ public sealed partial class PanelCladdingKeyService
             return OperationResponse<PanelCladdingKeySet>.Fail(vertical.Message);
         }
 
+        return CreateKeySet(
+            horizontal.Data,
+            vertical.Data,
+            userText,
+            panelWidth,
+            panelHeight,
+            tolerance);
+    }
+
+    public OperationResponse<PanelCladdingKeySet> CreateKeySet(
+        IReadOnlyList<double> horizontalOffsets,
+        IReadOnlyList<double> verticalOffsets,
+        IReadOnlyDictionary<string, string> cellValues,
+        double panelWidth,
+        double panelHeight,
+        double tolerance)
+    {
+        OperationResponse<IReadOnlyList<double>> horizontal = ValidateOffsets(
+            horizontalOffsets,
+            "H",
+            panelHeight,
+            tolerance);
+        if (!horizontal.Success || horizontal.Data is null)
+        {
+            return OperationResponse<PanelCladdingKeySet>.Fail(horizontal.Message);
+        }
+        OperationResponse<IReadOnlyList<double>> vertical = ValidateOffsets(
+            verticalOffsets,
+            "V",
+            panelWidth,
+            tolerance);
+        if (!vertical.Success || vertical.Data is null)
+        {
+            return OperationResponse<PanelCladdingKeySet>.Fail(vertical.Message);
+        }
+
         int rowCount = horizontal.Data.Count + 1;
         int columnCount = vertical.Data.Count + 1;
         var cells = new List<PanelCladdingCell>(rowCount * columnCount);
@@ -50,7 +87,7 @@ public sealed partial class PanelCladdingKeyService
             {
                 string rowLabel = GetRowLabel(row);
                 string key = GetCellKey(column, rowLabel);
-                userText.TryGetValue(key, out string? value);
+                cellValues.TryGetValue(key, out string? value);
                 cells.Add(new PanelCladdingCell
                 {
                     Column = column,
@@ -76,6 +113,11 @@ public sealed partial class PanelCladdingKeyService
         return (value ?? string.Empty).Trim().ToUpperInvariant();
     }
 
+    public static bool IsCellLabelToken(string value)
+    {
+        return !string.IsNullOrWhiteSpace(value) && CellLabelRegex().IsMatch(value.Trim());
+    }
+
     public bool IsClearableCladdingAssignmentKey(string key)
     {
         if (string.IsNullOrWhiteSpace(key))
@@ -88,6 +130,70 @@ public sealed partial class PanelCladdingKeyService
             string.Equals(key, LegacyTypeCodeKey, StringComparison.OrdinalIgnoreCase) ||
             string.Equals(key, SignatureKey, StringComparison.OrdinalIgnoreCase) ||
             string.Equals(key, LegacySignatureKey, StringComparison.OrdinalIgnoreCase);
+    }
+
+    public bool IsCladdingCellKey(string key)
+    {
+        return !string.IsNullOrWhiteSpace(key) && CladdingCellRegex().IsMatch(key);
+    }
+
+    public bool IsOffsetKey(string key)
+    {
+        return !string.IsNullOrWhiteSpace(key) &&
+            (HorizontalOffsetRegex().IsMatch(key) || VerticalOffsetRegex().IsMatch(key));
+    }
+
+    public static string GetHorizontalOffsetKey(int index)
+    {
+        return $"CW_2.03_OFFSET_H{index}";
+    }
+
+    public static string GetVerticalOffsetKey(int index)
+    {
+        return $"CW_2.04_OFFSET_V{index}";
+    }
+
+    public static double NormalizeOffset(double value)
+    {
+        return Math.Round(value, OffsetDecimalPlaces, MidpointRounding.AwayFromZero);
+    }
+
+    public static string FormatOffset(double value)
+    {
+        return NormalizeOffset(value).ToString("0.#####", CultureInfo.InvariantCulture);
+    }
+
+    public bool AreOffsetsCanonicallyStored(
+        IReadOnlyDictionary<string, string> userText,
+        IReadOnlyList<double> horizontalOffsets,
+        IReadOnlyList<double> verticalOffsets)
+    {
+        int storedOffsetCount = userText.Keys.Count(IsOffsetKey);
+        if (storedOffsetCount != horizontalOffsets.Count + verticalOffsets.Count)
+        {
+            return false;
+        }
+        for (int index = 0; index < horizontalOffsets.Count; index++)
+        {
+            if (!HasCanonicalOffset(
+                userText,
+                GetHorizontalOffsetKey(index),
+                horizontalOffsets[index]))
+            {
+                return false;
+            }
+        }
+        for (int index = 0; index < verticalOffsets.Count; index++)
+        {
+            if (!HasCanonicalOffset(
+                userText,
+                GetVerticalOffsetKey(index),
+                verticalOffsets[index]))
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     public static string GetCellKey(int column, string rowLabel)
@@ -148,7 +254,6 @@ public sealed partial class PanelCladdingKeyService
         }
 
         int expected = 0;
-        double previous = double.NegativeInfinity;
         var ordered = new List<double>(byIndex.Count);
         foreach ((int index, double value) in byIndex)
         {
@@ -158,23 +263,52 @@ public sealed partial class PanelCladdingKeyService
                     $"PANEL_CLADDING_GAPPED_{label}_INDICES: expected {label}{expected}, found {label}{index}.");
             }
 
+            ordered.Add(value);
+            expected++;
+        }
+        return ValidateOffsets(ordered, label, extent, tolerance);
+    }
+
+    private static bool HasCanonicalOffset(
+        IReadOnlyDictionary<string, string> userText,
+        string key,
+        double value)
+    {
+        return userText.TryGetValue(key, out string? stored) && string.Equals(
+            stored?.Trim(),
+            FormatOffset(value),
+            StringComparison.Ordinal);
+    }
+
+    private static OperationResponse<IReadOnlyList<double>> ValidateOffsets(
+        IReadOnlyList<double> values,
+        string label,
+        double extent,
+        double tolerance)
+    {
+        double previous = double.NegativeInfinity;
+        var ordered = new List<double>(values.Count);
+        for (int index = 0; index < values.Count; index++)
+        {
+            double value = NormalizeOffset(values[index]);
+            if (!double.IsFinite(value))
+            {
+                return OperationResponse<IReadOnlyList<double>>.Fail(
+                    $"PANEL_CLADDING_INVALID_{label}_VALUE: {label}{index} is not finite.");
+            }
             if (value <= tolerance || value >= extent - tolerance)
             {
                 return OperationResponse<IReadOnlyList<double>>.Fail(
-                    $"PANEL_CLADDING_{label}_OUTSIDE_EXTENT: {label}{index}={value.ToString("G17", CultureInfo.InvariantCulture)} is outside the panel interior.");
+                    $"PANEL_CLADDING_{label}_OUTSIDE_EXTENT: {label}{index}={FormatOffset(value)} is outside the panel interior.");
             }
-
             if (value <= previous + tolerance)
             {
                 return OperationResponse<IReadOnlyList<double>>.Fail(
                     $"PANEL_CLADDING_NON_MONOTONIC_{label}: {label}{index} is not strictly greater than the prior offset.");
             }
-
             ordered.Add(value);
             previous = value;
-            expected++;
         }
-
         return OperationResponse<IReadOnlyList<double>>.Ok(ordered);
     }
 
@@ -186,5 +320,8 @@ public sealed partial class PanelCladdingKeyService
 
     [GeneratedRegex(@"^CW_\d+\.\d{2}_CLADDING_\d+[A-Z]+$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex CladdingCellRegex();
+
+    [GeneratedRegex(@"^\d+[A-Z]+$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex CellLabelRegex();
 }
 
