@@ -31,8 +31,8 @@ internal static class Program
         PanelCladdingKeySet keySet = RequireData(keys.Parse(panelText, 100d, 100d, 0.001d), "Parse grid");
         PanelCladdingSpawnPlan plan = RequireData(planner.CreatePlan(panelText, keySet), "Create spawn plan");
         Require(plan.PanelId == "W3_06_42", "PID was not normalized for CID authority.");
-        Require(plan.Cells.Count == 3, "Blank cladding cells must not create surfaces.");
-        Require(plan.Cells.Select(cell => cell.Cid).SequenceEqual(new[]
+        Require(plan.Regions.Count == 3, "Blank cladding cells must not create surfaces.");
+        Require(plan.Regions.Select(region => region.Cid).SequenceEqual(new[]
             { "W3_06_42-0A", "W3_06_42-0B", "W3_06_42-1A" }),
             "CID ordering/naming is not column-first and bottom-to-top.");
         Require(PanelCladdingSpawnPlanningService.BuildSurfaceCid(
@@ -42,10 +42,10 @@ internal static class Program
                 "W3_06_42", "0A") == "W3_06_42-0A",
             "A plain panel identifier must preserve the legacy CID naming behavior.");
 
-        PanelCladdingSpawnCellPlan glass = plan.Cells[0];
-        Require(glass.LayerPath == "02_Material Surfaces::Surfaces-Glass::GL01",
+        PanelCladdingSpawnRegionPlan glass = plan.Regions[0];
+        Require(glass.LayerPath == "03_Material Surfaces (STEP)::Surfaces-Glass::GL01",
             "GL01 did not route to the required glass material layer.");
-        Require(plan.Cells[1].LayerPath == glass.LayerPath,
+        Require(plan.Regions[1].LayerPath == glass.LayerPath,
             "Cells using the same material must reuse one layer path.");
         Require(glass.UserTextWrites["CW_1.02_CID"] == "W3_06_42-0A",
             "Canonical CID user text is missing.");
@@ -59,7 +59,7 @@ internal static class Program
                 !glass.UserTextWrites.ContainsKey("WallType"),
             "Noncanonical metadata aliases must be ignored.");
         Require(glass.UserTextWrites["Cladding"] == "GL01", "Normalized cladding information is missing.");
-        Require(plan.Cells[2].LayerPath == "02_Material Surfaces::Surfaces-Stone::STN02",
+        Require(plan.Regions[2].LayerPath == "03_Material Surfaces (STEP)::Surfaces-Stone::STN02",
             "STN02 did not route to the stone material family.");
         Console.WriteLine("[OK] PID-derived CIDs, metadata inheritance, blank-cell handling, and material layers");
 
@@ -86,7 +86,7 @@ internal static class Program
             "Glass colors must retain a cool glass-like hue.");
         Require(glass01 == PanelCladdingSpawnPlanningService.ResolveMaterialLayerColor("gl01"),
             "Material layer colors must be deterministic and case-insensitive.");
-        Require(glass.LayerColor == glass01 && plan.Cells[1].LayerColor == glass01,
+        Require(glass.LayerColor == glass01 && plan.Regions[1].LayerColor == glass01,
             "Cells on the same material layer must share its deterministic color.");
         PanelColorRgb stone01 = PanelCladdingSpawnPlanningService.ResolveMaterialLayerColor("STN01");
         PanelColorRgb stone02 = PanelCladdingSpawnPlanningService.ResolveMaterialLayerColor("STN02");

@@ -40,11 +40,11 @@ internal static class Program
                 $"Layer-derived panel material mapping failed for {panel.PanelId}.");
         }
         Require(plan.Surfaces.All(surface =>
-                surface.Cid == PanelCladdingSpawnPlanningService.BuildSurfaceCid(
+                surface.DesiredCid == PanelCladdingSpawnPlanningService.BuildSurfaceCid(
                     surface.PanelId,
                     CellLabelForKey(plan, surface.CellKey))),
             "Every mapped surface CID must use the shared PID-to-CID derivation plus cell label.");
-        Require(plan.Surfaces.Any(surface => surface.Cid.StartsWith("CID_", StringComparison.Ordinal)),
+        Require(plan.Surfaces.Any(surface => surface.DesiredCid.StartsWith("CID_", StringComparison.Ordinal)),
             "Prefixed production PIDs must map to CID_-prefixed surface identifiers.");
         Console.WriteLine("[OK] exact PID/CID mapping, layer authority, surface refresh, and panel change detection");
 
@@ -137,7 +137,7 @@ internal static class Program
             own[0].ObjectId,
             own[0].PanelId,
             own[0].Cid,
-            "02_Material Surfaces::Surfaces-Metal::GL01",
+            "03_Material Surfaces (STEP)::Surfaces-Metal::GL01",
             own[0].CladdingValue);
         RequireIsolatedIssue(
             planner.CreatePlan(Snapshot(new[] { panel }, new[] { wrongFamily }.Concat(own.Skip(1)).ToArray())),
@@ -382,8 +382,10 @@ internal static class Program
                 "Workflow must commit two changed panels and two stale surface keys.");
             Require(request.PanelWrites.All(write =>
                     write.CellValues.Values.SequenceEqual(FinalMaterials) &&
+                    write.HorizontalOffsets.SequenceEqual(snapshot.Panels[0].Layout.HorizontalOffsets) &&
+                    write.VerticalOffsets.SequenceEqual(snapshot.Panels[0].Layout.VerticalOffsets) &&
                     !string.IsNullOrWhiteSpace(write.TypeCode) &&
-                    write.StoredSignature.StartsWith("v2:sha256:", StringComparison.Ordinal)),
+                    write.StoredSignature.StartsWith("v3:sha256:", StringComparison.Ordinal)),
                 "Final panel writes must carry normalized cells, type codes, and signatures.");
             Require(result.MatchedSurfaceCount == 8 && result.ChangedPanelIds.Count == 2 &&
                     result.RefreshedSurfaceIds.Count == 2 && result.Types.Count == 2,
@@ -432,11 +434,7 @@ internal static class Program
             PanelCladdingSurfaceSyncPanelSnapshot[] unchangedPanels =
             {
                 Panel(PanelOneId, "PID_PANEL_01", BuildLayout(PanelOneId, FinalMaterials)),
-                Panel(PanelTwoId, "PID_PANEL_02", BuildLayout(
-                    PanelTwoId,
-                    FinalMaterials,
-                    horizontalOffset: 30d,
-                    verticalOffset: 70d))
+                Panel(PanelTwoId, "PID_PANEL_02", BuildLayout(PanelTwoId, FinalMaterials))
             };
             PanelCladdingSurfaceSyncSnapshot unchangedSnapshot = Snapshot(
                 unchangedPanels,
@@ -664,11 +662,7 @@ internal static class Program
             new[]
             {
                 Panel(PanelOneId, "PID_PANEL_01", BuildLayout(PanelOneId, originalsOne)),
-                Panel(PanelTwoId, "PID_PANEL_02", BuildLayout(
-                    PanelTwoId,
-                    originalsTwo,
-                    horizontalOffset: 30d,
-                    verticalOffset: 70d))
+                Panel(PanelTwoId, "PID_PANEL_02", BuildLayout(PanelTwoId, originalsTwo))
             },
             surfacesOne.Concat(surfacesTwo).ToArray());
     }

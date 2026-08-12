@@ -20,7 +20,7 @@ preservation, standalone dependencies, service contracts, and unique Rhino comma
 1. Open and save a Rhino document with at least two configured panel Breps and their spawned
    cladding surfaces.
 2. Move at least one surface per panel from its existing material leaf layer to another valid leaf
-   beneath `02_Material Surfaces::<matching family>`; for example move a surface from `GL01` to
+   beneath `03_Material Surfaces (STEP)::<matching family>`; for example move a surface from `GL01` to
    `GL02` below `Surfaces-Glass`.
 3. Hide one changed surface (or its material layer), and optionally make another surface's
    `Cladding` user text stale without changing its layer.

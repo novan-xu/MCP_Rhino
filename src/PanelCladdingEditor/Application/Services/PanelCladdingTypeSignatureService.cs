@@ -8,11 +8,11 @@ namespace PanelCladdingEditor.Application.Services.PanelCladding;
 
 public sealed class PanelCladdingTypeSignatureService
 {
-    private readonly PanelCladdingKeyService _keys;
+    private readonly PanelCladdingRegionService _regions;
 
     public PanelCladdingTypeSignatureService(PanelCladdingKeyService keys)
     {
-        _keys = keys;
+        _regions = new PanelCladdingRegionService(keys);
     }
 
     public OperationResponse<PanelCladdingTypeIdentity> Create(
@@ -30,22 +30,27 @@ public sealed class PanelCladdingTypeSignatureService
             .OrderBy(item => item.Column)
             .ThenBy(item => item.Row)
             .ToArray();
-        var normalized = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (PanelCladdingCell cell in orderedCells)
+        OperationResponse<PanelCladdingRegionSet> regionResponse = _regions.Resolve(
+            orderedCells,
+            requestedValues,
+            requirePopulatedCells: true);
+        if (!regionResponse.Success || regionResponse.Data is null)
         {
-            requestedValues.TryGetValue(cell.UserTextKey, out string? rawValue);
-            string value = _keys.NormalizeCladdingValue(rawValue ?? cell.Value);
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                return OperationResponse<PanelCladdingTypeIdentity>.Fail(
-                    $"PANEL_CLADDING_CELL_REQUIRED: {cell.ShortLabel} ({cell.UserTextKey}) is blank.");
-            }
-
-            normalized[cell.UserTextKey] = value;
+            return OperationResponse<PanelCladdingTypeIdentity>.Fail(regionResponse.Message);
         }
+        IReadOnlyDictionary<string, string> normalized = regionResponse.Data.NormalizedCellValues;
 
         var payload = new StringBuilder();
-        payload.Append("v=2|cells=");
+        double unitScale = layout.ModelUnitScaleToMillimeters;
+        payload.Append("v=3|size=")
+            .Append(FormatNumber(layout.Width * unitScale))
+            .Append(',')
+            .Append(FormatNumber(layout.Height * unitScale))
+            .Append("|h=");
+        AppendOffsets(payload, layout.HorizontalOffsets.Select(value => value * unitScale));
+        payload.Append("|v=");
+        AppendOffsets(payload, layout.VerticalOffsets.Select(value => value * unitScale));
+        payload.Append("|cells=");
         foreach (PanelCladdingCell cell in orderedCells)
         {
             payload.Append(cell.ShortLabel)
@@ -71,14 +76,25 @@ public sealed class PanelCladdingTypeSignatureService
 
         return OperationResponse<PanelCladdingTypeIdentity>.Ok(new PanelCladdingTypeIdentity
         {
-            SchemaVersion = 2,
+            SchemaVersion = 3,
             TypeCode = typeCode,
             FullDigest = digest,
-            StoredSignature = $"v2:sha256:{digest}",
+            StoredSignature = $"v3:sha256:{digest}",
             CanonicalPayload = canonical,
             NormalizedCellValues = normalized
         });
     }
+
+    private static void AppendOffsets(StringBuilder payload, IEnumerable<double> values)
+    {
+        foreach (double value in values)
+        {
+            payload.Append(PanelCladdingKeyService.FormatOffset(value)).Append(';');
+        }
+    }
+
+    private static string FormatNumber(double value) =>
+        value.ToString("G17", CultureInfo.InvariantCulture);
 
     public static string WithDigestLength(PanelCladdingTypeIdentity identity, int digestLength)
     {

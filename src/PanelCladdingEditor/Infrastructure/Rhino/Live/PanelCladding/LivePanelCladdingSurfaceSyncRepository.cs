@@ -1,5 +1,6 @@
 extern alias rhinocommon;
 
+using System.Globalization;
 using PanelCladdingEditor.Application.Interfaces;
 using PanelCladdingEditor.Application.Services.PanelCladding;
 using PanelCladdingEditor.Contracts.Responses;
@@ -17,10 +18,17 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
 {
     private const string CladdingUserTextKey = "Cladding";
     private readonly ILivePanelCladdingRepository _layouts;
+    private readonly PanelCladdingKeyService _keys;
+    private readonly PanelAxonometricProjectionService _projection;
 
-    public LivePanelCladdingSurfaceSyncRepository(ILivePanelCladdingRepository layouts)
+    public LivePanelCladdingSurfaceSyncRepository(
+        ILivePanelCladdingRepository layouts,
+        PanelCladdingKeyService keys,
+        PanelAxonometricProjectionService projection)
     {
         _layouts = layouts;
+        _keys = keys;
+        _projection = projection;
     }
 
     public OperationResponse<PanelCladdingSurfaceSyncSnapshot> Read(
@@ -44,9 +52,8 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
         }
         RhinoDoc document = resolved.Data;
 
-        var panels = new List<PanelCladdingSurfaceSyncPanelSnapshot>(selectedIds.Length);
         var issues = new List<PanelCladdingSurfaceSyncIssue>();
-        var expectedCids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var candidates = new List<PanelReadCandidate>(selectedIds.Length);
         foreach (Guid objectId in selectedIds)
         {
             RhinoObject? rhinoObject = document.Objects.FindId(objectId);
@@ -76,24 +83,24 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
             string pid = GetCanonicalUserText(
                 rhinoObject.Attributes,
                 PanelCladdingSpawnPlanningService.PanelIdUserTextKey);
-            panels.Add(new PanelCladdingSurfaceSyncPanelSnapshot
-            {
-                ObjectId = objectId,
-                PanelId = pid,
-                Layout = layout.Data
-            });
-            if (!string.IsNullOrWhiteSpace(pid))
-            {
-                foreach (PanelCladdingCell cell in layout.Data.Cells)
-                {
-                    expectedCids.Add(PanelCladdingSpawnPlanningService.BuildSurfaceCid(
-                        pid,
-                        cell.ShortLabel));
-                }
-            }
+            candidates.Add(new PanelReadCandidate(
+                rhinoObject,
+                (Brep)rhinoObject.Geometry,
+                pid,
+                layout.Data,
+                ReadUserText(rhinoObject)));
         }
 
-        var surfaces = new List<PanelCladdingSurfaceSyncSurfaceSnapshot>();
+        var uniquePanelsByPid = candidates
+            .Where(panel => !string.IsNullOrWhiteSpace(panel.PanelId))
+            .GroupBy(panel => panel.PanelId.Trim(), StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Count() == 1)
+            .ToDictionary(
+                group => group.Key,
+                group => group.First(),
+                StringComparer.OrdinalIgnoreCase);
+
+        var discoveredSurfaces = new List<SurfaceReadCandidate>();
         var modelTypeAssignments = new List<PanelCladdingWorkbookTypeReference>();
         foreach (RhinoObject rhinoObject in document.Objects.GetObjectList(
             CreateSurfaceEnumeratorSettings()))
@@ -117,31 +124,185 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
                     StoredSignature = storedSignature
                 });
             }
-            string cid = GetCanonicalUserText(
-                rhinoObject.Attributes,
-                PanelCladdingSpawnPlanningService.CidUserTextKey);
-            if (string.IsNullOrWhiteSpace(cid))
+            if (selectedIds.Contains(rhinoObject.Id))
             {
                 continue;
             }
             string layerPath = GetLayerPath(document, rhinoObject);
-            if (!IsUnderMaterialSurfaceRoot(layerPath) && !expectedCids.Contains(cid.Trim()))
+            if (!IsUnderMaterialSurfaceRoot(layerPath))
             {
                 continue;
             }
-
-            surfaces.Add(new PanelCladdingSurfaceSyncSurfaceSnapshot
+            string cid = GetCanonicalUserText(
+                rhinoObject.Attributes,
+                PanelCladdingSpawnPlanningService.CidUserTextKey);
+            string surfacePid = GetCanonicalUserText(
+                rhinoObject.Attributes,
+                PanelCladdingSpawnPlanningService.PanelIdUserTextKey);
+            if (string.IsNullOrWhiteSpace(surfacePid))
             {
-                ObjectId = rhinoObject.Id,
-                PanelId = GetCanonicalUserText(
-                    rhinoObject.Attributes,
-                    PanelCladdingSpawnPlanningService.PanelIdUserTextKey),
-                Cid = cid,
-                LayerPath = layerPath,
-                CladdingValue = GetCanonicalUserText(rhinoObject.Attributes, CladdingUserTextKey)
-            });
+                continue;
+            }
+            discoveredSurfaces.Add(new SurfaceReadCandidate(
+                rhinoObject,
+                (Brep)rhinoObject.Geometry,
+                surfacePid,
+                cid,
+                layerPath,
+                GetCanonicalUserText(rhinoObject.Attributes, CladdingUserTextKey)));
         }
 
+        var panels = new List<PanelCladdingSurfaceSyncPanelSnapshot>(candidates.Count);
+        var surfaces = new List<PanelCladdingSurfaceSyncSurfaceSnapshot>();
+        foreach (PanelReadCandidate panel in candidates)
+        {
+            string pid = panel.PanelId.Trim();
+            if (pid.Length == 0 || !uniquePanelsByPid.TryGetValue(pid, out PanelReadCandidate? uniquePanel) ||
+                uniquePanel.Object.Id != panel.Object.Id)
+            {
+                panels.Add(new PanelCladdingSurfaceSyncPanelSnapshot
+                {
+                    ObjectId = panel.Object.Id,
+                    PanelId = panel.PanelId,
+                    Layout = panel.Layout
+                });
+                continue;
+            }
+
+            SurfaceReadCandidate[] panelSurfaces = discoveredSurfaces
+                .Where(surface => string.Equals(
+                    surface.PanelId.Trim(),
+                    pid,
+                    StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+            if (panelSurfaces.Length == 0)
+            {
+                issues.Add(new PanelCladdingSurfaceSyncIssue
+                {
+                    PanelObjectId = panel.Object.Id,
+                    PanelId = pid,
+                    Message = $"PANEL_CLADDING_SURFACE_SYNC_SURFACE_MISSING: {pid}: no Breps found under {PanelCladdingSpawnPlanningService.MaterialSurfaceRootLayer}."
+                });
+                panels.Add(new PanelCladdingSurfaceSyncPanelSnapshot
+                {
+                    ObjectId = panel.Object.Id,
+                    PanelId = panel.PanelId,
+                    Layout = panel.Layout
+                });
+                continue;
+            }
+
+            OperationResponse<PanelCladdingInferredOffsets> inferred =
+                LivePanelCladdingGeometryPartitionService.InferOffsets(
+                    panel.Geometry,
+                    panelSurfaces.Select(surface => surface.Geometry).ToArray(),
+                    panel.Layout.ModelTolerance);
+            if (!inferred.Success || inferred.Data is null)
+            {
+                AddPanelIssue(panel, $"PANEL_CLADDING_SURFACE_SYNC_OFFSET_INFERENCE_FAILED: {inferred.Message}");
+                continue;
+            }
+            OperationResponse<PanelCladdingKeySet> keySet = _keys.CreateKeySet(
+                inferred.Data.HorizontalOffsets,
+                inferred.Data.VerticalOffsets,
+                panel.UserText,
+                panel.Layout.Width,
+                panel.Layout.Height,
+                panel.Layout.ModelTolerance);
+            if (!keySet.Success || keySet.Data is null)
+            {
+                AddPanelIssue(panel, $"PANEL_CLADDING_SURFACE_SYNC_INFERRED_GRID_INVALID: {keySet.Message}");
+                continue;
+            }
+            OperationResponse<PanelCladdingLayout> inferredLayout = BuildInferredLayout(
+                panel.Layout,
+                keySet.Data);
+            if (!inferredLayout.Success || inferredLayout.Data is null)
+            {
+                AddPanelIssue(panel, inferredLayout.Message);
+                continue;
+            }
+            OperationResponse<LivePanelCladdingGeometryGrid> geometryGrid =
+                LivePanelCladdingGeometryPartitionService.CreateGrid(
+                    panel.Geometry,
+                    keySet.Data,
+                    panel.Layout.ModelTolerance);
+            if (!geometryGrid.Success || geometryGrid.Data is null)
+            {
+                AddPanelIssue(panel,
+                    $"PANEL_CLADDING_SURFACE_SYNC_GRID_FAILED: {panel.Object.Id:D}: {geometryGrid.Message}");
+                continue;
+            }
+
+            using LivePanelCladdingGeometryGrid grid = geometryGrid.Data;
+            var expectedCids = keySet.Data.Cells
+                .Select(cell => PanelCladdingSpawnPlanningService.BuildSurfaceCid(pid, cell.ShortLabel))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            SurfaceReadCandidate? wrongPid = discoveredSurfaces.FirstOrDefault(surface =>
+                !string.IsNullOrWhiteSpace(surface.Cid) &&
+                expectedCids.Contains(surface.Cid.Trim()) &&
+                !string.Equals(surface.PanelId.Trim(), pid, StringComparison.OrdinalIgnoreCase));
+            if (wrongPid is not null)
+            {
+                AddPanelIssue(panel,
+                    $"PANEL_CLADDING_SURFACE_SYNC_SURFACE_PID_MISMATCH: {wrongPid.Cid.Trim()}: expected {pid}, found {wrongPid.PanelId.Trim()}");
+                continue;
+            }
+
+            foreach (SurfaceReadCandidate surface in panelSurfaces)
+            {
+                OperationResponse<IReadOnlyList<string>> coverage =
+                    LivePanelCladdingGeometryPartitionService.ResolveCoveredCellLabels(
+                        surface.Geometry,
+                        grid,
+                        panel.Layout.ModelTolerance,
+                        string.IsNullOrWhiteSpace(surface.Cid)
+                            ? surface.Object.Id.ToString("D")
+                            : surface.Cid.Trim());
+                IReadOnlyList<string> coveredCellLabels = Array.Empty<string>();
+                if (!coverage.Success || coverage.Data is null)
+                {
+                    issues.Add(new PanelCladdingSurfaceSyncIssue
+                    {
+                        PanelObjectId = panel.Object.Id,
+                        PanelId = pid,
+                        Message = coverage.Message
+                    });
+                }
+                else
+                {
+                    coveredCellLabels = coverage.Data;
+                }
+                surfaces.Add(new PanelCladdingSurfaceSyncSurfaceSnapshot
+                {
+                    ObjectId = surface.Object.Id,
+                    PanelId = surface.PanelId,
+                    Cid = surface.Cid,
+                    LayerPath = surface.LayerPath,
+                    CladdingValue = surface.CladdingValue,
+                    CoveredCellLabels = coveredCellLabels
+                });
+            }
+
+            panels.Add(new PanelCladdingSurfaceSyncPanelSnapshot
+            {
+                ObjectId = panel.Object.Id,
+                PanelId = panel.PanelId,
+                Layout = inferredLayout.Data,
+                GridChanged = !OffsetsEqual(
+                    panel.Layout.HorizontalOffsets,
+                    inferredLayout.Data.HorizontalOffsets,
+                    panel.Layout.ModelTolerance) ||
+                    !OffsetsEqual(
+                        panel.Layout.VerticalOffsets,
+                        inferredLayout.Data.VerticalOffsets,
+                        panel.Layout.ModelTolerance) ||
+                    !_keys.AreOffsetsCanonicallyStored(
+                        panel.UserText,
+                        inferredLayout.Data.HorizontalOffsets,
+                        inferredLayout.Data.VerticalOffsets)
+            });
+        }
         return OperationResponse<PanelCladdingSurfaceSyncSnapshot>.Ok(
             new PanelCladdingSurfaceSyncSnapshot
             {
@@ -154,6 +315,22 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
                 Issues = issues,
                 ModelTypeAssignments = modelTypeAssignments
             });
+
+        void AddPanelIssue(PanelReadCandidate panel, string message)
+        {
+            issues.Add(new PanelCladdingSurfaceSyncIssue
+            {
+                PanelObjectId = panel.Object.Id,
+                PanelId = panel.PanelId.Trim(),
+                Message = message
+            });
+            panels.Add(new PanelCladdingSurfaceSyncPanelSnapshot
+            {
+                ObjectId = panel.Object.Id,
+                PanelId = panel.PanelId,
+                Layout = panel.Layout
+            });
+        }
     }
 
     public OperationResponse<PanelCladdingSurfaceSyncResult> Commit(
@@ -187,7 +364,7 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
             if (rhinoObject?.Geometry is not Brep)
             {
                 return OperationResponse<PanelCladdingSurfaceSyncResult>.Fail(
-                    $"PANEL_CLADDING_SURFACE_SYNC_STALE_SURFACE: {surfaceWrite.Cid}: surface not found");
+                    $"PANEL_CLADDING_SURFACE_SYNC_STALE_SURFACE: {surfaceWrite.ExpectedCid}: surface not found");
             }
             string currentPid = GetCanonicalUserText(
                 rhinoObject.Attributes,
@@ -197,17 +374,26 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
                 PanelCladdingSpawnPlanningService.CidUserTextKey);
             string currentLayerPath = GetLayerPath(document, rhinoObject);
             if (!string.Equals(currentPid.Trim(), surfaceWrite.PanelId, StringComparison.OrdinalIgnoreCase) ||
-                !string.Equals(currentCid.Trim(), surfaceWrite.Cid, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(currentCid.Trim(), surfaceWrite.ExpectedCid, StringComparison.Ordinal) ||
                 !string.Equals(currentLayerPath, surfaceWrite.ExpectedLayerPath, StringComparison.OrdinalIgnoreCase))
             {
                 return OperationResponse<PanelCladdingSurfaceSyncResult>.Fail(
-                    $"PANEL_CLADDING_SURFACE_SYNC_STALE_SURFACE: {surfaceWrite.Cid}: PID, CID, or layer changed");
+                    $"PANEL_CLADDING_SURFACE_SYNC_STALE_SURFACE: {surfaceWrite.ExpectedCid}: PID, CID, or layer changed");
             }
 
             ObjectAttributes original = rhinoObject.Attributes.Duplicate();
             ObjectAttributes proposed = rhinoObject.Attributes.Duplicate();
             DeleteUserTextCaseInsensitive(proposed, CladdingUserTextKey);
+            DeleteUserTextCaseInsensitive(proposed, PanelCladdingSpawnPlanningService.CidUserTextKey);
             proposed.SetUserString(CladdingUserTextKey, surfaceWrite.MaterialCode);
+            proposed.SetUserString(
+                PanelCladdingSpawnPlanningService.CidUserTextKey,
+                surfaceWrite.DesiredCid);
+            if (string.IsNullOrWhiteSpace(proposed.Name) ||
+                string.Equals(proposed.Name, surfaceWrite.ExpectedCid, StringComparison.OrdinalIgnoreCase))
+            {
+                proposed.Name = surfaceWrite.DesiredCid;
+            }
             prepared.Add(new PreparedObject(rhinoObject, original, proposed));
         }
 
@@ -233,8 +419,28 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
             }
             ObjectAttributes original = rhinoObject.Attributes.Duplicate();
             ObjectAttributes proposed = rhinoObject.Attributes.Duplicate();
+            string?[] existingKeys = proposed.GetUserStrings()?.AllKeys ?? Array.Empty<string?>();
+            foreach (string? key in existingKeys)
+            {
+                if (key is not null && (_keys.IsOffsetKey(key) || _keys.IsCladdingCellKey(key)))
+                {
+                    proposed.DeleteUserString(key);
+                }
+            }
             DeleteUserTextCaseInsensitive(proposed, PanelCladdingKeyService.LegacyTypeCodeKey);
             DeleteUserTextCaseInsensitive(proposed, PanelCladdingKeyService.LegacySignatureKey);
+            for (int index = 0; index < panelWrite.HorizontalOffsets.Count; index++)
+            {
+                proposed.SetUserString(
+                    PanelCladdingKeyService.GetHorizontalOffsetKey(index),
+                    PanelCladdingKeyService.FormatOffset(panelWrite.HorizontalOffsets[index]));
+            }
+            for (int index = 0; index < panelWrite.VerticalOffsets.Count; index++)
+            {
+                proposed.SetUserString(
+                    PanelCladdingKeyService.GetVerticalOffsetKey(index),
+                    PanelCladdingKeyService.FormatOffset(panelWrite.VerticalOffsets[index]));
+            }
             foreach ((string key, string value) in panelWrite.CellValues)
             {
                 proposed.SetUserString(key, value);
@@ -346,6 +552,70 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
         };
     }
 
+    private OperationResponse<PanelCladdingLayout> BuildInferredLayout(
+        PanelCladdingLayout source,
+        PanelCladdingKeySet keySet)
+    {
+        if (source.Preview.Vertices.Count < 3 || source.Preview.Triangles.Count == 0)
+        {
+            return OperationResponse<PanelCladdingLayout>.Fail(
+                $"PANEL_CLADDING_SURFACE_SYNC_PREVIEW_GEOMETRY_MISSING: {source.ObjectId:D}");
+        }
+        double xMin = source.Preview.Vertices.Min(point => point.X);
+        double xMax = source.Preview.Vertices.Max(point => point.X);
+        double yMin = source.Preview.Vertices.Min(point => point.Y);
+        double yMax = source.Preview.Vertices.Max(point => point.Y);
+        OperationResponse<(PanelGeometryClass Classification, string Diagnostic, PanelPreviewGeometry Preview)> projection =
+            _projection.Build(
+                source.Preview.Vertices,
+                source.Preview.Triangles,
+                xMin,
+                xMax,
+                yMin,
+                yMax,
+                keySet.HorizontalOffsets,
+                keySet.VerticalOffsets,
+                keySet.Cells,
+                source.ModelTolerance);
+        if (!projection.Success)
+        {
+            return OperationResponse<PanelCladdingLayout>.Fail(
+                $"PANEL_CLADDING_SURFACE_SYNC_PREVIEW_FAILED: {source.ObjectId:D}: {projection.Message}");
+        }
+        var projected = projection.Data;
+        return OperationResponse<PanelCladdingLayout>.Ok(new PanelCladdingLayout
+        {
+            ObjectId = source.ObjectId,
+            DocumentRuntimeSerialNumber = source.DocumentRuntimeSerialNumber,
+            DocumentPath = source.DocumentPath,
+            ObjectName = source.ObjectName,
+            LayerFullPath = source.LayerFullPath,
+            SystemCode = source.SystemCode,
+            GeometryFingerprint = source.GeometryFingerprint,
+            GeometryClass = projected.Classification,
+            GeometryDiagnostic = projected.Diagnostic,
+            Width = source.Width,
+            Height = source.Height,
+            ModelTolerance = source.ModelTolerance,
+            ModelUnitScaleToMillimeters = source.ModelUnitScaleToMillimeters,
+            HorizontalOffsets = keySet.HorizontalOffsets,
+            VerticalOffsets = keySet.VerticalOffsets,
+            Cells = keySet.Cells,
+            Preview = projected.Preview,
+            WorkbookPath = source.WorkbookPath
+        });
+    }
+
+    private static bool OffsetsEqual(
+        IReadOnlyList<double> left,
+        IReadOnlyList<double> right,
+        double tolerance)
+    {
+        return left.Count == right.Count && left
+            .Zip(right, (leftValue, rightValue) => Math.Abs(leftValue - rightValue) <= tolerance)
+            .All(equal => equal);
+    }
+
     private static ObjectEnumeratorSettings CreateSurfaceEnumeratorSettings()
     {
         return new ObjectEnumeratorSettings
@@ -392,6 +662,20 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
         return string.Empty;
     }
 
+    private static IReadOnlyDictionary<string, string> ReadUserText(RhinoObject rhinoObject)
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var values = rhinoObject.Attributes.GetUserStrings();
+        foreach (string? key in values?.AllKeys ?? Array.Empty<string?>())
+        {
+            if (!string.IsNullOrWhiteSpace(key))
+            {
+                result[key] = values?[key] ?? string.Empty;
+            }
+        }
+        return result;
+    }
+
     private static void DeleteUserTextCaseInsensitive(ObjectAttributes attributes, string canonicalKey)
     {
         string?[] keys = attributes.GetUserStrings()?.AllKeys ?? Array.Empty<string?>();
@@ -413,9 +697,10 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
 
     private static bool IsUnderMaterialSurfaceRoot(string layerPath)
     {
-        string root = PanelCladdingSpawnPlanningService.MaterialSurfaceRootLayer;
-        return string.Equals(layerPath, root, StringComparison.OrdinalIgnoreCase) ||
-            layerPath.StartsWith(root + "::", StringComparison.OrdinalIgnoreCase);
+        string root = (layerPath ?? string.Empty).Split(
+            new[] { "::" },
+            StringSplitOptions.None)[0];
+        return PanelCladdingSpawnPlanningService.IsSupportedMaterialSurfaceRoot(root);
     }
 
     private static bool RestoreOriginalAttributes(
@@ -477,4 +762,19 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
         RhinoObject Object,
         ObjectAttributes Original,
         ObjectAttributes Proposed);
+
+    private sealed record PanelReadCandidate(
+        RhinoObject Object,
+        Brep Geometry,
+        string PanelId,
+        PanelCladdingLayout Layout,
+        IReadOnlyDictionary<string, string> UserText);
+
+    private sealed record SurfaceReadCandidate(
+        RhinoObject Object,
+        Brep Geometry,
+        string PanelId,
+        string Cid,
+        string LayerPath,
+        string CladdingValue);
 }

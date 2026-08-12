@@ -77,6 +77,24 @@ Follow `Project_Guides/` and:
 - follow naming and execution-mode constraints
 - use the required `PLAN -> EXET -> TEST` chain
 
+## Laptop-Specific GitHub Publishing
+
+On laptop `NYCZBF16G9NXU`, the user does not have administrator access and intentionally uses a
+portable GitHub CLI. For commit / push / pull-request / merge requests on this laptop:
+
+- Do not require a system-wide GitHub CLI installation and do not treat `gh` being absent from
+  `PATH` as a blocker.
+- Resolve the portable CLI from `%LOCALAPPDATA%\CodexTools\gh\<version>\bin\gh.exe`, preferring the
+  highest installed version. The currently validated binary is
+  `C:\Users\nxu\AppData\Local\CodexTools\gh\2.96.0\bin\gh.exe`.
+- Invoke portable GitHub CLI commands through the resolved absolute path. Do not request admin
+  access or ask the user to install `gh` with a package manager.
+- Continue to use local `git` for branch creation, staging, committing, and pushing. Prefer the
+  authenticated GitHub connector for pull-request creation and merge mutations.
+- If a CLI-only operation requires GitHub authentication and the portable CLI has no saved login,
+  run `auth login` through the resolved portable binary or ask the user to complete that portable
+  login. Do not ask for installation.
+
 ## Project Cleanup And Archive Rule
 
 - Keep active construction artifacts in `Project_Plan/`, `Project_Exet/`, and `Project_Test/`.

@@ -74,6 +74,26 @@ public sealed class PanelCladdingKeySet
     public IReadOnlyList<PanelCladdingCell> Cells { get; init; } = Array.Empty<PanelCladdingCell>();
 }
 
+public sealed class PanelCladdingInferredOffsets
+{
+    public IReadOnlyList<double> HorizontalOffsets { get; init; } = Array.Empty<double>();
+    public IReadOnlyList<double> VerticalOffsets { get; init; } = Array.Empty<double>();
+}
+
+public sealed class PanelCladdingRegion
+{
+    public string OwnerCellLabel { get; init; } = string.Empty;
+    public string MaterialCode { get; init; } = string.Empty;
+    public IReadOnlyList<PanelCladdingCell> Cells { get; init; } = Array.Empty<PanelCladdingCell>();
+}
+
+public sealed class PanelCladdingRegionSet
+{
+    public IReadOnlyList<PanelCladdingRegion> Regions { get; init; } = Array.Empty<PanelCladdingRegion>();
+    public IReadOnlyDictionary<string, string> NormalizedCellValues { get; init; } =
+        new Dictionary<string, string>();
+}
+
 public sealed class PanelCladdingTypeIdentity
 {
     public int SchemaVersion { get; init; } = 1;
@@ -122,11 +142,10 @@ public sealed class PanelCladdingSaveResult
     public bool ReusedExistingType { get; init; }
 }
 
-public sealed class PanelCladdingSpawnCellPlan
+public sealed class PanelCladdingSpawnRegionPlan
 {
-    public int Column { get; init; }
-    public int Row { get; init; }
-    public string CellLabel { get; init; } = string.Empty;
+    public string OwnerCellLabel { get; init; } = string.Empty;
+    public IReadOnlyList<PanelCladdingCell> Cells { get; init; } = Array.Empty<PanelCladdingCell>();
     public string CladdingCode { get; init; } = string.Empty;
     public string Cid { get; init; } = string.Empty;
     public string LayerPath { get; init; } = string.Empty;
@@ -138,8 +157,8 @@ public sealed class PanelCladdingSpawnCellPlan
 public sealed class PanelCladdingSpawnPlan
 {
     public string PanelId { get; init; } = string.Empty;
-    public IReadOnlyList<PanelCladdingSpawnCellPlan> Cells { get; init; } =
-        Array.Empty<PanelCladdingSpawnCellPlan>();
+    public IReadOnlyList<PanelCladdingSpawnRegionPlan> Regions { get; init; } =
+        Array.Empty<PanelCladdingSpawnRegionPlan>();
 }
 
 public sealed class PanelCladdingSpawnResult
@@ -220,6 +239,7 @@ public sealed class PanelCladdingSurfaceSyncPanelSnapshot
     public Guid ObjectId { get; init; }
     public string PanelId { get; init; } = string.Empty;
     public PanelCladdingLayout Layout { get; init; } = new();
+    public bool GridChanged { get; init; }
 }
 
 public sealed class PanelCladdingSurfaceSyncSurfaceSnapshot
@@ -229,6 +249,7 @@ public sealed class PanelCladdingSurfaceSyncSurfaceSnapshot
     public string Cid { get; init; } = string.Empty;
     public string LayerPath { get; init; } = string.Empty;
     public string CladdingValue { get; init; } = string.Empty;
+    public IReadOnlyList<string> CoveredCellLabels { get; init; } = Array.Empty<string>();
 }
 
 public sealed class PanelCladdingSurfaceSyncIssue
@@ -265,11 +286,15 @@ public sealed class PanelCladdingSurfaceSyncSurfacePlan
     public Guid ObjectId { get; init; }
     public Guid PanelObjectId { get; init; }
     public string PanelId { get; init; } = string.Empty;
-    public string Cid { get; init; } = string.Empty;
+    public string ExpectedCid { get; init; } = string.Empty;
+    public string DesiredCid { get; init; } = string.Empty;
     public string CellKey { get; init; } = string.Empty;
+    public IReadOnlyList<string> CoveredCellLabels { get; init; } = Array.Empty<string>();
     public string ExpectedLayerPath { get; init; } = string.Empty;
     public string MaterialCode { get; init; } = string.Empty;
     public bool CladdingKeyChanged { get; init; }
+    public bool CidChanged { get; init; }
+    public bool MetadataChanged => CladdingKeyChanged || CidChanged;
 }
 
 public sealed class PanelCladdingSurfaceSyncPanelPlan
@@ -297,6 +322,8 @@ public sealed class PanelCladdingSurfaceSyncPanelWrite
 {
     public Guid ObjectId { get; init; }
     public string ExpectedGeometryFingerprint { get; init; } = string.Empty;
+    public IReadOnlyList<double> HorizontalOffsets { get; init; } = Array.Empty<double>();
+    public IReadOnlyList<double> VerticalOffsets { get; init; } = Array.Empty<double>();
     public IReadOnlyDictionary<string, string> CellValues { get; init; } =
         new Dictionary<string, string>();
     public string TypeCode { get; init; } = string.Empty;

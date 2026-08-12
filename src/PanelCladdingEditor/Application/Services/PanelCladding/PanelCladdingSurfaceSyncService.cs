@@ -49,7 +49,7 @@ public sealed class PanelCladdingSurfaceSyncService : IPanelCladdingSurfaceSyncS
             .Where(panel => panel.CladdingChanged)
             .ToArray();
         PanelCladdingSurfaceSyncSurfacePlan[] changedSurfaces = plan.Surfaces
-            .Where(surface => surface.CladdingKeyChanged)
+            .Where(surface => surface.MetadataChanged)
             .ToArray();
         Guid[] skippedPanelIds = plan.Issues
             .Select(issue => issue.PanelObjectId)
@@ -130,6 +130,8 @@ public sealed class PanelCladdingSurfaceSyncService : IPanelCladdingSurfaceSyncS
             {
                 ObjectId = panel.ObjectId,
                 ExpectedGeometryFingerprint = panel.Layout.GeometryFingerprint,
+                HorizontalOffsets = panel.Layout.HorizontalOffsets,
+                VerticalOffsets = panel.Layout.VerticalOffsets,
                 CellValues = identity.NormalizedCellValues,
                 TypeCode = identity.TypeCode,
                 StoredSignature = identity.StoredSignature

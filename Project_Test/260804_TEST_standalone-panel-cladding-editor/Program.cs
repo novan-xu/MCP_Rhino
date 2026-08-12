@@ -114,8 +114,8 @@ internal static class Program
             PanelCladdingTypeIdentity alternateOffsetIdentity = RequireData(
                 signatureService.Create(alternateOffsetLayout, requested, "WT01"),
                 "Alternate-offset signature");
-            RequirePanelCladding(planarIdentity.FullDigest == alternateOffsetIdentity.FullDigest,
-                "Equal cladding assignments must ignore H/V offset values.");
+            RequirePanelCladding(planarIdentity.FullDigest != alternateOffsetIdentity.FullDigest,
+                "Different H/V offset values must produce different region-aware signatures.");
             PanelCladdingLayout curvedMeters = ScaleLayout(curved, 0.001d, 1000d, 0.000001d);
             PanelCladdingTypeIdentity curvedMetersIdentity = RequireData(
                 signatureService.Create(curvedMeters, requested, "WT01"), "Unit-independent signature");
@@ -131,16 +131,17 @@ internal static class Program
             RequirePanelCladding(planarIdentity.FullDigest != changedMaterialIdentity.FullDigest,
                 "A changed cladding material must produce a different signature.");
             RequirePanelCladding(
-                planarIdentity.SchemaVersion == 2 &&
-                planarIdentity.StoredSignature.StartsWith("v2:sha256:", StringComparison.Ordinal) &&
+                planarIdentity.SchemaVersion == 3 &&
+                planarIdentity.StoredSignature.StartsWith("v3:sha256:", StringComparison.Ordinal) &&
                 planarIdentity.TypeCode.Contains("-CL-", StringComparison.Ordinal) &&
-                planarIdentity.CanonicalPayload.StartsWith("v=2|cells=", StringComparison.Ordinal) &&
-                !new[] { "|g=", "|w=", "|h=", "|H=", "|V=", "|depth=" }.Any(token =>
-                    planarIdentity.CanonicalPayload.Contains(token, StringComparison.Ordinal)),
-                "Cladding identity must use v2 cell-only payload with no geometry or offset tokens.");
+                planarIdentity.CanonicalPayload.StartsWith("v=3|size=", StringComparison.Ordinal) &&
+                planarIdentity.CanonicalPayload.Contains("|h=", StringComparison.Ordinal) &&
+                planarIdentity.CanonicalPayload.Contains("|v=", StringComparison.Ordinal) &&
+                planarIdentity.CanonicalPayload.Contains("|cells=", StringComparison.Ordinal),
+                "Cladding identity must use the v3 size, offset, and normalized-cell payload.");
             OperationResponse<PanelCladdingTypeIdentity> unsupportedIdentity = signatureService.Create(unsupported, requested, "WT01");
             RequirePanelCladding(!unsupportedIdentity.Success, "Unsupported projection must disable type creation.");
-            checkpoints.Add("deterministic v2 cell-only SHA-256 type identity independent of geometry and offsets");
+            checkpoints.Add("deterministic v3 SHA-256 type identity with unit-normalized size, offsets, and regions");
 
             byte[] previewPng = RequireData(renderer.RenderPng(curved, 900, 620), "Render curved preview");
             RequirePanelCladding(previewPng.Length > 8 && previewPng.Take(8).SequenceEqual(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }),
