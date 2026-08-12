@@ -200,3 +200,93 @@ After all Rhino processes were closed, the staged bundle was activated successfu
 
 Version 1.0.17 is active for the next Rhino launch. Repeat surface spawn/sync with a production PID
 to confirm `PID_BKT_W3_05_25` produces and resolves `CID_BKT_W3_05_25-0A`.
+
+## Hidden-surface and partial-batch correction (2026-08-07)
+
+Live use exposed two remaining sync defects: hidden surfaces were omitted by default Rhino object
+enumeration, and one missing or duplicate CID aborted the entire selected-panel batch.
+
+- Replaced default document iteration with explicit Brep object-enumerator settings that include
+  normal, locked, active, and hidden objects (including hidden-layer objects) while excluding
+  reference objects.
+- Added structured per-panel sync issues and selected/skipped panel ids across snapshot, planning,
+  commit, and result contracts.
+- Changed panel/layout/PID/CID/layer mapping validation to isolate the affected panel. Each panel's
+  surface and panel writes are accumulated temporarily and published only after its complete expected
+  CID set validates.
+- Missing, duplicate, unexpected, wrong-PID, invalid-layer/family, duplicate-selected-PID,
+  unsupported, and unreadable panels are skipped; fully valid panels continue through Rhino writes
+  and workbook export.
+- An all-skipped selection completes successfully without workbook or attribute mutation.
+- After successful completion, the live adapter clears selection and selects skipped panel objects
+  for inspection. The command prints each issue plus processed/skipped counts.
+- Updated automated and live fixtures for hidden enumeration, all-skipped completion, mixed
+  valid/missing-CID planning, partial workflow commit, issue propagation, and skipped ids.
+
+Validation completed:
+
+- dedicated surface-sync smoke: Debug and Release passed;
+- match, standalone editor, spawn, and clear regressions: Debug and Release passed;
+- full solution serial builds: Debug and Release passed with zero warnings/errors;
+- PanelCladdingEditor 1.0.19 package build passed;
+- direct package assembly verification reported plug-in id
+  `7c1a4d3b-5e29-4f68-9a72-1d8c6b0f4e35`, matching the manifest and remaining distinct from
+  MCP_Rhino.
+
+Rhino process 64172 was active, so the installer staged version 1.0.19 at
+`C:\Users\nxu\AppData\Local\PanelCladdingEditor\staged\1.0.19-20260807202424001`.
+Close every Rhino window and activate that staged bundle before verifying hidden surfaces and a mixed
+valid/invalid panel selection in Rhino.
+
+## Version 1.0.19 activation (2026-08-07)
+
+After all Rhino processes were closed, the staged bundle was activated successfully.
+
+- Installed RHP: `C:\Users\nxu\AppData\Local\PanelCladdingEditor\plugin\1.0.19\PanelCladdingEditor.rhp`.
+- Installer registry-only validation passed.
+- Independent installed-assembly verification reported PanelCladdingEditor plug-in id
+  `7c1a4d3b-5e29-4f68-9a72-1d8c6b0f4e35`, matching the manifest and remaining distinct from
+  MCP_Rhino plug-in id `7a3fc2f0-24a8-4b79-be58-5a08cfb0d10a`.
+
+Version 1.0.19 is active for the next Rhino launch. Run the revised sync fixture with a hidden
+surface and a mixed valid/missing-or-duplicate-CID panel selection.
+
+## Model-authoritative workbook pruning (2026-08-07)
+
+`_PanelCladdingSyncFromSurfaces` now reconciles the selected workbook with cladding types assigned
+anywhere in the active Rhino model on every run.
+
+- Live read collects canonical `CW_1.10_CLADDING_TYPE` / `Signature` assignments from all normal,
+  locked, and hidden Breps, including objects on hidden layers.
+- The workflow retains every model assignment except the prior identities of selected panels whose
+  cladding changes; prepared replacement identities are added back before pruning.
+- Batch workbook preparation now supports prune-only runs with zero type upserts.
+- The temporary workbook removes unused `_CLADDING_INDEX` records and their indexed type worksheets.
+  Unrelated/project worksheets and the hidden index sheet are preserved.
+- Pruning executes even when panel cells and surface `Cladding` values do not change, and removed
+  type codes are returned through commit/result contracts and reported by the Rhino command.
+- External deletion remains inside the existing validated temporary workbook and atomic replacement
+  flow. Locked or concurrently changed workbooks fail before leaving Rhino metadata changes.
+
+Automated coverage now proves:
+
+- a no-panel-change service run still invokes and commits pruning;
+- one model-used type remains while one unused managed type is deleted;
+- the unused type sheet and index row are both removed;
+- an unrelated `Project Notes` worksheet survives;
+- the final hidden index exactly matches the remaining managed type sheet;
+- model-wide type references and prepared replacement results flow through the batch contract.
+
+Validation completed:
+
+- dedicated surface-sync, standalone editor, match, spawn, and clear smokes passed in Debug and
+  Release;
+- full serial solution builds passed in Debug and Release with zero warnings/errors;
+- PanelCladdingEditor 1.0.21 package build passed;
+- packaged and installed RHP identity verification reported plug-in id
+  `7c1a4d3b-5e29-4f68-9A72-1D8C6B0F4E35`, matching the manifest and remaining distinct from
+  MCP_Rhino.
+
+Rhino was closed, so version 1.0.21 installed directly at
+`C:\Users\nxu\AppData\Local\PanelCladdingEditor\plugin\1.0.21\PanelCladdingEditor.rhp`.
+Registry-only installer validation passed. Version 1.0.21 is active for the next Rhino launch.

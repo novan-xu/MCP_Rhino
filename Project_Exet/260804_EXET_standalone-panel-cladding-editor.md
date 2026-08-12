@@ -168,3 +168,31 @@ Version 1.0.11 is installed and ready to load on the next Rhino start.
   and remaining distinct from MCP_Rhino.
 
 Version 1.0.12 is installed and ready for the next Rhino start.
+
+## Cladding-only v2 identity revision (2026-08-07)
+
+- Replaced geometry/grid-position signature schema v1 with cladding-only schema v2.
+- The canonical digest payload now contains only ordered logical cell labels and normalized material
+  values. Width, height, planar/curved classification, depth samples, units, tolerance, and all H/V
+  offsets are excluded.
+- New stored signatures use `v2:sha256:<digest>` and new type codes use the neutral
+  `<system>-CL-<columns>X<rows>-<digest>` form. Grid counts are derived from logical cells rather
+  than offset arrays.
+- Existing v1 workbook entries remain historical records and are not silently rewritten. Saving a
+  panel with version 1.0.20 creates/assigns its v2 identity.
+- Updated the standalone smoke to prove identical materials produce the same type/signature across
+  different offset values, dimensions/units, geometry classes, and depth profiles, while a material
+  change still changes identity.
+
+Validation completed:
+
+- standalone editor, match, surface-sync, spawn, and clear smokes passed in Debug and Release;
+- full serial solution builds passed in Debug and Release with zero warnings/errors;
+- PanelCladdingEditor 1.0.20 package build passed;
+- packaged and installed RHP identity verification reported plug-in id
+  `7c1a4d3b-5e29-4f68-9a72-1d8c6b0f4e35`, matching the manifest and remaining distinct from
+  MCP_Rhino.
+
+Rhino was closed, so version 1.0.20 installed directly at
+`C:\Users\nxu\AppData\Local\PanelCladdingEditor\plugin\1.0.20\PanelCladdingEditor.rhp`.
+Registry-only installer validation passed. Version 1.0.20 is active for the next Rhino launch.

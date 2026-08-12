@@ -72,7 +72,7 @@ public sealed class OpenXmlPanelCladdingWorkbookRepository : IPanelCladdingWorkb
     {
         PanelCladdingWorkbookUpsert[] items = (request.Items ?? Array.Empty<PanelCladdingWorkbookUpsert>())
             .ToArray();
-        if (items.Length == 0)
+        if (items.Length == 0 && !request.PruneUnusedTypes)
         {
             return OperationResponse<IPreparedPanelCladdingWorkbookBatchUpdate>.Fail(
                 "PANEL_CLADDING_WORKBOOK_BATCH_ITEMS_REQUIRED");
@@ -119,7 +119,7 @@ public sealed class OpenXmlPanelCladdingWorkbookRepository : IPanelCladdingWorkb
             long originalLength = existed ? new FileInfo(finalPath).Length : -1L;
             DateTime originalWriteUtc = existed ? File.GetLastWriteTimeUtc(finalPath) : DateTime.MinValue;
             var results = new List<PanelCladdingWorkbookBatchItemResult>(items.Length);
-            bool modified = false;
+            bool modified = !existed;
             foreach (PanelCladdingWorkbookUpsert item in items)
             {
                 PreparedState state = UpdateTemporaryWorkbook(tempPath, finalPath, item);
@@ -131,6 +131,20 @@ public sealed class OpenXmlPanelCladdingWorkbookRepository : IPanelCladdingWorkb
                 modified |= state.Modified;
             }
 
+            PanelCladdingWorkbookTypeReference[] retainedTypes = (request.RetainedTypes ??
+                    Array.Empty<PanelCladdingWorkbookTypeReference>())
+                .Concat(results.Select(item => new PanelCladdingWorkbookTypeReference
+                {
+                    ObjectId = item.ObjectId,
+                    TypeCode = item.Result.Identity.TypeCode,
+                    StoredSignature = item.Result.Identity.StoredSignature
+                }))
+                .ToArray();
+            IReadOnlyList<string> removedTypeCodes = request.PruneUnusedTypes
+                ? PruneUnusedManagedTypes(tempPath, retainedTypes)
+                : Array.Empty<string>();
+            modified |= removedTypeCodes.Count > 0;
+
             ValidateWorkbook(tempPath);
             return OperationResponse<IPreparedPanelCladdingWorkbookBatchUpdate>.Ok(
                 new PreparedWorkbookBatchUpdate(
@@ -140,6 +154,7 @@ public sealed class OpenXmlPanelCladdingWorkbookRepository : IPanelCladdingWorkb
                     originalLength,
                     originalWriteUtc,
                     results,
+                    removedTypeCodes,
                     modified));
         }
         catch (Exception ex)
@@ -443,6 +458,123 @@ public sealed class OpenXmlPanelCladdingWorkbookRepository : IPanelCladdingWorkb
             ("H", record.HeightMillimeters.ToString("0.########", CultureInfo.InvariantCulture)),
             ("I", record.UpdatedUtc)));
         worksheet.Save();
+    }
+
+    private static IReadOnlyList<string> PruneUnusedManagedTypes(
+        string tempPath,
+        IReadOnlyList<PanelCladdingWorkbookTypeReference> retainedTypes)
+    {
+        using SpreadsheetDocument document = SpreadsheetDocument.Open(tempPath, true);
+        WorkbookPart workbookPart = document.WorkbookPart
+            ?? throw new InvalidDataException("WorkbookPart is missing.");
+        workbookPart.Workbook ??= new S.Workbook();
+        S.Sheets sheets = workbookPart.Workbook.GetFirstChild<S.Sheets>()
+            ?? workbookPart.Workbook.AppendChild(new S.Sheets());
+        S.Sheet? indexSheet = sheets.Elements<S.Sheet>().FirstOrDefault(sheet =>
+            string.Equals(sheet.Name?.Value, IndexSheetName, StringComparison.OrdinalIgnoreCase));
+        if (indexSheet is null)
+        {
+            EnsureAtLeastOneVisibleSheet(workbookPart, sheets);
+            workbookPart.Workbook.Save();
+            return Array.Empty<string>();
+        }
+
+        var retainedTypeCodes = (retainedTypes ?? Array.Empty<PanelCladdingWorkbookTypeReference>())
+            .Select(reference => reference.TypeCode.Trim())
+            .Where(value => value.Length > 0)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var retainedSignatures = (retainedTypes ?? Array.Empty<PanelCladdingWorkbookTypeReference>())
+            .Select(reference => reference.StoredSignature.Trim())
+            .Where(value => value.Length > 0)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        WorksheetPart indexPart = (WorksheetPart)workbookPart.GetPartById(indexSheet.Id!);
+        IReadOnlyList<IndexRecord> records = ReadIndex(workbookPart, indexPart);
+        IndexRecord[] removed = records.Where(record =>
+                !retainedTypeCodes.Contains(record.TypeCode) &&
+                !retainedSignatures.Contains(record.StoredSignature))
+            .ToArray();
+        if (removed.Length == 0)
+        {
+            return Array.Empty<string>();
+        }
+
+        foreach (IndexRecord record in removed)
+        {
+            S.Sheet? managedSheet = sheets.Elements<S.Sheet>().FirstOrDefault(sheet =>
+                !string.Equals(sheet.Name?.Value, IndexSheetName, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(sheet.Name?.Value, record.SheetName, StringComparison.OrdinalIgnoreCase));
+            if (managedSheet is null)
+            {
+                continue;
+            }
+            OpenXmlPart managedPart = workbookPart.GetPartById(managedSheet.Id!);
+            managedSheet.Remove();
+            workbookPart.DeletePart(managedPart);
+        }
+
+        RewriteIndex(indexPart, records.Except(removed).ToArray());
+        EnsureAtLeastOneVisibleSheet(workbookPart, sheets);
+        EnsureVisibleActiveSheet(workbookPart, sheets);
+        workbookPart.Workbook.Save();
+        return removed
+            .Select(record => record.TypeCode)
+            .Where(typeCode => !string.IsNullOrWhiteSpace(typeCode))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(typeCode => typeCode, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static void RewriteIndex(WorksheetPart indexPart, IReadOnlyList<IndexRecord> records)
+    {
+        var data = new S.SheetData();
+        data.Append(CreateRow(
+            1U,
+            ("A", "TypeCode"),
+            ("B", "FullDigest"),
+            ("C", "StoredSignature"),
+            ("D", "SheetName"),
+            ("E", "GeometryClass"),
+            ("F", "Grid"),
+            ("G", "WidthMm"),
+            ("H", "HeightMm"),
+            ("I", "UpdatedUtc")));
+        uint rowIndex = 2U;
+        foreach (IndexRecord record in records)
+        {
+            data.Append(CreateRow(
+                rowIndex++,
+                ("A", record.TypeCode),
+                ("B", record.FullDigest),
+                ("C", record.StoredSignature),
+                ("D", record.SheetName),
+                ("E", record.GeometryClass),
+                ("F", record.Grid),
+                ("G", record.WidthMillimeters.ToString("0.########", CultureInfo.InvariantCulture)),
+                ("H", record.HeightMillimeters.ToString("0.########", CultureInfo.InvariantCulture)),
+                ("I", record.UpdatedUtc)));
+        }
+        indexPart.Worksheet = new S.Worksheet(data);
+        indexPart.Worksheet.Save();
+    }
+
+    private static void EnsureAtLeastOneVisibleSheet(WorkbookPart workbookPart, S.Sheets sheets)
+    {
+        if (sheets.Elements<S.Sheet>().Any(sheet => sheet.State?.Value != S.SheetStateValues.Hidden))
+        {
+            return;
+        }
+
+        WorksheetPart summaryPart = workbookPart.AddNewPart<WorksheetPart>();
+        summaryPart.Worksheet = new S.Worksheet(new S.SheetData(CreateRow(
+            1U,
+            ("A", "No cladding types are currently assigned in the Rhino model."))));
+        summaryPart.Worksheet.Save();
+        AddSheet(
+            workbookPart,
+            sheets,
+            summaryPart,
+            ResolveSheetName("Cladding Types", sheets),
+            hidden: false);
     }
 
     private static PanelCladdingTypeIdentity ResolveTypeCodeCollision(
@@ -862,6 +994,7 @@ public sealed class OpenXmlPanelCladdingWorkbookRepository : IPanelCladdingWorkb
             long originalLength,
             DateTime originalWriteUtc,
             IReadOnlyList<PanelCladdingWorkbookBatchItemResult> results,
+            IReadOnlyList<string> removedTypeCodes,
             bool modified)
         {
             _tempPath = tempPath;
@@ -870,10 +1003,12 @@ public sealed class OpenXmlPanelCladdingWorkbookRepository : IPanelCladdingWorkb
             _originalLength = originalLength;
             _originalWriteUtc = originalWriteUtc;
             Results = results;
+            RemovedTypeCodes = removedTypeCodes;
             _modified = modified;
         }
 
         public IReadOnlyList<PanelCladdingWorkbookBatchItemResult> Results { get; }
+        public IReadOnlyList<string> RemovedTypeCodes { get; }
 
         public OperationResponse Commit()
         {

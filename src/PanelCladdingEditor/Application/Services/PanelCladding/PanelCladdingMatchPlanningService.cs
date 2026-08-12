@@ -41,7 +41,7 @@ public sealed partial class PanelCladdingMatchPlanningService
                 "PANEL_CLADDING_MATCH_SOURCE_IS_TARGET");
         }
 
-        OperationResponse<IReadOnlyDictionary<string, string>> configuration =
+        OperationResponse<SourceCladdingConfiguration> configuration =
             BuildSourceConfiguration(source);
         if (!configuration.Success || configuration.Data is null)
         {
@@ -57,9 +57,9 @@ public sealed partial class PanelCladdingMatchPlanningService
                     $"PANEL_CLADDING_MATCH_TARGET_ALREADY_CONFIGURED: {target.ObjectId:D}");
             }
 
-            OperationResponse compatible = ValidateGeometryCompatibility(
-                source.Geometry,
-                target.Geometry);
+            OperationResponse compatible = ValidateTargetCompatibility(
+                configuration.Data,
+                target);
             if (!compatible.Success)
             {
                 return OperationResponse<PanelCladdingMatchPlan>.Fail(
@@ -77,7 +77,7 @@ public sealed partial class PanelCladdingMatchPlanningService
             {
                 ObjectId = target.ObjectId,
                 UserTextDeletes = deletes.OrderBy(key => key, StringComparer.OrdinalIgnoreCase).ToArray(),
-                UserTextWrites = new Dictionary<string, string>(configuration.Data, StringComparer.OrdinalIgnoreCase)
+                UserTextWrites = new Dictionary<string, string>(configuration.Data.Writes, StringComparer.OrdinalIgnoreCase)
             });
         }
 
@@ -88,7 +88,7 @@ public sealed partial class PanelCladdingMatchPlanningService
         });
     }
 
-    private OperationResponse<IReadOnlyDictionary<string, string>> BuildSourceConfiguration(
+    private OperationResponse<SourceCladdingConfiguration> BuildSourceConfiguration(
         PanelCladdingMatchPanelSnapshot source)
     {
         if (source.Geometry.GeometryClass == PanelGeometryClass.UnsupportedProjection)
@@ -119,14 +119,6 @@ public sealed partial class PanelCladdingMatchPlanningService
             [PanelCladdingKeyService.TypeCodeKey] = typeCode,
             [PanelCladdingKeyService.SignatureKey] = signature
         };
-        for (int index = 0; index < parsed.Data.HorizontalOffsets.Count; index++)
-        {
-            writes[$"CW_2.03_OFFSET_H{index}"] = FormatDistance(parsed.Data.HorizontalOffsets[index]);
-        }
-        for (int index = 0; index < parsed.Data.VerticalOffsets.Count; index++)
-        {
-            writes[$"CW_2.04_OFFSET_V{index}"] = FormatDistance(parsed.Data.VerticalOffsets[index]);
-        }
         foreach (PanelCladdingCell cell in parsed.Data.Cells)
         {
             string material = _keys.NormalizeCladdingValue(cell.Value);
@@ -139,56 +131,42 @@ public sealed partial class PanelCladdingMatchPlanningService
             writes[cell.UserTextKey] = material;
         }
 
-        return OperationResponse<IReadOnlyDictionary<string, string>>.Ok(writes);
+        return OperationResponse<SourceCladdingConfiguration>.Ok(new SourceCladdingConfiguration
+        {
+            Writes = writes,
+            CellLabels = parsed.Data.Cells.Select(cell => cell.ShortLabel).ToArray()
+        });
     }
 
-    private static OperationResponse ValidateGeometryCompatibility(
-        PanelCladdingMatchGeometryDescriptor source,
-        PanelCladdingMatchGeometryDescriptor target)
+    private OperationResponse ValidateTargetCompatibility(
+        SourceCladdingConfiguration configuration,
+        PanelCladdingMatchPanelSnapshot target)
     {
-        if (source.GeometryClass == PanelGeometryClass.UnsupportedProjection ||
-            target.GeometryClass == PanelGeometryClass.UnsupportedProjection)
+        if (target.Geometry.GeometryClass == PanelGeometryClass.UnsupportedProjection)
         {
             return OperationResponse.Fail("unsupported panel projection");
         }
-        if (source.GeometryClass != target.GeometryClass)
+
+        OperationResponse<PanelCladdingKeySet> targetLayout = _keys.Parse(
+            target.UserText,
+            target.Geometry.Width,
+            target.Geometry.Height,
+            target.Geometry.ModelTolerance);
+        if (!targetLayout.Success || targetLayout.Data is null)
         {
-            return OperationResponse.Fail(
-                $"geometry class {target.GeometryClass} does not match {source.GeometryClass}");
+            return OperationResponse.Fail(targetLayout.Message);
         }
 
-        double tolerance = Math.Max(source.ModelTolerance, target.ModelTolerance);
-        if (!double.IsFinite(tolerance) || tolerance <= 0d)
-        {
-            tolerance = 1e-6d;
-        }
-        if (Math.Abs(source.Width - target.Width) > tolerance ||
-            Math.Abs(source.Height - target.Height) > tolerance)
+        string[] targetCellLabels = targetLayout.Data.Cells
+            .Select(cell => cell.ShortLabel)
+            .ToArray();
+        if (!configuration.CellLabels.SequenceEqual(
+            targetCellLabels,
+            StringComparer.OrdinalIgnoreCase))
         {
             return OperationResponse.Fail(
-                $"local extents {target.Width:G17}x{target.Height:G17} do not match " +
-                $"{source.Width:G17}x{source.Height:G17}");
-        }
-
-        if (source.GeometryClass == PanelGeometryClass.Curved)
-        {
-            if (source.DepthSamples.Count == 0 ||
-                source.DepthSamples.Count != target.DepthSamples.Count)
-            {
-                return OperationResponse.Fail("curved depth sample counts do not match");
-            }
-            double depthTolerance = Math.Max(
-                tolerance,
-                Math.Max(source.Width, source.Height) * 1e-6d);
-            for (int index = 0; index < source.DepthSamples.Count; index++)
-            {
-                if (!double.IsFinite(source.DepthSamples[index]) ||
-                    !double.IsFinite(target.DepthSamples[index]) ||
-                    Math.Abs(source.DepthSamples[index] - target.DepthSamples[index]) > depthTolerance)
-                {
-                    return OperationResponse.Fail($"curved depth profile differs at sample {index}");
-                }
-            }
+                $"cladding cell topology {string.Join(',', targetCellLabels)} does not match " +
+                string.Join(',', configuration.CellLabels));
         }
 
         return OperationResponse.Ok();
@@ -216,9 +194,7 @@ public sealed partial class PanelCladdingMatchPlanningService
 
     private static bool IsTransferConfigurationKey(string key)
     {
-        return HorizontalOffsetRegex().IsMatch(key) ||
-            VerticalOffsetRegex().IsMatch(key) ||
-            CladdingCellRegex().IsMatch(key) ||
+        return CladdingCellRegex().IsMatch(key) ||
             string.Equals(key, PanelCladdingKeyService.TypeCodeKey, StringComparison.OrdinalIgnoreCase) ||
             string.Equals(key, PanelCladdingKeyService.LegacyTypeCodeKey, StringComparison.OrdinalIgnoreCase) ||
             string.Equals(key, PanelCladdingKeyService.SignatureKey, StringComparison.OrdinalIgnoreCase) ||
@@ -243,25 +219,21 @@ public sealed partial class PanelCladdingMatchPlanningService
         return false;
     }
 
-    private static OperationResponse<IReadOnlyDictionary<string, string>> SourceNotConfigured(
+    private static OperationResponse<SourceCladdingConfiguration> SourceNotConfigured(
         Guid sourceObjectId,
         string detail)
     {
-        return OperationResponse<IReadOnlyDictionary<string, string>>.Fail(
+        return OperationResponse<SourceCladdingConfiguration>.Fail(
             $"PANEL_CLADDING_MATCH_SOURCE_NOT_CONFIGURED: {sourceObjectId:D}: {detail}");
     }
 
-    private static string FormatDistance(double value)
-    {
-        return value.ToString("G17", CultureInfo.InvariantCulture);
-    }
-
-    [GeneratedRegex(@"^CW_2\.03_OFFSET_H\d+$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex HorizontalOffsetRegex();
-
-    [GeneratedRegex(@"^CW_2\.04_OFFSET_V\d+$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex VerticalOffsetRegex();
-
     [GeneratedRegex(@"^CW_4\.\d{2}_CLADDING_\d+[A-Z]+$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex CladdingCellRegex();
+
+    private sealed class SourceCladdingConfiguration
+    {
+        public IReadOnlyDictionary<string, string> Writes { get; init; } =
+            new Dictionary<string, string>();
+        public IReadOnlyList<string> CellLabels { get; init; } = Array.Empty<string>();
+    }
 }
