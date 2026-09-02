@@ -17,6 +17,9 @@ internal static class Program
         var keys = new PanelCladdingKeyService();
         var planner = new PanelCladdingMatchPlanningService(keys);
         PanelCladdingMatchPanelSnapshot source = BuildConfiguredSource(SourceId, PlanarGeometry());
+        PanelCladdingTopologyPayloads targetTopology = RequireData(
+            keys.EncodeTopology(new PanelCladdingTopologyState(), 1, 2),
+            "Encode target topology");
         PanelCladdingMatchPanelSnapshot targetOne = Snapshot(
             TargetOneId,
             PlanarGeometry(),
@@ -33,7 +36,9 @@ internal static class Program
                 ["CW_2.04_OFFSET_V1"] = "65",
                 [PanelCladdingKeyService.GetCellKey(0, "A")] = " ",
                 [PanelCladdingKeyService.TypeCodeKey] = string.Empty,
-                [PanelCladdingKeyService.SignatureKey] = " "
+                [PanelCladdingKeyService.SignatureKey] = " ",
+                [PanelCladdingKeyService.SegmentMaskKey] = targetTopology.SegmentMask,
+                [PanelCladdingKeyService.MergeMaskKey] = targetTopology.MergeMask
             });
         PanelCladdingMatchPanelSnapshot targetTwo = Snapshot(
             TargetTwoId,
@@ -59,13 +64,20 @@ internal static class Program
             "Match must neither delete nor write target offset keys.");
         Require(plan.Targets[0].UserTextDeletes.Contains(PanelCladdingKeyService.GetCellKey(0, "A"), StringComparer.OrdinalIgnoreCase),
             "Existing blank cladding keys must be deleted before replacement.");
-        Require(plan.Targets[0].UserTextDeletes.Contains(PanelCladdingKeyService.LegacyTypeCodeKey, StringComparer.OrdinalIgnoreCase) &&
-                plan.Targets[0].UserTextDeletes.Contains(PanelCladdingKeyService.LegacySignatureKey, StringComparer.OrdinalIgnoreCase),
-            "Legacy type/signature keys must be included in cleanup.");
+        Require(!plan.Targets[0].UserTextDeletes.Any(key =>
+                PanelCladdingKeyService.IsTopologyKey(key) ||
+                string.Equals(key, PanelCladdingKeyService.TypeCodeKey, StringComparison.OrdinalIgnoreCase)),
+            "PCMatchSrf must not clean up target topology or type metadata.");
+        Require(plan.Targets[0].UserTextDeletes.Contains(
+                PanelCladdingKeyService.SignatureKey,
+                StringComparer.OrdinalIgnoreCase),
+            "PCMatchSrf must retire the persisted Signature key on a touched target.");
         foreach (string preserved in new[]
         {
             "CW_1.01_PID", "CW_1.05_RELEASE", "CW_1.07_WALL_TYPE", "CW_1.02_CID", "Plane", "CustomNote",
-            "CW_2.03_OFFSET_H0", "CW_2.04_OFFSET_V0", "CW_2.04_OFFSET_V1"
+            "CW_2.03_OFFSET_H0", "CW_2.04_OFFSET_V0", "CW_2.04_OFFSET_V1",
+            PanelCladdingKeyService.TypeCodeKey,
+            PanelCladdingKeyService.SegmentMaskKey, PanelCladdingKeyService.MergeMaskKey
         })
         {
             Require(!plan.Targets[0].UserTextDeletes.Contains(preserved, StringComparer.OrdinalIgnoreCase),
@@ -73,14 +85,14 @@ internal static class Program
             Require(!plan.Targets[0].UserTextWrites.ContainsKey(preserved),
                 $"Identity/unrelated key {preserved} must not be overwritten.");
         }
-        Console.WriteLine("[OK] multi-target cladding transfer, offset preservation, stale cladding cleanup, and identity preservation");
+        Console.WriteLine("[OK] multi-target transfer preserves offsets, masks, type metadata, and retires Signature");
 
         PanelCladdingMatchPanelSnapshot oneCellSource = Snapshot(
             SourceId,
             PlanarGeometry(),
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
-                [PanelCladdingKeyService.TypeCodeKey] = "WT01-CL-1X1-ABCDEF12",
+                [PanelCladdingKeyService.TypeCodeKey] = "WT01-1X1-ABCDEF12",
                 [PanelCladdingKeyService.SignatureKey] = "v2:sha256:onecell",
                 [PanelCladdingKeyService.GetCellKey(0, "A")] = "gl01"
             });
@@ -96,39 +108,48 @@ internal static class Program
             "A one-cell source must not invent divider offsets.");
         Require(oneCellPlan.Targets[0].UserTextWrites[PanelCladdingKeyService.GetCellKey(0, "A")] == "GL01",
             "One-cell material normalization failed.");
-        Console.WriteLine("[OK] one-cell configuration without divider offsets");
+        Require(!oneCellPlan.Targets[0].UserTextWrites.Keys.Any(PanelCladdingKeyService.IsTopologyKey),
+            "A one-cell source must not invent topology writes.");
+        Console.WriteLine("[OK] one-cell configuration transfers only its logical cell");
+
+        VerifyParentCellTransfer(planner, keys);
+        Console.WriteLine("[OK] parent-cell assignments remain references instead of resolved materials");
 
         VerifyEligibilityFailures(planner, source, targetOne, targetTwo);
-        Console.WriteLine("[OK] configured-target, source, overlap, and unsupported-target failures are fail-closed");
+        Console.WriteLine("[OK] populated targets overwrite while source/target and unsupported failures remain fail-closed");
 
         VerifyTargetOwnedOffsetsAndTopology(planner);
-        Console.WriteLine("[OK] target-owned offsets may differ while logical cladding topology remains enforced");
+        Console.WriteLine("[OK] target-owned offset distances may differ while logical grid dimensions remain enforced");
 
         VerifyAssemblyContract();
-        Console.WriteLine("[OK] standalone PanelCladdingMatch command/service contract and unique GUID");
+        Console.WriteLine("[OK] standalone PCMatchSrf command/service contract and unique GUID");
     }
 
     private static void VerifyConfigurationWrites(IReadOnlyDictionary<string, string> writes)
     {
         Require(!writes.Keys.Any(key => key.Contains("OFFSET", StringComparison.OrdinalIgnoreCase)),
             "Cladding configuration writes must not contain offsets.");
-        string[] expectedMaterials = { "GL01", "GL02", "STN01", "STN02", "TER01", "TER02" };
-        int materialIndex = 0;
-        for (int column = 0; column < 3; column++)
+        var expectedMaterials = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            for (int row = 0; row < 2; row++)
-            {
-                string key = PanelCladdingKeyService.GetCellKey(column, PanelCladdingKeyService.GetRowLabel(row));
-                Require(writes[key] == expectedMaterials[materialIndex++], $"Material write mismatch for {key}.");
-            }
+            [PanelCladdingKeyService.GetCellKey(0, "A")] = "GL01",
+            [PanelCladdingKeyService.GetCellKey(1, "A")] = "STN01",
+            [PanelCladdingKeyService.GetCellKey(1, "B")] = "STN02",
+            [PanelCladdingKeyService.GetCellKey(2, "A")] = "TER01",
+            [PanelCladdingKeyService.GetCellKey(2, "B")] = "TER02"
+        };
+        foreach ((string key, string expected) in expectedMaterials)
+        {
+            Require(writes[key] == expected, $"Material write mismatch for {key}.");
         }
-        Require(writes[PanelCladdingKeyService.TypeCodeKey] == "WT01-CL-3X2-ABCDEF12",
-            "Canonical type code was not copied.");
-        Require(writes[PanelCladdingKeyService.SignatureKey] == "v2:sha256:configured",
-            "Canonical Signature was not copied.");
-        Require(!writes.ContainsKey(PanelCladdingKeyService.LegacyTypeCodeKey) &&
-                !writes.ContainsKey(PanelCladdingKeyService.LegacySignatureKey),
-            "Legacy type/signature keys must not be written.");
+        Require(writes[PanelCladdingKeyService.GetCellKey(0, "B")] == "0A",
+            "A target-visible cell did not inherit the source region through a parent reference.");
+        Require(writes.Keys.All(key => new PanelCladdingKeyService().IsCladdingCellKey(key) ||
+                string.Equals(
+                    key,
+                    PanelCladdingKeyService.CladdingLogicKey,
+                    StringComparison.OrdinalIgnoreCase)) &&
+                writes.ContainsKey(PanelCladdingKeyService.CladdingLogicKey),
+            "PCMatchSrf writes must be limited to cladding cells and their derived logic.");
     }
 
     private static void VerifyEligibilityFailures(
@@ -137,33 +158,44 @@ internal static class Program
         PanelCladdingMatchPanelSnapshot targetOne,
         PanelCladdingMatchPanelSnapshot emptyTarget)
     {
+        var configuredText = new Dictionary<string, string>(
+            targetOne.UserText,
+            StringComparer.OrdinalIgnoreCase)
+        {
+            [PanelCladdingKeyService.GetCellKey(0, "A")] = "GL01"
+        };
         PanelCladdingMatchPanelSnapshot configuredTarget = Snapshot(
             TargetOneId,
             PlanarGeometry(),
-            new Dictionary<string, string>
-            {
-                [PanelCladdingKeyService.GetCellKey(0, "A")] = "GL01"
-            });
-        RequireFailure(
+            configuredText);
+        PanelCladdingMatchTargetPlan overwrite = RequireData(
             planner.CreatePlan(source, new[] { configuredTarget }),
-            "TARGET_ALREADY_CONFIGURED");
+            "Configured target overwrite plan").Targets.Single();
+        VerifyConfigurationWrites(overwrite.UserTextWrites);
+        Require(overwrite.UserTextDeletes.Contains(
+                PanelCladdingKeyService.GetCellKey(0, "A"),
+                StringComparer.OrdinalIgnoreCase),
+            "Configured target cladding keys must be replaced by the source graph.");
 
-        PanelCladdingMatchPanelSnapshot legacyConfiguredTarget = Snapshot(
+        PanelCladdingMatchPanelSnapshot metadataOnlyTarget = Snapshot(
             TargetOneId,
             PlanarGeometry(),
             new Dictionary<string, string>
             {
-                [PanelCladdingKeyService.LegacyTypeCodeKey] = "LEGACY"
+                [PanelCladdingKeyService.LegacyTypeCodeKey] = "LEGACY",
+                [PanelCladdingKeyService.GetHorizontalOffsetKey(0)] = "60",
+                [PanelCladdingKeyService.GetVerticalOffsetKey(0)] = "25",
+                [PanelCladdingKeyService.GetVerticalOffsetKey(1)] = "75"
             });
-        RequireFailure(
-            planner.CreatePlan(source, new[] { legacyConfiguredTarget }),
-            "TARGET_ALREADY_CONFIGURED");
+        RequireData(
+            planner.CreatePlan(source, new[] { metadataOnlyTarget }),
+            "Metadata-only target plan");
 
         var missingSignature = new Dictionary<string, string>(source.UserText, StringComparer.OrdinalIgnoreCase);
         missingSignature.Remove(PanelCladdingKeyService.SignatureKey);
-        RequireFailure(
+        RequireData(
             planner.CreatePlan(Snapshot(SourceId, PlanarGeometry(), missingSignature), new[] { emptyTarget }),
-            "SOURCE_NOT_CONFIGURED");
+            "Source without signature plan");
 
         RequireFailure(
             planner.CreatePlan(source, new[] { Snapshot(SourceId, PlanarGeometry(), targetOne.UserText) }),
@@ -174,6 +206,42 @@ internal static class Program
                 source,
                 new[] { Snapshot(TargetOneId, UnsupportedGeometry(), targetOne.UserText) }),
             "GEOMETRY_MISMATCH");
+    }
+
+    private static void VerifyParentCellTransfer(
+        PanelCladdingMatchPlanningService planner,
+        PanelCladdingKeyService keys)
+    {
+        PanelCladdingTopologyPayloads masks = RequireData(
+            keys.EncodeTopology(new PanelCladdingTopologyState(), 1, 1),
+            "Encode parent-cell topology");
+        PanelCladdingMatchPanelSnapshot source = Snapshot(
+            SourceId,
+            PlanarGeometry(),
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                [PanelCladdingKeyService.GetHorizontalOffsetKey(0)] = "40",
+                [PanelCladdingKeyService.GetVerticalOffsetKey(0)] = "50",
+                [PanelCladdingKeyService.GetCellKey(0, "A")] = "MPL-001",
+                [PanelCladdingKeyService.GetCellKey(0, "B")] = "MPL-001",
+                [PanelCladdingKeyService.GetCellKey(1, "A")] = "0A",
+                [PanelCladdingKeyService.GetCellKey(1, "B")] = "0B",
+                [PanelCladdingKeyService.TypeCodeKey] = "WT01-2X2-PARENT",
+                [PanelCladdingKeyService.SignatureKey] = "v4:sha256:parent",
+                [PanelCladdingKeyService.SegmentMaskKey] = masks.SegmentMask,
+                [PanelCladdingKeyService.MergeMaskKey] = masks.MergeMask
+            });
+        PanelCladdingMatchPlan plan = RequireData(
+            planner.CreatePlan(
+                source,
+                new[] { Snapshot(TargetOneId, PlanarGeometry(), TargetGrid("25", "65")) }),
+            "Create parent-cell match plan");
+        IReadOnlyDictionary<string, string> writes = plan.Targets.Single().UserTextWrites;
+        Require(writes[PanelCladdingKeyService.GetCellKey(0, "A")] == "MPL-001" &&
+                writes[PanelCladdingKeyService.GetCellKey(0, "B")] == "MPL-001" &&
+                writes[PanelCladdingKeyService.GetCellKey(1, "A")] == "0A" &&
+                writes[PanelCladdingKeyService.GetCellKey(1, "B")] == "0B",
+            "Parent-cell references were flattened to their resolved material.");
     }
 
     private static void VerifyTargetOwnedOffsetsAndTopology(PanelCladdingMatchPlanningService planner)
@@ -217,11 +285,10 @@ internal static class Program
         Assembly assembly = typeof(PanelCladdingMatchPlanningService).Assembly;
         Type matchCommand = RequireType(assembly, "PanelCladdingEditor.UI.PanelCladdingMatchCommand");
         Type editorCommand = RequireType(assembly, "PanelCladdingEditor.UI.PanelCladdingEditorCommand");
-        Type spawnCommand = RequireType(assembly, "PanelCladdingEditor.UI.PanelCladdingSpawnCommand");
-        Type smokeCommand = RequireType(assembly, "PanelCladdingEditor.UI.PanelCladdingEditorSmokeCommand");
+        Type spawnCommand = RequireType(assembly, "PanelCladdingEditor.UI.PanelCladdingSpawnSrfCommand");
         Require(matchCommand.GUID != Guid.Empty, "Match command GUID must be explicit and non-empty.");
-        Require(new[] { matchCommand.GUID, editorCommand.GUID, spawnCommand.GUID, smokeCommand.GUID }
-                .Distinct().Count() == 4,
+        Require(new[] { matchCommand.GUID, editorCommand.GUID, spawnCommand.GUID }
+                .Distinct().Count() == 3,
             "All PanelCladdingEditor Rhino command GUIDs must be unique.");
         Require(assembly.GetType(
                 "PanelCladdingEditor.Infrastructure.Rhino.Live.PanelCladding.LivePanelCladdingMatchService") is not null,
@@ -251,7 +318,7 @@ internal static class Program
             ["CW_2.03_OFFSET_H0"] = "40",
             ["CW_2.04_OFFSET_V0"] = "30",
             ["CW_2.04_OFFSET_V1"] = "70",
-            [PanelCladdingKeyService.TypeCodeKey] = "WT01-CL-3X2-ABCDEF12",
+            [PanelCladdingKeyService.TypeCodeKey] = "WT01-3X2-ABCDEF12",
             [PanelCladdingKeyService.SignatureKey] = "v2:sha256:configured",
             ["CW_1.01_PID"] = "SOURCE"
         };
@@ -265,20 +332,43 @@ internal static class Program
                     materials[materialIndex++];
             }
         }
+        userText.Remove(PanelCladdingKeyService.GetCellKey(0, "B"));
+        PanelCladdingTopologyPayloads topology = RequireData(
+            new PanelCladdingKeyService().EncodeTopology(
+                new PanelCladdingTopologyState
+                {
+                    MissingSegments = new[]
+                    {
+                        new PanelCladdingSegmentCoordinate(PanelCladdingTopologyAxis.Horizontal, 0, 0)
+                    },
+                    MergeRuns = new[]
+                    {
+                        new PanelCladdingMergeRun(PanelCladdingTopologyAxis.Vertical, 0, 0, 1)
+                    }
+                },
+                horizontalTrackCount: 1,
+                verticalTrackCount: 2),
+            "Encode configured source topology");
+        userText[PanelCladdingKeyService.SegmentMaskKey] = topology.SegmentMask;
+        userText[PanelCladdingKeyService.MergeMaskKey] = topology.MergeMask;
         return Snapshot(objectId, geometry, userText);
     }
 
     private static IReadOnlyDictionary<string, string> TargetGrid(
         string horizontal,
         string verticalZero,
-        string verticalOne)
+        string? verticalOne = null)
     {
-        return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             ["CW_2.03_OFFSET_H0"] = horizontal,
-            ["CW_2.04_OFFSET_V0"] = verticalZero,
-            ["CW_2.04_OFFSET_V1"] = verticalOne
+            ["CW_2.04_OFFSET_V0"] = verticalZero
         };
+        if (verticalOne is not null)
+        {
+            result["CW_2.04_OFFSET_V1"] = verticalOne;
+        }
+        return result;
     }
 
     private static PanelCladdingMatchPanelSnapshot Snapshot(

@@ -50,36 +50,60 @@ function Assert-DirectPanelRhp([string] $Root) {
     }
 }
 
+function Get-PanelExpectedCommands {
+    return @(
+        'PCClear',
+        'PCCreate',
+        'PCCrvTemplate',
+        'PCEditor',
+        'PCMatchCrv',
+        'PCMatchSrf',
+        'PCSpawnCrv',
+        'PCSpawnSrf',
+        'PCSyncCrv',
+        'PCSyncSrf'
+    )
+}
+
 function Set-PanelPluginRegistration([string] $RegistryRoot, [string] $PluginId, [string] $RhpPath) {
     $pluginKey = Get-PanelPluginKey $RegistryRoot $PluginId
     $pluginFileKey = Join-Path $pluginKey 'PlugIn'
+    $commandListKey = Join-Path $pluginKey 'CommandList'
     $canonicalRhp = [IO.Path]::GetFullPath($RhpPath)
 
     if (Test-Path -LiteralPath $pluginKey) {
         $existing = Get-ItemProperty -LiteralPath $pluginKey -ErrorAction SilentlyContinue
         $existingFile = Get-ItemProperty -LiteralPath $pluginFileKey -ErrorAction SilentlyContinue
         $existingName = [string]$existing.Name
-        $existingPath = if (-not [string]::IsNullOrWhiteSpace([string]$existing.FileName)) {
-            [string]$existing.FileName
-        } elseif ($null -ne $existingFile) {
-            [string]$existingFile.FileName
-        } else { '' }
+        $existingPaths = @([string]$existing.FileName, [string]$existingFile.FileName) |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
         if ((-not [string]::IsNullOrWhiteSpace($existingName) -and
              -not $existingName.Equals('PanelCladdingEditor', [StringComparison]::OrdinalIgnoreCase)) -or
-            (-not [string]::IsNullOrWhiteSpace($existingPath) -and
-             [IO.Path]::GetFileName($existingPath) -ne 'PanelCladdingEditor.rhp')) {
+            @($existingPaths | Where-Object {
+                [IO.Path]::GetFileName($_) -ne 'PanelCladdingEditor.rhp'
+            }).Count -gt 0) {
             throw "The PanelCladdingEditor plug-in GUID is registered to an unowned product: $pluginKey"
         }
+
+        # Replace only the verified product-owned key so stale shorthand,
+        # partial, or older command registrations cannot survive repair.
+        Remove-Item -LiteralPath $pluginKey -Recurse -Force
     }
 
     New-Item -Path $pluginKey -Force | Out-Null
     foreach ($entry in ([ordered]@{
         Name = 'PanelCladdingEditor'
-        FileName = $canonicalRhp
         EnglishName = 'PanelCladdingEditor'
         Organization = 'BayHealth project team'
+        Address = ''
+        Country = ''
+        Phone = ''
+        EMail = ''
+        WebSite = ''
+        UpdateURL = ''
+        Fax = ''
         Description = 'Standalone Rhino 8 panel cladding type editor.'
-        RegPath = '\HKEY_CURRENT_USER\' + $pluginKey.Substring('Registry::HKEY_CURRENT_USER\'.Length)
+        RegPath = '\\HKEY_CURRENT_USER\' + $pluginKey.Substring('Registry::HKEY_CURRENT_USER\'.Length)
     }).GetEnumerator()) {
         New-ItemProperty -LiteralPath $pluginKey -Name $entry.Key -Value $entry.Value -PropertyType String -Force | Out-Null
     }
@@ -92,24 +116,57 @@ function Set-PanelPluginRegistration([string] $RegistryRoot, [string] $PluginId,
     }).GetEnumerator()) {
         New-ItemProperty -LiteralPath $pluginKey -Name $entry.Key -Value $entry.Value -PropertyType DWord -Force | Out-Null
     }
-    New-Item -Path $pluginFileKey -Force | Out-Null
+
+    New-Item -Path $pluginFileKey, $commandListKey -Force | Out-Null
     New-ItemProperty -LiteralPath $pluginFileKey -Name FileName -Value $canonicalRhp -PropertyType String -Force | Out-Null
+    foreach ($command in @(Get-PanelExpectedCommands)) {
+        New-ItemProperty -LiteralPath $commandListKey -Name $command -Value "2;$command" -PropertyType String -Force | Out-Null
+    }
 }
 
 function Assert-PanelPluginRegistration([string] $RegistryRoot, [string] $PluginId, [string] $RhpPath) {
     $pluginKey = Get-PanelPluginKey $RegistryRoot $PluginId
     $pluginFileKey = Join-Path $pluginKey 'PlugIn'
-    if (-not (Test-Path -LiteralPath $pluginKey) -or -not (Test-Path -LiteralPath $pluginFileKey)) {
+    $commandListKey = Join-Path $pluginKey 'CommandList'
+    if (-not (Test-Path -LiteralPath $pluginKey)) {
         throw 'The canonical PanelCladdingEditor registry registration is missing.'
     }
+
     $root = Get-ItemProperty -LiteralPath $pluginKey
-    $child = Get-ItemProperty -LiteralPath $pluginFileKey
     $canonicalRhp = [IO.Path]::GetFullPath($RhpPath)
-    if ([int]$root.LoadMode -ne 1 -or [int]$root.DirectoryInstall -ne 0 -or
+    $rootFileName = [string]$root.FileName
+    $hasPluginFile = Test-Path -LiteralPath $pluginFileKey
+    $hasCommandList = Test-Path -LiteralPath $commandListKey
+    if (-not [string]::IsNullOrWhiteSpace($rootFileName)) {
+        throw 'The complete PanelCladdingEditor registry registration still contains shorthand FileName.'
+    }
+
+    if (-not $hasPluginFile -or -not $hasCommandList) {
+        throw 'The complete PanelCladdingEditor registry registration is incomplete.'
+    }
+
+    $child = Get-ItemProperty -LiteralPath $pluginFileKey
+    $expectedRegPath = '\\HKEY_CURRENT_USER\' + $pluginKey.Substring('Registry::HKEY_CURRENT_USER\'.Length)
+    if (-not ([string]$root.Name).Equals('PanelCladdingEditor', [StringComparison]::OrdinalIgnoreCase) -or
+        -not ([string]$root.EnglishName).Equals('PanelCladdingEditor', [StringComparison]::OrdinalIgnoreCase) -or
+        -not ([string]$root.RegPath).Equals($expectedRegPath, [StringComparison]::OrdinalIgnoreCase) -or
+        [int]$root.LoadMode -ne 1 -or [int]$root.Type -ne 16 -or
+        [int]$root.DirectoryInstall -ne 0 -or
         [int]$root.IsDotNETPlugIn -ne 1 -or
-        -not ([IO.Path]::GetFullPath([string]$root.FileName)).Equals($canonicalRhp, [StringComparison]::OrdinalIgnoreCase) -or
         -not ([IO.Path]::GetFullPath([string]$child.FileName)).Equals($canonicalRhp, [StringComparison]::OrdinalIgnoreCase)) {
-        throw 'The canonical PanelCladdingEditor registry registration is inconsistent.'
+        throw 'The complete PanelCladdingEditor registry registration is inconsistent.'
+    }
+
+    $expectedCommands = @(Get-PanelExpectedCommands)
+    $commandProperties = @((Get-ItemProperty -LiteralPath $commandListKey).PSObject.Properties |
+        Where-Object { $_.Name -notmatch '^PS(Path|ParentPath|ChildName|Drive|Provider)$' } |
+        Sort-Object Name)
+    $registeredCommands = @($commandProperties | ForEach-Object { $_.Name })
+    $missingCommands = @($expectedCommands | Where-Object { $_ -notin $registeredCommands })
+    $unexpectedCommands = @($registeredCommands | Where-Object { $_ -notin $expectedCommands })
+    $invalidCommandValues = @($commandProperties | Where-Object { [string]$_.Value -ne "2;$($_.Name)" })
+    if ($missingCommands.Count -gt 0 -or $unexpectedCommands.Count -gt 0 -or $invalidCommandValues.Count -gt 0) {
+        throw "The complete PanelCladdingEditor command registration is inconsistent. Missing: $($missingCommands -join ', '); unexpected: $($unexpectedCommands -join ', '); invalid values: $($invalidCommandValues.Name -join ', ')."
     }
 }
 
@@ -187,7 +244,7 @@ if ($Mode -eq 'Validate') {
     Assert-DirectPanelRhp $pluginRoot
     Assert-PanelPluginRegistration $RhinoPluginRegistryRoot $pluginId $rhpPath
     Assert-SinglePanelDiscovery $RhinoPluginRoot $pluginRoot $LegacyRhinoPackageRoot $legacyNames
-    Write-Output "PanelCladdingEditor $version registry-only installation is valid."
+    Write-Output "PanelCladdingEditor $version registry-only installation is valid (complete registration)."
     return
 }
 
@@ -319,4 +376,4 @@ catch {
     throw $failure
 }
 
-Write-Output "PanelCladdingEditor $version installed registry-only at $pluginRoot. Restart Rhino to load the plug-in and register its commands."
+Write-Output "PanelCladdingEditor $version installed registry-only at $pluginRoot. Restart Rhino to load the plug-in."

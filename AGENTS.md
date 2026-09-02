@@ -117,6 +117,16 @@ portable GitHub CLI. For commit / push / pull-request / merge requests on this l
   packaging or installation, verify the compiled RHP's assembly metadata directly and reject
   missing, empty, mismatched, or shared plug-in IDs. Follow the full contract and regression rules
   in `Project_Guides/MCP_Rhino Architecture.md`.
+- **Rhino plug-in registration memo:** For registry-only plug-ins, Rhino owns the plug-in key root
+  product record and `CommandList`, and rewrites both on every successful load. Rhino does not write
+  `PlugIn\FileName`; that value is installer-owned for its whole lifetime and never self-heals. A
+  stale or dangling `PlugIn\FileName` therefore causes a silent no-load with no Rhino-side error and
+  survives any number of Rhino sessions while the surrounding record keeps looking freshly updated.
+  After every install, repair, or version bump, run the product installer in `-Mode Validate` and
+  treat it as a required gate, not an optional check. When a plug-in does not load, compare the
+  last-write times of the plug-in key root, `PlugIn`, and `CommandList` before assuming an assembly,
+  identity, or packaging fault. Evidence and reproduction:
+  `Project_Exet/260826_EXET_panel-cladding-plugin-registration.md`.
 
 ## Document Priority
 

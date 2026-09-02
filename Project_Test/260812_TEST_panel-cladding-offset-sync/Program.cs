@@ -30,14 +30,17 @@ internal static class Program
 
     private static void VerifyStepLayerContract(PanelCladdingKeyService keys)
     {
-        const string expectedRoot = "03_Material Surfaces (STEP)";
+        const string expectedRoot = "04_STEP Surfaces";
         Require(PanelCladdingSpawnPlanningService.MaterialSurfaceRootLayer == expectedRoot,
             "Spawn root must use the STEP layer name.");
         Require(PanelCladdingSpawnPlanningService.IsSupportedMaterialSurfaceRoot(expectedRoot),
             "STEP root must be accepted.");
+        Require(PanelCladdingSpawnPlanningService.IsSupportedMaterialSurfaceRoot(
+                "03_Material Surfaces (STEP)"),
+            "The exact legacy STEP root must remain readable for migration.");
         Require(!PanelCladdingSpawnPlanningService.IsSupportedMaterialSurfaceRoot("02_Material Surfaces") &&
                 !PanelCladdingSpawnPlanningService.IsSupportedMaterialSurfaceRoot("03_Material Surfaces (STP)"),
-            "Legacy material roots must not be accepted.");
+            "Unrecognized material roots must not be accepted.");
 
         PanelCladdingKeySet keySet = RequireData(keys.CreateKeySet(
             Array.Empty<double>(),
@@ -64,7 +67,7 @@ internal static class Program
                 expectedRoot + "::",
                 StringComparison.Ordinal)),
             "Every spawned cladding region must be under the STEP root.");
-        Console.WriteLine("[OK] STEP is the exclusive spawn and material-root contract");
+        Console.WriteLine("[OK] 04_STEP Surfaces is the spawn root and the exact legacy root remains readable");
     }
 
     private static void VerifyCanonicalGrid(PanelCladdingKeyService keys)

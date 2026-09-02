@@ -131,17 +131,18 @@ internal static class Program
             RequirePanelCladding(planarIdentity.FullDigest != changedMaterialIdentity.FullDigest,
                 "A changed cladding material must produce a different signature.");
             RequirePanelCladding(
-                planarIdentity.SchemaVersion == 3 &&
-                planarIdentity.StoredSignature.StartsWith("v3:sha256:", StringComparison.Ordinal) &&
-                planarIdentity.TypeCode.Contains("-CL-", StringComparison.Ordinal) &&
-                planarIdentity.CanonicalPayload.StartsWith("v=3|size=", StringComparison.Ordinal) &&
+                planarIdentity.SchemaVersion == 4 &&
+                planarIdentity.StoredSignature.StartsWith("v4:sha256:", StringComparison.Ordinal) &&
+                planarIdentity.TypeCode.StartsWith("WT01-2X2-", StringComparison.Ordinal) &&
+                !planarIdentity.TypeCode.Contains("-CL-", StringComparison.Ordinal) &&
+                planarIdentity.CanonicalPayload.StartsWith("v=4|size=", StringComparison.Ordinal) &&
                 planarIdentity.CanonicalPayload.Contains("|h=", StringComparison.Ordinal) &&
                 planarIdentity.CanonicalPayload.Contains("|v=", StringComparison.Ordinal) &&
                 planarIdentity.CanonicalPayload.Contains("|cells=", StringComparison.Ordinal),
-                "Cladding identity must use the v3 size, offset, and normalized-cell payload.");
+                "Cladding identity must use the v4 size, offset, topology, and normalized-cell payload.");
             OperationResponse<PanelCladdingTypeIdentity> unsupportedIdentity = signatureService.Create(unsupported, requested, "WT01");
             RequirePanelCladding(!unsupportedIdentity.Success, "Unsupported projection must disable type creation.");
-            checkpoints.Add("deterministic v3 SHA-256 type identity with unit-normalized size, offsets, and regions");
+            checkpoints.Add("deterministic v4 SHA-256 type identity with unit-normalized size, offsets, topology, and regions");
 
             byte[] previewPng = RequireData(renderer.RenderPng(curved, 900, 620), "Render curved preview");
             RequirePanelCladding(previewPng.Length > 8 && previewPng.Take(8).SequenceEqual(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }),
@@ -369,21 +370,17 @@ internal static class Program
             assembly.GetType("PanelCladdingEditor.UI.PanelCladdingEditorCommand") is not null,
             "Production PanelCladdingEditor command is missing.");
         RequirePanelCladding(
-            assembly.GetType("PanelCladdingEditor.UI.PanelCladdingEditorSmokeCommand") is not null,
-            "Rhino-side standalone smoke command is missing.");
+            assembly.GetType("PanelCladdingEditor.UI.PanelCladdingEditorSmokeCommand") is null,
+            "The retired Rhino-side smoke command must not be exposed to users.");
         RequirePanelCladding(
             assembly.GetType("PanelCladdingEditor.PanelCladdingEditorPlugin")?.GUID ==
                 Guid.Parse("7C1A4D3B-5E29-4F68-9A72-1D8C6B0F4E35"),
             "Standalone plug-in must use the clean product GUID.");
 
         Type editorCommand = assembly.GetType("PanelCladdingEditor.UI.PanelCladdingEditorCommand")!;
-        Type smokeCommand = assembly.GetType("PanelCladdingEditor.UI.PanelCladdingEditorSmokeCommand")!;
         Guid editorCommandId = editorCommand.GUID;
-        Guid smokeCommandId = smokeCommand.GUID;
-        RequirePanelCladding(editorCommandId != Guid.Empty && smokeCommandId != Guid.Empty,
-            "Every Rhino command must have an explicit non-empty GUID.");
-        RequirePanelCladding(editorCommandId != smokeCommandId,
-            "Rhino command GUIDs must be unique.");
+        RequirePanelCladding(editorCommandId != Guid.Empty,
+            "The editor Rhino command must have an explicit non-empty GUID.");
 
         string[] forbiddenReferences = { "MCP_Rhino", "ModelContextProtocol", "Microsoft.Extensions.Hosting" };
         string[] references = assembly.GetReferencedAssemblies().Select(item => item.Name ?? string.Empty).ToArray();

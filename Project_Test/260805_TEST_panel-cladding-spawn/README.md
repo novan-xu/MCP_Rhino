@@ -16,5 +16,5 @@ dotnet run --project .\Project_Test\260805_TEST_panel-cladding-spawn\PanelCladdi
 
 Live geometry/Undo verification requires a saved Rhino document containing multiple authored
 panels. Preselect two or more panels (or select them at the command prompt), run
-`_PanelCladdingSpawn`, confirm all reported CIDs and colored material layers, then run `_Undo` once
+`_PCSpawn`, confirm all reported CIDs and colored material layers, then run `_Undo` once
 and confirm all spawned objects are removed together.

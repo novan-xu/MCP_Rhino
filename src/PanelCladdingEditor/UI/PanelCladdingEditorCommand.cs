@@ -1,6 +1,8 @@
 extern alias rhinocommon;
 
 using System.Runtime.InteropServices;
+using System.Windows;
+using System.Windows.Interop;
 using PanelCladdingEditor.Application.Services.PanelCladding;
 using PanelCladdingEditor.Contracts.Responses;
 using PanelCladdingEditor.Infrastructure.PanelCladding;
@@ -22,13 +24,13 @@ public sealed class PanelCladdingEditorCommand : RhinoCommand
 {
     private static PanelCladdingEditorWindow? _window;
 
-    public override string EnglishName => "PanelCladdingEditor";
+    public override string EnglishName => "PCEditor";
 
     protected override Result RunCommand(RhinoDoc doc, RunMode mode)
     {
         if (doc is null || string.IsNullOrWhiteSpace(doc.Path))
         {
-            RhinoApp.WriteLine("PanelCladdingEditor requires a saved active document.");
+            RhinoApp.WriteLine("PCEditor requires a saved active document.");
             return Result.Failure;
         }
 
@@ -47,11 +49,17 @@ public sealed class PanelCladdingEditorCommand : RhinoCommand
             var renderer = new PanelPreviewRenderer();
             var workbook = new OpenXmlPanelCladdingWorkbookRepository();
             var signature = new PanelCladdingTypeSignatureService(keys);
-            var save = new PanelCladdingSaveService(liveRepository, workbook, renderer, signature);
-            var controller = new PanelCladdingEditorController(liveRepository, save, renderer);
+            var save = new PanelCladdingSaveService(liveRepository, signature);
+            var controller = new PanelCladdingEditorController(
+                liveRepository,
+                save,
+                renderer,
+                signature,
+                workbook,
+                new PdfFrameExtrusionScheduleImporter());
             _window = new PanelCladdingEditorWindow(controller);
             _window.EditorClosed += (_, _) => _window = null;
-            _window.Show();
+            new WindowInteropHelper(_window) { Owner = RhinoApp.MainWindowHandle() };
         }
 
         OperationResponse loaded = _window.LoadPanel(doc.Path, selection.ObjectId);
@@ -60,8 +68,15 @@ public sealed class PanelCladdingEditorCommand : RhinoCommand
             RhinoApp.WriteLine(loaded.Message);
             return Result.Failure;
         }
-        _window.BringToFront();
-        _window.Focus();
+        if (!_window.IsVisible)
+        {
+            _window.Show();
+        }
+        if (_window.WindowState == WindowState.Minimized)
+        {
+            _window.WindowState = WindowState.Normal;
+        }
+        _window.Activate();
         return Result.Success;
     }
 

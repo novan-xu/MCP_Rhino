@@ -8,10 +8,12 @@ namespace PanelCladdingEditor.Application.Services.PanelCladding;
 
 public sealed class PanelCladdingTypeSignatureService
 {
+    private readonly PanelCladdingKeyService _keys;
     private readonly PanelCladdingRegionService _regions;
 
     public PanelCladdingTypeSignatureService(PanelCladdingKeyService keys)
     {
+        _keys = keys;
         _regions = new PanelCladdingRegionService(keys);
     }
 
@@ -33,16 +35,24 @@ public sealed class PanelCladdingTypeSignatureService
         OperationResponse<PanelCladdingRegionSet> regionResponse = _regions.Resolve(
             orderedCells,
             requestedValues,
-            requirePopulatedCells: true);
+            requirePopulatedCells: false);
         if (!regionResponse.Success || regionResponse.Data is null)
         {
             return OperationResponse<PanelCladdingTypeIdentity>.Fail(regionResponse.Message);
         }
         IReadOnlyDictionary<string, string> normalized = regionResponse.Data.NormalizedCellValues;
+        OperationResponse<PanelCladdingTopologyPayloads> topologyResponse = _keys.EncodeTopology(
+            layout.Topology,
+            layout.HorizontalOffsets.Count,
+            layout.VerticalOffsets.Count);
+        if (!topologyResponse.Success || topologyResponse.Data is null)
+        {
+            return OperationResponse<PanelCladdingTypeIdentity>.Fail(topologyResponse.Message);
+        }
 
         var payload = new StringBuilder();
         double unitScale = layout.ModelUnitScaleToMillimeters;
-        payload.Append("v=3|size=")
+        payload.Append("v=4|size=")
             .Append(FormatNumber(layout.Width * unitScale))
             .Append(',')
             .Append(FormatNumber(layout.Height * unitScale))
@@ -50,6 +60,12 @@ public sealed class PanelCladdingTypeSignatureService
         AppendOffsets(payload, layout.HorizontalOffsets.Select(value => value * unitScale));
         payload.Append("|v=");
         AppendOffsets(payload, layout.VerticalOffsets.Select(value => value * unitScale));
+        payload.Append("|segments=")
+            .Append(topologyResponse.Data.SegmentMask)
+            .Append("|merges=")
+            .Append(topologyResponse.Data.MergeMask)
+            .Append("|hidden=")
+            .Append(topologyResponse.Data.HideMask);
         payload.Append("|cells=");
         foreach (PanelCladdingCell cell in orderedCells)
         {
@@ -66,20 +82,20 @@ public sealed class PanelCladdingTypeSignatureService
             : requestedSystemCode);
         int columnCount = orderedCells.Select(cell => cell.Column).Distinct().Count();
         int rowCount = orderedCells.Select(cell => cell.Row).Distinct().Count();
-        string typeCode = $"{systemCode}-CL-{columnCount}X{rowCount}-{digest[..8].ToUpperInvariant()}";
+        string typeCode = $"{systemCode}-{columnCount}X{rowCount}-{digest[..8].ToUpperInvariant()}";
         if (typeCode.Length > 31)
         {
             int over = typeCode.Length - 31;
             systemCode = systemCode[..Math.Max(2, systemCode.Length - over)];
-            typeCode = $"{systemCode}-CL-{columnCount}X{rowCount}-{digest[..8].ToUpperInvariant()}";
+            typeCode = $"{systemCode}-{columnCount}X{rowCount}-{digest[..8].ToUpperInvariant()}";
         }
 
         return OperationResponse<PanelCladdingTypeIdentity>.Ok(new PanelCladdingTypeIdentity
         {
-            SchemaVersion = 3,
+            SchemaVersion = 4,
             TypeCode = typeCode,
             FullDigest = digest,
-            StoredSignature = $"v3:sha256:{digest}",
+            StoredSignature = $"v4:sha256:{digest}",
             CanonicalPayload = canonical,
             NormalizedCellValues = normalized
         });
@@ -99,7 +115,7 @@ public sealed class PanelCladdingTypeSignatureService
     public static string WithDigestLength(PanelCladdingTypeIdentity identity, int digestLength)
     {
         string[] parts = identity.TypeCode.Split('-');
-        if (parts.Length < 4)
+        if (parts.Length < 3)
         {
             throw new InvalidOperationException("Type code does not contain the expected digest segment.");
         }

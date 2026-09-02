@@ -1,4 +1,5 @@
 ﻿using System.Globalization;
+using System.Text.RegularExpressions;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Validation;
@@ -15,6 +16,203 @@ namespace PanelCladdingEditor.Infrastructure.PanelCladding;
 public sealed class OpenXmlPanelCladdingWorkbookRepository : IPanelCladdingWorkbookRepository
 {
     private const string IndexSheetName = "_CLADDING_INDEX";
+    private const string MaterialSheetName = "Materials";
+    private const string FrameExtrusionSheetName = "Extrusions";
+
+    public OperationResponse<PanelCladdingMaterialCatalog> ReadMaterialCatalog(string workbookPath)
+    {
+        OperationResponse<string> pathValidation = ValidatePath(workbookPath, allowCreate: false);
+        if (!pathValidation.Success || pathValidation.Data is null)
+        {
+            return OperationResponse<PanelCladdingMaterialCatalog>.Fail(pathValidation.Message);
+        }
+        try
+        {
+            using SpreadsheetDocument document = SpreadsheetDocument.Open(pathValidation.Data, false);
+            WorkbookPart workbookPart = document.WorkbookPart
+                ?? throw new InvalidDataException("WorkbookPart is missing.");
+            S.Sheets sheets = workbookPart.Workbook?.GetFirstChild<S.Sheets>()
+                ?? throw new InvalidDataException("Workbook sheets are missing.");
+            S.Sheet? materialSheet = sheets.Elements<S.Sheet>().FirstOrDefault(sheet =>
+                string.Equals(sheet.Name?.Value, MaterialSheetName, StringComparison.OrdinalIgnoreCase));
+            if (materialSheet is not null)
+            {
+                WorksheetPart part = (WorksheetPart)workbookPart.GetPartById(materialSheet.Id!);
+                return OperationResponse<PanelCladdingMaterialCatalog>.Ok(new PanelCladdingMaterialCatalog
+                {
+                    WorkbookPath = pathValidation.Data,
+                    Materials = ReadMaterialRows(workbookPart, part),
+                    UsesLegacyTypeFallback = false
+                });
+            }
+
+            return OperationResponse<PanelCladdingMaterialCatalog>.Ok(new PanelCladdingMaterialCatalog
+            {
+                WorkbookPath = pathValidation.Data,
+                Materials = ReadLegacyMaterialRows(workbookPart, sheets),
+                UsesLegacyTypeFallback = true
+            }, "Legacy cladding type sheets were scanned; save Material Setup to migrate the catalogue.");
+        }
+        catch (Exception ex)
+        {
+            return OperationResponse<PanelCladdingMaterialCatalog>.Fail(
+                $"PANEL_CLADDING_MATERIAL_CATALOG_READ_FAILED: {ex.Message}");
+        }
+    }
+
+    public OperationResponse<IPreparedPanelCladdingMaterialCatalogUpdate> PrepareMaterialCatalog(
+        PanelCladdingMaterialCatalogSaveRequest request)
+    {
+        OperationResponse<string> pathValidation = ValidatePath(request.WorkbookPath, request.AllowCreate);
+        if (!pathValidation.Success || pathValidation.Data is null)
+        {
+            return OperationResponse<IPreparedPanelCladdingMaterialCatalogUpdate>.Fail(pathValidation.Message);
+        }
+        OperationResponse<IReadOnlyList<PanelCladdingMaterialCatalogItem>> validated =
+            ValidateMaterialCatalog(request.Materials);
+        if (!validated.Success || validated.Data is null)
+        {
+            return OperationResponse<IPreparedPanelCladdingMaterialCatalogUpdate>.Fail(validated.Message);
+        }
+
+        string finalPath = pathValidation.Data;
+        bool existed = File.Exists(finalPath);
+        OperationResponse lockCheck = CheckExclusiveAccess(finalPath, existed);
+        if (!lockCheck.Success)
+        {
+            return OperationResponse<IPreparedPanelCladdingMaterialCatalogUpdate>.Fail(lockCheck.Message);
+        }
+        string directory = Path.GetDirectoryName(finalPath)!;
+        string tempPath = Path.Combine(directory,
+            $".{Path.GetFileNameWithoutExtension(finalPath)}.materials.{Guid.NewGuid():N}.tmp.xlsx");
+        try
+        {
+            if (existed)
+            {
+                File.Copy(finalPath, tempPath, overwrite: false);
+            }
+            else
+            {
+                CreateEmptyWorkbook(tempPath);
+            }
+            long originalLength = existed ? new FileInfo(finalPath).Length : -1L;
+            DateTime originalWriteUtc = existed ? File.GetLastWriteTimeUtc(finalPath) : DateTime.MinValue;
+            int removed = WriteMaterialCatalog(tempPath, validated.Data, request.RemoveLegacyTypeSheets);
+            ValidateWorkbook(tempPath);
+            return OperationResponse<IPreparedPanelCladdingMaterialCatalogUpdate>.Ok(
+                new PreparedMaterialCatalogUpdate(
+                    tempPath,
+                    finalPath,
+                    existed,
+                    originalLength,
+                    originalWriteUtc,
+                    new PanelCladdingMaterialCatalogSaveResult
+                    {
+                        WorkbookPath = finalPath,
+                        MaterialCount = validated.Data.Count,
+                        RemovedLegacyTypeSheetCount = removed
+                    }));
+        }
+        catch (Exception ex)
+        {
+            TryDelete(tempPath);
+            return OperationResponse<IPreparedPanelCladdingMaterialCatalogUpdate>.Fail(
+                $"PANEL_CLADDING_MATERIAL_CATALOG_PREPARE_FAILED: {ex.Message}");
+        }
+    }
+
+    public OperationResponse<PanelFrameExtrusionCatalog> ReadFrameExtrusionCatalog(string workbookPath)
+    {
+        OperationResponse<string> pathValidation = ValidatePath(workbookPath, allowCreate: false);
+        if (!pathValidation.Success || pathValidation.Data is null)
+        {
+            return OperationResponse<PanelFrameExtrusionCatalog>.Fail(pathValidation.Message);
+        }
+        try
+        {
+            using SpreadsheetDocument document = SpreadsheetDocument.Open(pathValidation.Data, false);
+            WorkbookPart workbookPart = document.WorkbookPart
+                ?? throw new InvalidDataException("WorkbookPart is missing.");
+            S.Sheets sheets = workbookPart.Workbook?.GetFirstChild<S.Sheets>()
+                ?? throw new InvalidDataException("Workbook sheets are missing.");
+            S.Sheet? extrusionSheet = sheets.Elements<S.Sheet>().FirstOrDefault(sheet =>
+                string.Equals(sheet.Name?.Value, FrameExtrusionSheetName, StringComparison.OrdinalIgnoreCase));
+            return OperationResponse<PanelFrameExtrusionCatalog>.Ok(new PanelFrameExtrusionCatalog
+            {
+                WorkbookPath = pathValidation.Data,
+                Extrusions = extrusionSheet is null
+                    ? Array.Empty<PanelFrameExtrusionCatalogItem>()
+                    : ReadFrameExtrusionRows(
+                        workbookPart,
+                        (WorksheetPart)workbookPart.GetPartById(extrusionSheet.Id!))
+            });
+        }
+        catch (Exception exception)
+        {
+            return OperationResponse<PanelFrameExtrusionCatalog>.Fail(
+                $"PANEL_FRAME_EXTRUSION_CATALOG_READ_FAILED: {exception.Message}");
+        }
+    }
+
+    public OperationResponse<IPreparedPanelFrameExtrusionCatalogUpdate> PrepareFrameExtrusionCatalog(
+        PanelFrameExtrusionCatalogSaveRequest request)
+    {
+        OperationResponse<string> pathValidation = ValidatePath(request.WorkbookPath, request.AllowCreate);
+        if (!pathValidation.Success || pathValidation.Data is null)
+        {
+            return OperationResponse<IPreparedPanelFrameExtrusionCatalogUpdate>.Fail(pathValidation.Message);
+        }
+        OperationResponse<IReadOnlyList<PanelFrameExtrusionCatalogItem>> validated =
+            ValidateFrameExtrusionCatalog(request.Extrusions);
+        if (!validated.Success || validated.Data is null)
+        {
+            return OperationResponse<IPreparedPanelFrameExtrusionCatalogUpdate>.Fail(validated.Message);
+        }
+
+        string finalPath = pathValidation.Data;
+        bool existed = File.Exists(finalPath);
+        OperationResponse lockCheck = CheckExclusiveAccess(finalPath, existed);
+        if (!lockCheck.Success)
+        {
+            return OperationResponse<IPreparedPanelFrameExtrusionCatalogUpdate>.Fail(lockCheck.Message);
+        }
+        string directory = Path.GetDirectoryName(finalPath)!;
+        string tempPath = Path.Combine(directory,
+            $".{Path.GetFileNameWithoutExtension(finalPath)}.extrusions.{Guid.NewGuid():N}.tmp.xlsx");
+        try
+        {
+            if (existed)
+            {
+                File.Copy(finalPath, tempPath, overwrite: false);
+            }
+            else
+            {
+                CreateEmptyWorkbook(tempPath);
+            }
+            long originalLength = existed ? new FileInfo(finalPath).Length : -1L;
+            DateTime originalWriteUtc = existed ? File.GetLastWriteTimeUtc(finalPath) : DateTime.MinValue;
+            WriteFrameExtrusionCatalog(tempPath, validated.Data);
+            ValidateWorkbook(tempPath);
+            return OperationResponse<IPreparedPanelFrameExtrusionCatalogUpdate>.Ok(
+                new PreparedFrameExtrusionCatalogUpdate(
+                    tempPath,
+                    finalPath,
+                    existed,
+                    originalLength,
+                    originalWriteUtc,
+                    new PanelFrameExtrusionCatalogSaveResult
+                    {
+                        WorkbookPath = finalPath,
+                        ExtrusionCount = validated.Data.Count
+                    }));
+        }
+        catch (Exception exception)
+        {
+            TryDelete(tempPath);
+            return OperationResponse<IPreparedPanelFrameExtrusionCatalogUpdate>.Fail(
+                $"PANEL_FRAME_EXTRUSION_CATALOG_PREPARE_FAILED: {exception.Message}");
+        }
+    }
 
     public OperationResponse<IPreparedPanelCladdingWorkbookUpdate> PrepareUpsert(PanelCladdingWorkbookUpsert request)
     {
@@ -763,6 +961,636 @@ public sealed class OpenXmlPanelCladdingWorkbookRepository : IPanelCladdingWorkb
         workbookPart.Workbook.Save();
     }
 
+    private static OperationResponse<IReadOnlyList<PanelCladdingMaterialCatalogItem>> ValidateMaterialCatalog(
+        IReadOnlyList<PanelCladdingMaterialCatalogItem>? materials)
+    {
+        var validated = new List<PanelCladdingMaterialCatalogItem>();
+        var codes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (PanelCladdingMaterialCatalogItem item in materials ?? Array.Empty<PanelCladdingMaterialCatalogItem>())
+        {
+            string code = item.Code.Trim().ToUpperInvariant();
+            string description = item.Description.Trim();
+            string category = item.Category.Trim();
+            string color = item.ColorHex.Trim().ToUpperInvariant();
+            if (code.Length == 0 || description.Length == 0 || category.Length == 0)
+            {
+                return OperationResponse<IReadOnlyList<PanelCladdingMaterialCatalogItem>>.Fail(
+                    "PANEL_CLADDING_MATERIAL_FIELDS_REQUIRED");
+            }
+            if (!Regex.IsMatch(color, "^#[0-9A-F]{6}$", RegexOptions.CultureInvariant))
+            {
+                return OperationResponse<IReadOnlyList<PanelCladdingMaterialCatalogItem>>.Fail(
+                    $"PANEL_CLADDING_MATERIAL_COLOR_INVALID: {code} color must be #RRGGBB.");
+            }
+            if (!codes.Add(code))
+            {
+                return OperationResponse<IReadOnlyList<PanelCladdingMaterialCatalogItem>>.Fail(
+                    $"PANEL_CLADDING_MATERIAL_CODE_DUPLICATE: {code}");
+            }
+            validated.Add(new PanelCladdingMaterialCatalogItem
+            {
+                Code = code,
+                Description = description,
+                Category = category,
+                ColorHex = color
+            });
+        }
+        return OperationResponse<IReadOnlyList<PanelCladdingMaterialCatalogItem>>.Ok(
+            validated.OrderBy(item => item.Code, StringComparer.OrdinalIgnoreCase).ToArray());
+    }
+
+    private static OperationResponse<IReadOnlyList<PanelFrameExtrusionCatalogItem>> ValidateFrameExtrusionCatalog(
+        IReadOnlyList<PanelFrameExtrusionCatalogItem>? extrusions)
+    {
+        var validated = new List<PanelFrameExtrusionCatalogItem>();
+        var codes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var sources = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (PanelFrameExtrusionCatalogItem item in extrusions ?? Array.Empty<PanelFrameExtrusionCatalogItem>())
+        {
+            string sourceCode = item.SourceCode.Trim().ToUpperInvariant();
+            string baseCode = string.IsNullOrWhiteSpace(item.BaseCode)
+                ? (sourceCode.StartsWith("ALU-", StringComparison.Ordinal) ? sourceCode[4..] : sourceCode)
+                : item.BaseCode.Trim().ToUpperInvariant();
+            string code = item.Dimension is null
+                ? string.Empty
+                : $"{(item.Dimension == PanelFrameProfileDimension.OneDimensional ? "1D" : "0D")}-{baseCode}";
+            string description = item.Description.Trim();
+            string sourcePdf = item.SourcePdfPath.Trim();
+            string category = string.IsNullOrWhiteSpace(item.Category)
+                ? $"PAGE {item.SourcePageNumber}"
+                : item.Category.Trim().ToUpperInvariant();
+            string parent = item.ParentCode.Trim().ToUpperInvariant();
+            if (!Regex.IsMatch(baseCode, "^[A-Z0-9][A-Z0-9-]{0,76}$", RegexOptions.CultureInvariant) ||
+                !Regex.IsMatch(sourceCode, "^[A-Z0-9][A-Z0-9-]{0,80}$", RegexOptions.CultureInvariant) ||
+                (!string.IsNullOrEmpty(parent) &&
+                 !Regex.IsMatch(parent, "^(?:0D|1D)-[A-Z0-9][A-Z0-9-]{0,76}$", RegexOptions.CultureInvariant)))
+            {
+                return OperationResponse<IReadOnlyList<PanelFrameExtrusionCatalogItem>>.Fail(
+                    $"PANEL_FRAME_EXTRUSION_CATALOG_CODE_INVALID: {sourceCode}");
+            }
+            if (item.SourcePageNumber <= 0 || item.ThumbnailPng.Length == 0 ||
+                item.ThumbnailPng.Length > 24_000 || !HasPngSignature(item.ThumbnailPng))
+            {
+                return OperationResponse<IReadOnlyList<PanelFrameExtrusionCatalogItem>>.Fail(
+                    $"PANEL_FRAME_EXTRUSION_CATALOG_THUMBNAIL_INVALID: {code}");
+            }
+            if (!sources.Add(sourceCode) || (!string.IsNullOrEmpty(code) && !codes.Add(code)))
+            {
+                return OperationResponse<IReadOnlyList<PanelFrameExtrusionCatalogItem>>.Fail(
+                    $"PANEL_FRAME_EXTRUSION_CATALOG_CODE_DUPLICATE: {sourceCode}");
+            }
+            double? calculationValue = item.CalculationValue;
+            PanelFrameProfileCalculation calculation = item.Dimension == PanelFrameProfileDimension.OneDimensional
+                ? PanelFrameProfileCalculation.Length
+                : item.Calculation;
+            if (item.Dimension == PanelFrameProfileDimension.OneDimensional)
+            {
+                calculationValue ??= 1d;
+                if (!IsPositiveInteger(calculationValue.Value))
+                {
+                    return OperationResponse<IReadOnlyList<PanelFrameExtrusionCatalogItem>>.Fail(
+                        $"PANEL_FRAME_EXTRUSION_CATALOG_QUANTITY_INVALID: {code}");
+                }
+            }
+            else if (item.Dimension == PanelFrameProfileDimension.ZeroDimensional &&
+                     (calculation == PanelFrameProfileCalculation.Length || calculationValue is null ||
+                      !double.IsFinite(calculationValue.Value) || calculationValue.Value <= 0d ||
+                      (calculation == PanelFrameProfileCalculation.FixedQuantity &&
+                       !IsPositiveInteger(calculationValue.Value))))
+            {
+                return OperationResponse<IReadOnlyList<PanelFrameExtrusionCatalogItem>>.Fail(
+                    $"PANEL_FRAME_EXTRUSION_CATALOG_VALUE_INVALID: {code}");
+            }
+            validated.Add(new PanelFrameExtrusionCatalogItem
+            {
+                Code = code,
+                BaseCode = baseCode,
+                SourceCode = sourceCode,
+                Description = description,
+                Category = category,
+                Dimension = item.Dimension,
+                Calculation = calculation,
+                CalculationValue = calculationValue,
+                ParentCode = parent,
+                SourcePdfPath = sourcePdf,
+                SourcePageNumber = item.SourcePageNumber,
+                ThumbnailPng = item.ThumbnailPng.ToArray()
+            });
+        }
+        return OperationResponse<IReadOnlyList<PanelFrameExtrusionCatalogItem>>.Ok(
+            validated.OrderBy(item => item.SourcePageNumber)
+                .ThenBy(item => item.Category, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(item => item.BaseCode, StringComparer.OrdinalIgnoreCase)
+                .ToArray());
+    }
+
+    private static IReadOnlyList<PanelFrameExtrusionCatalogItem> ReadFrameExtrusionRows(
+        WorkbookPart workbookPart,
+        WorksheetPart worksheetPart)
+    {
+        S.SheetData? data = worksheetPart.Worksheet?.GetFirstChild<S.SheetData>();
+        if (data is null)
+        {
+            return Array.Empty<PanelFrameExtrusionCatalogItem>();
+        }
+        S.Row? headerRow = data.Elements<S.Row>().FirstOrDefault();
+        var headers = headerRow?.Elements<S.Cell>().ToDictionary(
+            cell => GetColumnIndex(cell.CellReference?.Value),
+            cell => ReadCellText(workbookPart, cell)) ?? new Dictionary<int, string>();
+        bool version2 = string.Equals(Get(headers, 2), "Base Code", StringComparison.OrdinalIgnoreCase);
+        var result = new List<PanelFrameExtrusionCatalogItem>();
+        foreach (S.Row row in data.Elements<S.Row>().Skip(1))
+        {
+            var values = row.Elements<S.Cell>().ToDictionary(
+                cell => GetColumnIndex(cell.CellReference?.Value),
+                cell => ReadCellText(workbookPart, cell));
+            string code = Get(values, 1).Trim();
+            string sourceCode = Get(values, version2 ? 3 : 2).Trim();
+            if (sourceCode.Length == 0)
+            {
+                continue;
+            }
+            int pageColumn = version2 ? 11 : 5;
+            int thumbnailColumn = version2 ? 12 : 6;
+            if (!int.TryParse(Get(values, pageColumn), NumberStyles.Integer, CultureInfo.InvariantCulture, out int pageNumber))
+            {
+                throw new InvalidDataException($"PANEL_FRAME_EXTRUSION_CATALOG_PAGE_INVALID: {code}");
+            }
+            byte[] thumbnail;
+            try
+            {
+                thumbnail = Convert.FromBase64String(Get(values, thumbnailColumn));
+            }
+            catch (FormatException exception)
+            {
+                throw new InvalidDataException(
+                    $"PANEL_FRAME_EXTRUSION_CATALOG_THUMBNAIL_INVALID: {code}",
+                    exception);
+            }
+            OperationResponse<IReadOnlyList<PanelFrameExtrusionCatalogItem>> validated =
+                ValidateFrameExtrusionCatalog(
+                [
+                    new PanelFrameExtrusionCatalogItem
+                    {
+                        Code = code,
+                        BaseCode = version2 ? Get(values, 2) : string.Empty,
+                        SourceCode = sourceCode,
+                        Description = Get(values, version2 ? 4 : 3),
+                        Category = version2 ? Get(values, 5) : string.Empty,
+                        Dimension = version2 ? ParseDimension(Get(values, 6)) : PanelFrameProfileDimension.OneDimensional,
+                        Calculation = version2 ? ParseCalculation(Get(values, 7)) : PanelFrameProfileCalculation.Length,
+                        CalculationValue = version2 ? ParseOptionalDouble(Get(values, 8)) : 1d,
+                        ParentCode = version2 ? Get(values, 9) : string.Empty,
+                        SourcePdfPath = Get(values, version2 ? 10 : 4),
+                        SourcePageNumber = pageNumber,
+                        ThumbnailPng = thumbnail
+                    }
+                ]);
+            if (!validated.Success || validated.Data is null)
+            {
+                throw new InvalidDataException(validated.Message);
+            }
+            result.Add(validated.Data[0]);
+        }
+        if (result.Select(item => item.SourceCode).Distinct(StringComparer.OrdinalIgnoreCase).Count() != result.Count)
+        {
+            throw new InvalidDataException("PANEL_FRAME_EXTRUSION_CATALOG_CODE_DUPLICATE");
+        }
+        return result.OrderBy(item => item.SourcePageNumber)
+            .ThenBy(item => item.Category, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(item => item.BaseCode, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static PanelFrameProfileDimension? ParseDimension(string value) => value.Trim().ToUpperInvariant() switch
+    {
+        "1D" => PanelFrameProfileDimension.OneDimensional,
+        "0D" => PanelFrameProfileDimension.ZeroDimensional,
+        "" => null,
+        _ => throw new InvalidDataException($"PANEL_FRAME_EXTRUSION_CATALOG_DIMENSION_INVALID: {value}")
+    };
+
+    private static PanelFrameProfileCalculation ParseCalculation(string value) => value.Trim().ToUpperInvariant() switch
+    {
+        "" or "LENGTH" => PanelFrameProfileCalculation.Length,
+        "FIXED" => PanelFrameProfileCalculation.FixedQuantity,
+        "SPACING" => PanelFrameProfileCalculation.Spacing,
+        _ => throw new InvalidDataException($"PANEL_FRAME_EXTRUSION_CATALOG_CALCULATION_INVALID: {value}")
+    };
+
+    private static double? ParseOptionalDouble(string value) => string.IsNullOrWhiteSpace(value)
+        ? null
+        : double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out double result)
+            ? result
+            : throw new InvalidDataException($"PANEL_FRAME_EXTRUSION_CATALOG_VALUE_INVALID: {value}");
+
+    private static bool IsPositiveInteger(double value) =>
+        double.IsFinite(value) && value >= 1d && value <= 100_000d && Math.Abs(value - Math.Round(value)) < 1e-9d;
+
+    private static bool HasPngSignature(IReadOnlyList<byte> bytes) =>
+        bytes.Count >= 8 &&
+        bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47 &&
+        bytes[4] == 0x0D && bytes[5] == 0x0A && bytes[6] == 0x1A && bytes[7] == 0x0A;
+
+    private static IReadOnlyList<PanelCladdingMaterialCatalogItem> ReadMaterialRows(
+        WorkbookPart workbookPart,
+        WorksheetPart worksheetPart)
+    {
+        S.SheetData? data = worksheetPart.Worksheet?.GetFirstChild<S.SheetData>();
+        if (data is null)
+        {
+            return Array.Empty<PanelCladdingMaterialCatalogItem>();
+        }
+        var result = new List<PanelCladdingMaterialCatalogItem>();
+        foreach (S.Row row in data.Elements<S.Row>().Skip(1))
+        {
+            var values = row.Elements<S.Cell>().ToDictionary(
+                cell => GetColumnIndex(cell.CellReference?.Value),
+                cell => ReadCellText(workbookPart, cell));
+            string code = Get(values, 1).Trim().ToUpperInvariant();
+            if (code.Length == 0)
+            {
+                continue;
+            }
+            string description = Get(values, 2).Trim();
+            string category = Get(values, 3).Trim();
+            string color = Get(values, 4).Trim().ToUpperInvariant();
+            OperationResponse<IReadOnlyList<PanelCladdingMaterialCatalogItem>> validated = ValidateMaterialCatalog(
+                [new PanelCladdingMaterialCatalogItem
+                {
+                    Code = code,
+                    Description = description,
+                    Category = category,
+                    ColorHex = color
+                }]);
+            if (!validated.Success || validated.Data is null)
+            {
+                throw new InvalidDataException(validated.Message);
+            }
+            result.Add(validated.Data[0]);
+        }
+        if (result.Select(item => item.Code).Distinct(StringComparer.OrdinalIgnoreCase).Count() != result.Count)
+        {
+            throw new InvalidDataException("PANEL_CLADDING_MATERIAL_CODE_DUPLICATE");
+        }
+        return result.OrderBy(item => item.Code, StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
+    private static IReadOnlyList<PanelCladdingMaterialCatalogItem> ReadLegacyMaterialRows(
+        WorkbookPart workbookPart,
+        S.Sheets sheets)
+    {
+        S.Sheet? indexSheet = sheets.Elements<S.Sheet>().FirstOrDefault(sheet =>
+            string.Equals(sheet.Name?.Value, IndexSheetName, StringComparison.OrdinalIgnoreCase));
+        if (indexSheet is null)
+        {
+            return Array.Empty<PanelCladdingMaterialCatalogItem>();
+        }
+        WorksheetPart indexPart = (WorksheetPart)workbookPart.GetPartById(indexSheet.Id!);
+        HashSet<string> managedNames = ReadIndex(workbookPart, indexPart)
+            .Select(record => record.SheetName)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var codes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (S.Sheet sheet in sheets.Elements<S.Sheet>().Where(sheet => managedNames.Contains(sheet.Name?.Value ?? string.Empty)))
+        {
+            WorksheetPart part = (WorksheetPart)workbookPart.GetPartById(sheet.Id!);
+            foreach (S.Cell cell in part.Worksheet?.Descendants<S.Cell>() ?? Enumerable.Empty<S.Cell>())
+            {
+                string value = ReadCellText(workbookPart, cell).Trim().ToUpperInvariant();
+                if (Regex.IsMatch(value, "^[A-Z]{2,4}-[0-9]{3}$", RegexOptions.CultureInvariant))
+                {
+                    codes.Add(value);
+                }
+            }
+        }
+        return codes.Select(CreateDefaultMaterialCatalogItem)
+            .OrderBy(item => item.Code, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static PanelCladdingMaterialCatalogItem CreateDefaultMaterialCatalogItem(string code)
+    {
+        string family = PanelCladdingSpawnPlanningService.ResolveMaterialFamilyLayer(code);
+        string category = family switch
+        {
+            "Surfaces-Glass" => "Glass",
+            "Surfaces-Stone" => "Stone",
+            "Surfaces-Terracotta" => "Terracotta",
+            "Surfaces-Metal" => "Metal",
+            "Surfaces-Concrete" => "Concrete",
+            "Surfaces-Wood" => "Wood",
+            _ => "Composite"
+        };
+        PanelColorRgb color = PanelCladdingSpawnPlanningService.ResolveMaterialLayerColor(code);
+        return new PanelCladdingMaterialCatalogItem
+        {
+            Code = code,
+            Description = category switch
+            {
+                "Glass" => "Glazing panel",
+                "Stone" => "Stone finish",
+                "Terracotta" => "Terracotta finish",
+                "Metal" => "Metal panel",
+                _ => $"{category} finish"
+            },
+            Category = category,
+            ColorHex = $"#{color.Red:X2}{color.Green:X2}{color.Blue:X2}"
+        };
+    }
+
+    private static void WriteFrameExtrusionCatalog(
+        string tempPath,
+        IReadOnlyList<PanelFrameExtrusionCatalogItem> extrusions)
+    {
+        using SpreadsheetDocument document = SpreadsheetDocument.Open(tempPath, true);
+        WorkbookPart workbookPart = document.WorkbookPart
+            ?? throw new InvalidDataException("WorkbookPart is missing.");
+        workbookPart.Workbook ??= new S.Workbook();
+        S.Sheets sheets = workbookPart.Workbook.GetFirstChild<S.Sheets>()
+            ?? workbookPart.Workbook.AppendChild(new S.Sheets());
+        S.Sheet? prior = sheets.Elements<S.Sheet>().FirstOrDefault(sheet =>
+            string.Equals(sheet.Name?.Value, FrameExtrusionSheetName, StringComparison.OrdinalIgnoreCase));
+        if (prior is not null)
+        {
+            DeleteSheet(workbookPart, prior);
+        }
+
+        WorksheetPart part = workbookPart.AddNewPart<WorksheetPart>();
+        part.Worksheet = BuildFrameExtrusionWorksheet(extrusions);
+        part.Worksheet.Save();
+        AddSheet(workbookPart, sheets, part, FrameExtrusionSheetName, hidden: false);
+        EnsureVisibleActiveSheet(workbookPart, sheets);
+        workbookPart.Workbook.Save();
+    }
+
+    private static S.Worksheet BuildFrameExtrusionWorksheet(
+        IReadOnlyList<PanelFrameExtrusionCatalogItem> extrusions)
+    {
+        var view = new S.SheetView
+        {
+            WorkbookViewId = 0U,
+            ShowGridLines = false
+        };
+        view.Append(new S.Pane
+        {
+            VerticalSplit = 1D,
+            TopLeftCell = "A2",
+            ActivePane = S.PaneValues.BottomLeft,
+            State = S.PaneStateValues.Frozen
+        });
+        var columns = new S.Columns(
+            new S.Column { Min = 1U, Max = 3U, Width = 18d, CustomWidth = true },
+            new S.Column { Min = 4U, Max = 5U, Width = 28d, CustomWidth = true },
+            new S.Column { Min = 6U, Max = 9U, Width = 14d, CustomWidth = true },
+            new S.Column { Min = 10U, Max = 10U, Width = 54d, CustomWidth = true },
+            new S.Column { Min = 11U, Max = 11U, Width = 10d, CustomWidth = true },
+            new S.Column { Min = 12U, Max = 12U, Width = 2d, CustomWidth = true, Hidden = true });
+        var data = new S.SheetData();
+        S.Row header = CreateRow(1U,
+            ("A", "Extrusion Code"),
+            ("B", "Base Code"),
+            ("C", "Source Code"),
+            ("D", "Description"),
+            ("E", "Category"),
+            ("F", "Dimension"),
+            ("G", "Calculation"),
+            ("H", "Value"),
+            ("I", "Parent Code"),
+            ("J", "Source PDF"),
+            ("K", "Page"),
+            ("L", "Thumbnail PNG Base64"));
+        header.Height = 25d;
+        header.CustomHeight = true;
+        data.Append(header);
+        uint rowIndex = 2U;
+        foreach (PanelFrameExtrusionCatalogItem extrusion in extrusions)
+        {
+            S.Row row = CreateRow(rowIndex,
+                ("A", extrusion.Code),
+                ("B", extrusion.BaseCode),
+                ("C", extrusion.SourceCode),
+                ("D", extrusion.Description),
+                ("E", extrusion.Category),
+                ("F", extrusion.Dimension switch
+                {
+                    PanelFrameProfileDimension.OneDimensional => "1D",
+                    PanelFrameProfileDimension.ZeroDimensional => "0D",
+                    _ => string.Empty
+                }),
+                ("G", extrusion.Calculation switch
+                {
+                    PanelFrameProfileCalculation.FixedQuantity => "Fixed",
+                    PanelFrameProfileCalculation.Spacing => "Spacing",
+                    _ => "Length"
+                }),
+                ("H", extrusion.CalculationValue?.ToString("0.#####", CultureInfo.InvariantCulture) ?? string.Empty),
+                ("I", extrusion.ParentCode),
+                ("J", extrusion.SourcePdfPath),
+                ("K", extrusion.SourcePageNumber.ToString(CultureInfo.InvariantCulture)),
+                ("L", Convert.ToBase64String(extrusion.ThumbnailPng)));
+            row.Height = 22d;
+            row.CustomHeight = true;
+            data.Append(row);
+            rowIndex++;
+        }
+        string endReference = $"L{Math.Max(1U, rowIndex - 1U)}";
+        return new S.Worksheet(
+            new S.SheetViews(view),
+            columns,
+            data,
+            new S.AutoFilter { Reference = $"A1:{endReference}" });
+    }
+
+    private static int WriteMaterialCatalog(
+        string tempPath,
+        IReadOnlyList<PanelCladdingMaterialCatalogItem> materials,
+        bool removeLegacyTypeSheets)
+    {
+        using SpreadsheetDocument document = SpreadsheetDocument.Open(tempPath, true);
+        WorkbookPart workbookPart = document.WorkbookPart
+            ?? throw new InvalidDataException("WorkbookPart is missing.");
+        workbookPart.Workbook ??= new S.Workbook();
+        S.Sheets sheets = workbookPart.Workbook.GetFirstChild<S.Sheets>()
+            ?? workbookPart.Workbook.AppendChild(new S.Sheets());
+        S.Sheet? priorMaterials = sheets.Elements<S.Sheet>().FirstOrDefault(sheet =>
+            string.Equals(sheet.Name?.Value, MaterialSheetName, StringComparison.OrdinalIgnoreCase));
+        if (priorMaterials is not null)
+        {
+            DeleteSheet(workbookPart, priorMaterials);
+        }
+
+        WorksheetPart materialPart = workbookPart.AddNewPart<WorksheetPart>();
+        MaterialStyles styles = EnsureMaterialStyles(workbookPart, materials.Select(item => item.ColorHex));
+        materialPart.Worksheet = BuildMaterialWorksheet(materials, styles);
+        materialPart.Worksheet.Save();
+        AddSheet(workbookPart, sheets, materialPart, MaterialSheetName, hidden: false);
+
+        int removed = removeLegacyTypeSheets ? RemoveLegacyManagedTypeSheets(workbookPart, sheets) : 0;
+        EnsureVisibleActiveSheet(workbookPart, sheets);
+        workbookPart.Workbook.Save();
+        return removed;
+    }
+
+    private static S.Worksheet BuildMaterialWorksheet(
+        IReadOnlyList<PanelCladdingMaterialCatalogItem> materials,
+        MaterialStyles styles)
+    {
+        var view = new S.SheetView
+        {
+            WorkbookViewId = 0U,
+            ShowGridLines = false
+        };
+        view.Append(new S.Pane
+        {
+            VerticalSplit = 1D,
+            TopLeftCell = "A2",
+            ActivePane = S.PaneValues.BottomLeft,
+            State = S.PaneStateValues.Frozen
+        });
+        var columns = new S.Columns(
+            new S.Column { Min = 1U, Max = 1U, Width = 18d, CustomWidth = true },
+            new S.Column { Min = 2U, Max = 2U, Width = 32d, CustomWidth = true },
+            new S.Column { Min = 3U, Max = 3U, Width = 18d, CustomWidth = true },
+            new S.Column { Min = 4U, Max = 4U, Width = 14d, CustomWidth = true },
+            new S.Column { Min = 5U, Max = 5U, Width = 11d, CustomWidth = true });
+        var data = new S.SheetData();
+        S.Row header = CreateRow(1U,
+            ("A", "Material Code"),
+            ("B", "Description"),
+            ("C", "Category"),
+            ("D", "Color Hex"),
+            ("E", "Preview"));
+        header.Height = 25d;
+        header.CustomHeight = true;
+        foreach (S.Cell cell in header.Elements<S.Cell>())
+        {
+            cell.StyleIndex = styles.HeaderStyle;
+        }
+        data.Append(header);
+        uint rowIndex = 2U;
+        foreach (PanelCladdingMaterialCatalogItem material in materials)
+        {
+            S.Row row = CreateRow(rowIndex,
+                ("A", material.Code),
+                ("B", material.Description),
+                ("C", material.Category),
+                ("D", material.ColorHex),
+                ("E", string.Empty));
+            row.Height = 22d;
+            row.CustomHeight = true;
+            row.Elements<S.Cell>().Last().StyleIndex = styles.ColorStyles[material.ColorHex];
+            data.Append(row);
+            rowIndex++;
+        }
+        string endReference = $"E{Math.Max(1U, rowIndex - 1U)}";
+        return new S.Worksheet(
+            new S.SheetViews(view),
+            columns,
+            data,
+            new S.AutoFilter { Reference = $"A1:{endReference}" });
+    }
+
+    private static int RemoveLegacyManagedTypeSheets(WorkbookPart workbookPart, S.Sheets sheets)
+    {
+        S.Sheet? indexSheet = sheets.Elements<S.Sheet>().FirstOrDefault(sheet =>
+            string.Equals(sheet.Name?.Value, IndexSheetName, StringComparison.OrdinalIgnoreCase));
+        if (indexSheet is null)
+        {
+            return 0;
+        }
+        WorksheetPart indexPart = (WorksheetPart)workbookPart.GetPartById(indexSheet.Id!);
+        HashSet<string> managedNames = ReadIndex(workbookPart, indexPart)
+            .Select(record => record.SheetName)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        S.Sheet[] managedSheets = sheets.Elements<S.Sheet>()
+            .Where(sheet => managedNames.Contains(sheet.Name?.Value ?? string.Empty))
+            .ToArray();
+        foreach (S.Sheet sheet in managedSheets)
+        {
+            DeleteSheet(workbookPart, sheet);
+        }
+        DeleteSheet(workbookPart, indexSheet);
+        return managedSheets.Length;
+    }
+
+    private static void DeleteSheet(WorkbookPart workbookPart, S.Sheet sheet)
+    {
+        OpenXmlPart part = workbookPart.GetPartById(sheet.Id!);
+        sheet.Remove();
+        workbookPart.DeletePart(part);
+    }
+
+    private static MaterialStyles EnsureMaterialStyles(
+        WorkbookPart workbookPart,
+        IEnumerable<string> colors)
+    {
+        WorkbookStylesPart stylesPart = workbookPart.WorkbookStylesPart
+            ?? workbookPart.AddNewPart<WorkbookStylesPart>();
+        stylesPart.Stylesheet ??= CreateBaseStylesheet();
+        S.Stylesheet stylesheet = stylesPart.Stylesheet;
+        stylesheet.Fonts ??= new S.Fonts(new S.Font()) { Count = 1U };
+        stylesheet.Fills ??= new S.Fills(
+            new S.Fill(new S.PatternFill { PatternType = S.PatternValues.None }),
+            new S.Fill(new S.PatternFill { PatternType = S.PatternValues.Gray125 })) { Count = 2U };
+        stylesheet.Borders ??= new S.Borders(new S.Border()) { Count = 1U };
+        stylesheet.CellStyleFormats ??= new S.CellStyleFormats(new S.CellFormat()) { Count = 1U };
+        stylesheet.CellFormats ??= new S.CellFormats(new S.CellFormat()) { Count = 1U };
+
+        uint fontId = stylesheet.Fonts.Count?.Value ?? (uint)stylesheet.Fonts.ChildElements.Count;
+        stylesheet.Fonts.Append(new S.Font(
+            new S.Bold(),
+            new S.Color { Rgb = HexBinaryValue.FromString("FFFFFFFF") },
+            new S.FontName { Val = "Aptos" }));
+        stylesheet.Fonts.Count = fontId + 1U;
+        uint headerFill = AppendSolidFill(stylesheet, "FF3E494F");
+        uint headerStyle = AppendCellFormat(stylesheet, fontId, headerFill, horizontalCenter: false);
+
+        var colorStyles = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
+        foreach (string color in colors.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            uint fill = AppendSolidFill(stylesheet, "FF" + color.TrimStart('#').ToUpperInvariant());
+            colorStyles[color] = AppendCellFormat(stylesheet, 0U, fill, horizontalCenter: true);
+        }
+        stylesheet.Save();
+        return new MaterialStyles(headerStyle, colorStyles);
+    }
+
+    private static uint AppendSolidFill(S.Stylesheet stylesheet, string argb)
+    {
+        uint fillId = stylesheet.Fills!.Count?.Value ?? (uint)stylesheet.Fills.ChildElements.Count;
+        stylesheet.Fills.Append(new S.Fill(new S.PatternFill(
+            new S.ForegroundColor { Rgb = HexBinaryValue.FromString(argb) },
+            new S.BackgroundColor { Indexed = 64U })
+        { PatternType = S.PatternValues.Solid }));
+        stylesheet.Fills.Count = fillId + 1U;
+        return fillId;
+    }
+
+    private static uint AppendCellFormat(
+        S.Stylesheet stylesheet,
+        uint fontId,
+        uint fillId,
+        bool horizontalCenter)
+    {
+        uint index = stylesheet.CellFormats!.Count?.Value ?? (uint)stylesheet.CellFormats.ChildElements.Count;
+        stylesheet.CellFormats.Append(new S.CellFormat
+        {
+            FontId = fontId,
+            FillId = fillId,
+            BorderId = 0U,
+            ApplyFont = true,
+            ApplyFill = true,
+            ApplyAlignment = true,
+            Alignment = new S.Alignment
+            {
+                Horizontal = horizontalCenter ? S.HorizontalAlignmentValues.Center : S.HorizontalAlignmentValues.Left,
+                Vertical = S.VerticalAlignmentValues.Center
+            }
+        });
+        stylesheet.CellFormats.Count = index + 1U;
+        return index;
+    }
+
     private static OperationResponse<string> ValidatePath(string rawPath, bool allowCreate)
     {
         if (string.IsNullOrWhiteSpace(rawPath))
@@ -889,6 +1717,159 @@ public sealed class OpenXmlPanelCladdingWorkbookRepository : IPanelCladdingWorkb
         catch
         {
             // Best effort for an operation-owned temporary file only.
+        }
+    }
+
+    private sealed record MaterialStyles(
+        uint HeaderStyle,
+        IReadOnlyDictionary<string, uint> ColorStyles);
+
+    private sealed class PreparedMaterialCatalogUpdate : IPreparedPanelCladdingMaterialCatalogUpdate
+    {
+        private readonly string _tempPath;
+        private readonly string _finalPath;
+        private readonly bool _existed;
+        private readonly long _originalLength;
+        private readonly DateTime _originalWriteUtc;
+        private bool _committed;
+
+        public PreparedMaterialCatalogUpdate(
+            string tempPath,
+            string finalPath,
+            bool existed,
+            long originalLength,
+            DateTime originalWriteUtc,
+            PanelCladdingMaterialCatalogSaveResult result)
+        {
+            _tempPath = tempPath;
+            _finalPath = finalPath;
+            _existed = existed;
+            _originalLength = originalLength;
+            _originalWriteUtc = originalWriteUtc;
+            Result = result;
+        }
+
+        public PanelCladdingMaterialCatalogSaveResult Result { get; }
+
+        public OperationResponse Commit()
+        {
+            if (_committed)
+            {
+                return OperationResponse.Ok("Material catalogue update already committed.");
+            }
+            try
+            {
+                if (_existed)
+                {
+                    var current = new FileInfo(_finalPath);
+                    if (!current.Exists || current.Length != _originalLength ||
+                        current.LastWriteTimeUtc != _originalWriteUtc)
+                    {
+                        return OperationResponse.Fail("PANEL_CLADDING_WORKBOOK_CHANGED_DURING_SAVE");
+                    }
+                    string backup = _finalPath + ".panel-materials-backup";
+                    TryDelete(backup);
+                    File.Replace(_tempPath, _finalPath, backup, ignoreMetadataErrors: true);
+                    TryDelete(backup);
+                }
+                else
+                {
+                    if (File.Exists(_finalPath))
+                    {
+                        return OperationResponse.Fail("PANEL_CLADDING_WORKBOOK_CREATED_DURING_SAVE");
+                    }
+                    File.Move(_tempPath, _finalPath);
+                }
+                _committed = true;
+                return OperationResponse.Ok("Project material catalogue updated.");
+            }
+            catch (Exception ex)
+            {
+                return OperationResponse.Fail($"PANEL_CLADDING_MATERIAL_CATALOG_COMMIT_FAILED: {ex.Message}");
+            }
+        }
+
+        public void Dispose()
+        {
+            if (!_committed)
+            {
+                TryDelete(_tempPath);
+            }
+        }
+    }
+
+    private sealed class PreparedFrameExtrusionCatalogUpdate : IPreparedPanelFrameExtrusionCatalogUpdate
+    {
+        private readonly string _tempPath;
+        private readonly string _finalPath;
+        private readonly bool _existed;
+        private readonly long _originalLength;
+        private readonly DateTime _originalWriteUtc;
+        private bool _committed;
+
+        public PreparedFrameExtrusionCatalogUpdate(
+            string tempPath,
+            string finalPath,
+            bool existed,
+            long originalLength,
+            DateTime originalWriteUtc,
+            PanelFrameExtrusionCatalogSaveResult result)
+        {
+            _tempPath = tempPath;
+            _finalPath = finalPath;
+            _existed = existed;
+            _originalLength = originalLength;
+            _originalWriteUtc = originalWriteUtc;
+            Result = result;
+        }
+
+        public PanelFrameExtrusionCatalogSaveResult Result { get; }
+
+        public OperationResponse Commit()
+        {
+            if (_committed)
+            {
+                return OperationResponse.Ok("Frame extrusion catalogue update already committed.");
+            }
+            try
+            {
+                if (_existed)
+                {
+                    var current = new FileInfo(_finalPath);
+                    if (!current.Exists || current.Length != _originalLength ||
+                        current.LastWriteTimeUtc != _originalWriteUtc)
+                    {
+                        return OperationResponse.Fail("PANEL_CLADDING_WORKBOOK_CHANGED_DURING_SAVE");
+                    }
+                    string backup = _finalPath + ".panel-extrusions-backup";
+                    TryDelete(backup);
+                    File.Replace(_tempPath, _finalPath, backup, ignoreMetadataErrors: true);
+                    TryDelete(backup);
+                }
+                else
+                {
+                    if (File.Exists(_finalPath))
+                    {
+                        return OperationResponse.Fail("PANEL_CLADDING_WORKBOOK_CREATED_DURING_SAVE");
+                    }
+                    File.Move(_tempPath, _finalPath);
+                }
+                _committed = true;
+                return OperationResponse.Ok("Project frame extrusion catalogue updated.");
+            }
+            catch (Exception exception)
+            {
+                return OperationResponse.Fail(
+                    $"PANEL_FRAME_EXTRUSION_CATALOG_COMMIT_FAILED: {exception.Message}");
+            }
+        }
+
+        public void Dispose()
+        {
+            if (!_committed)
+            {
+                TryDelete(_tempPath);
+            }
         }
     }
 

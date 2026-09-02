@@ -6,11 +6,307 @@ namespace PanelCladdingEditor.Application.Services.PanelCladding;
 public sealed class PanelCladdingSurfaceSyncPlanningService
 {
     private readonly PanelCladdingKeyService _keys;
+    private readonly PanelCladdingLogicService _claddingLogic;
+    private readonly PanelCladdingSurfaceCoverageService _surfaceCoverage;
 
     public PanelCladdingSurfaceSyncPlanningService(PanelCladdingKeyService keys)
     {
         _keys = keys;
+        _claddingLogic = new PanelCladdingLogicService();
+        _surfaceCoverage = new PanelCladdingSurfaceCoverageService();
     }
+
+    public static OperationResponse<IReadOnlyList<double>> CombineSurfaceScopeOffsets(
+        IReadOnlyList<double> existingOffsets,
+        IReadOnlyList<double> inferredOffsets,
+        double extent,
+        double modelTolerance,
+        string axisLabel)
+    {
+        if (!double.IsFinite(extent) || extent <= 0d ||
+            !double.IsFinite(modelTolerance) || modelTolerance <= 0d)
+        {
+            return OperationResponse<IReadOnlyList<double>>.Fail(
+                $"PANEL_CLADDING_SURFACE_SYNC_{axisLabel}_EXTENT_INVALID");
+        }
+
+        double tolerance = Math.Max(modelTolerance * 10d, extent * 1e-7d);
+        var combined = new List<double>();
+        OperationResponse append(IReadOnlyList<double> values)
+        {
+            foreach (double value in (values ?? Array.Empty<double>()).OrderBy(value => value))
+            {
+                if (!double.IsFinite(value) ||
+                    value <= tolerance ||
+                    value >= extent - tolerance)
+                {
+                    return OperationResponse.Fail(
+                        $"PANEL_CLADDING_SURFACE_SYNC_{axisLabel}_OFFSET_INVALID: {value}");
+                }
+                if (!combined.Any(existing => Math.Abs(value - existing) <= tolerance))
+                {
+                    combined.Add(value);
+                }
+            }
+            return OperationResponse.Ok();
+        }
+        OperationResponse existing = append(existingOffsets);
+        if (!existing.Success)
+        {
+            return OperationResponse<IReadOnlyList<double>>.Fail(existing.Message);
+        }
+        OperationResponse inferred = append(inferredOffsets);
+        if (!inferred.Success)
+        {
+            return OperationResponse<IReadOnlyList<double>>.Fail(inferred.Message);
+        }
+        combined.Sort();
+        return OperationResponse<IReadOnlyList<double>>.Ok(combined);
+    }
+
+    public static OperationResponse<PanelCladdingInferredOffsets> ResolveEffectiveOffsets(
+        PanelCladdingObjectScope scope,
+        IReadOnlyList<double> existingHorizontalOffsets,
+        IReadOnlyList<double> existingVerticalOffsets,
+        PanelCladdingInferredOffsets inferred,
+        double panelWidth,
+        double panelHeight,
+        double modelTolerance)
+    {
+        if (scope == PanelCladdingObjectScope.Curves)
+        {
+            return OperationResponse<PanelCladdingInferredOffsets>.Ok(inferred);
+        }
+
+        return ResolveSurfaceScopeOffsets(
+            existingHorizontalOffsets,
+            existingVerticalOffsets,
+            inferred,
+            curveInferred: null,
+            panelWidth,
+            panelHeight,
+            modelTolerance);
+    }
+
+    public static OperationResponse<PanelCladdingInferredOffsets> ResolveSurfaceScopeOffsets(
+        IReadOnlyList<double> existingHorizontalOffsets,
+        IReadOnlyList<double> existingVerticalOffsets,
+        PanelCladdingInferredOffsets surfaceInferred,
+        PanelCladdingInferredOffsets? curveInferred,
+        double panelWidth,
+        double panelHeight,
+        double modelTolerance)
+    {
+        OperationResponse<IReadOnlyList<double>> horizontal = ResolveAxis(
+            existingHorizontalOffsets,
+            surfaceInferred.HorizontalOffsets,
+            curveInferred?.HorizontalOffsets,
+            new HashSet<int>(),
+            panelHeight,
+            modelTolerance,
+            "HORIZONTAL");
+        OperationResponse<IReadOnlyList<double>> vertical = ResolveAxis(
+            existingVerticalOffsets,
+            surfaceInferred.VerticalOffsets,
+            curveInferred?.VerticalOffsets,
+            new HashSet<int>(),
+            panelWidth,
+            modelTolerance,
+            "VERTICAL");
+        return BuildResolvedOffsets(horizontal, vertical);
+    }
+
+    public static OperationResponse<PanelCladdingInferredOffsets> ResolveSurfaceScopeOffsets(
+        PanelCladdingLayout existingLayout,
+        PanelCladdingInferredOffsets surfaceInferred,
+        PanelCladdingInferredOffsets? curveInferred,
+        IReadOnlyList<IReadOnlyList<string>>? storedSurfaceCoverages = null)
+    {
+        ArgumentNullException.ThrowIfNull(existingLayout);
+        ArgumentNullException.ThrowIfNull(surfaceInferred);
+
+        OperationResponse<NonSplittingTrackIndexes> tracks = ResolveNonSplittingTrackIndexes(
+            existingLayout,
+            storedSurfaceCoverages);
+        if (!tracks.Success || tracks.Data is null)
+        {
+            return OperationResponse<PanelCladdingInferredOffsets>.Fail(tracks.Message);
+        }
+        OperationResponse<IReadOnlyList<double>> horizontal = ResolveAxis(
+            existingLayout.HorizontalOffsets,
+            surfaceInferred.HorizontalOffsets,
+            curveInferred?.HorizontalOffsets,
+            tracks.Data.Horizontal,
+            existingLayout.Height,
+            existingLayout.ModelTolerance,
+            "HORIZONTAL");
+        OperationResponse<IReadOnlyList<double>> vertical = ResolveAxis(
+            existingLayout.VerticalOffsets,
+            surfaceInferred.VerticalOffsets,
+            curveInferred?.VerticalOffsets,
+            tracks.Data.Vertical,
+            existingLayout.Width,
+            existingLayout.ModelTolerance,
+            "VERTICAL");
+        return BuildResolvedOffsets(horizontal, vertical);
+    }
+
+    private static OperationResponse<PanelCladdingInferredOffsets> BuildResolvedOffsets(
+        OperationResponse<IReadOnlyList<double>> horizontal,
+        OperationResponse<IReadOnlyList<double>> vertical)
+    {
+        if (!horizontal.Success || horizontal.Data is null ||
+            !vertical.Success || vertical.Data is null)
+        {
+            return OperationResponse<PanelCladdingInferredOffsets>.Fail(
+                $"PANEL_CLADDING_SURFACE_SYNC_STRUCTURAL_GRID_INVALID: " +
+                $"{horizontal.Message}{vertical.Message}");
+        }
+        return OperationResponse<PanelCladdingInferredOffsets>.Ok(
+            new PanelCladdingInferredOffsets
+            {
+                HorizontalOffsets = horizontal.Data,
+                VerticalOffsets = vertical.Data
+            });
+    }
+
+    private static OperationResponse<IReadOnlyList<double>> ResolveAxis(
+        IReadOnlyList<double> stored,
+        IReadOnlyList<double> surfaces,
+        IReadOnlyList<double>? curves,
+        IReadOnlySet<int> nonSplittingStoredTracks,
+        double extent,
+        double tolerance,
+        string label)
+    {
+        var structural = nonSplittingStoredTracks
+            .Where(index => index >= 0 && index < stored.Count)
+            .OrderBy(index => index)
+            .Select(index => stored[index])
+            .ToList();
+        if (curves is not null && curves.Count > 0)
+        {
+            OperationResponse<PanelCladdingAxisCorrespondence> aligned =
+                PanelCladdingLayoutReconciliationService.AlignAxis(
+                    stored,
+                    curves,
+                    extent,
+                    tolerance,
+                    label);
+            if (!aligned.Success || aligned.Data is null)
+            {
+                return OperationResponse<IReadOnlyList<double>>.Fail(aligned.Message);
+            }
+            structural.Clear();
+            foreach (int oldIndex in nonSplittingStoredTracks
+                .Where(index => index >= 0 && index < stored.Count)
+                .OrderBy(index => index))
+            {
+                int? newIndex = oldIndex < aligned.Data.OldToNewTracks.Count
+                    ? aligned.Data.OldToNewTracks[oldIndex]
+                    : null;
+                structural.Add(newIndex.HasValue
+                    ? curves[newIndex.Value]
+                    : stored[oldIndex]);
+            }
+            for (int newIndex = 0; newIndex < curves.Count; newIndex++)
+            {
+                if (newIndex >= aligned.Data.NewToOldTracks.Count ||
+                    !aligned.Data.NewToOldTracks[newIndex].HasValue)
+                {
+                    structural.Add(curves[newIndex]);
+                }
+            }
+        }
+        return CombineSurfaceScopeOffsets(
+            surfaces,
+            structural,
+            extent,
+            tolerance,
+            label);
+    }
+
+    private static OperationResponse<NonSplittingTrackIndexes> ResolveNonSplittingTrackIndexes(
+        PanelCladdingLayout layout,
+        IReadOnlyList<IReadOnlyList<string>>? storedSurfaceCoverages)
+    {
+        var cellsByCoordinate = layout.Cells.ToDictionary(
+            cell => (cell.Column, cell.Row),
+            cell => cell,
+            EqualityComparer<(int Column, int Row)>.Default);
+        if (cellsByCoordinate.Count != layout.ColumnCount * layout.RowCount)
+        {
+            return OperationResponse<NonSplittingTrackIndexes>.Fail(
+                "PANEL_CLADDING_SURFACE_COVERAGE_LAYOUT_INCOMPLETE");
+        }
+
+        if (storedSurfaceCoverages is not null)
+        {
+            var surfaceByCell = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            for (int surfaceIndex = 0; surfaceIndex < storedSurfaceCoverages.Count; surfaceIndex++)
+            {
+                IReadOnlyList<string> coverage = storedSurfaceCoverages[surfaceIndex] ??
+                    Array.Empty<string>();
+                if (coverage.Count == 0)
+                {
+                    return OperationResponse<NonSplittingTrackIndexes>.Fail(
+                        $"PANEL_CLADDING_SURFACE_COVERAGE_EMPTY: {surfaceIndex}");
+                }
+                foreach (string suppliedLabel in coverage)
+                {
+                    string label = (suppliedLabel ?? string.Empty).Trim().ToUpperInvariant();
+                    if (!layout.Cells.Any(cell => string.Equals(
+                            cell.ShortLabel,
+                            label,
+                            StringComparison.OrdinalIgnoreCase)))
+                    {
+                        return OperationResponse<NonSplittingTrackIndexes>.Fail(
+                            $"PANEL_CLADDING_SURFACE_COVERAGE_CELL_UNKNOWN: {label}");
+                    }
+                    if (!surfaceByCell.TryAdd(label, surfaceIndex))
+                    {
+                        return OperationResponse<NonSplittingTrackIndexes>.Fail(
+                            $"PANEL_CLADDING_SURFACE_COVERAGE_CELL_OVERLAP: {label}");
+                    }
+                }
+            }
+            PanelCladdingCell? missing = layout.Cells.FirstOrDefault(cell =>
+                !surfaceByCell.ContainsKey(cell.ShortLabel));
+            if (missing is not null)
+            {
+                return OperationResponse<NonSplittingTrackIndexes>.Fail(
+                    $"PANEL_CLADDING_SURFACE_COVERAGE_CELL_MISSING: {missing.ShortLabel}");
+            }
+            return OperationResponse<NonSplittingTrackIndexes>.Ok(BuildTrackIndexes(
+                (first, second) => surfaceByCell[first.ShortLabel] == surfaceByCell[second.ShortLabel]));
+        }
+
+        return OperationResponse<NonSplittingTrackIndexes>.Ok(
+            new NonSplittingTrackIndexes(new HashSet<int>(), new HashSet<int>()));
+
+        NonSplittingTrackIndexes BuildTrackIndexes(
+            Func<PanelCladdingCell, PanelCladdingCell, bool> sameSurface)
+        {
+            IReadOnlySet<int> resolvedHorizontal = Enumerable.Range(0, layout.HorizontalOffsets.Count)
+                .Where(track => Enumerable.Range(0, layout.ColumnCount).All(column =>
+                    sameSurface(
+                        cellsByCoordinate[(column, track)],
+                        cellsByCoordinate[(column, track + 1)])))
+                .ToHashSet();
+            IReadOnlySet<int> resolvedVertical = Enumerable.Range(0, layout.VerticalOffsets.Count)
+                .Where(track => Enumerable.Range(0, layout.RowCount).All(row =>
+                    sameSurface(
+                        cellsByCoordinate[(track, row)],
+                        cellsByCoordinate[(track + 1, row)])))
+                .ToHashSet();
+            return new NonSplittingTrackIndexes(resolvedHorizontal, resolvedVertical);
+        }
+
+    }
+
+    private sealed record NonSplittingTrackIndexes(
+        IReadOnlySet<int> Horizontal,
+        IReadOnlySet<int> Vertical);
 
     public OperationResponse<PanelCladdingSurfaceSyncPlan> CreatePlan(
         PanelCladdingSurfaceSyncSnapshot snapshot)
@@ -116,6 +412,7 @@ public sealed class PanelCladdingSurfaceSyncPlanningService
 
         var panelPlans = new List<PanelCladdingSurfaceSyncPanelPlan>(candidatePanels.Count);
         var surfacePlans = new List<PanelCladdingSurfaceSyncSurfacePlan>();
+        var curvePlans = new List<PanelCladdingSurfaceSyncCurvePlan>();
         foreach (PanelCladdingSurfaceSyncPanelSnapshot panel in candidatePanels)
         {
             if (skippedPanelIds.Contains(panel.ObjectId))
@@ -130,24 +427,85 @@ public sealed class PanelCladdingSurfaceSyncPlanningService
             var cellsByLabel = orderedCells.ToDictionary(
                 cell => cell.ShortLabel,
                 StringComparer.OrdinalIgnoreCase);
-            var expectedCids = orderedCells
-                .Select(cell => PanelCladdingSpawnPlanningService.BuildSurfaceCid(pid, cell.ShortLabel))
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-            PanelCladdingSurfaceSyncSurfaceSnapshot? wrongPid = surfaces.FirstOrDefault(surface =>
-                expectedCids.Contains(surface.Cid.Trim()) &&
-                !string.Equals(surface.PanelId.Trim(), pid, StringComparison.OrdinalIgnoreCase));
-            if (wrongPid is not null)
+            string storedCladdingLogic = GetUserText(
+                panel.Layout.SourceUserText,
+                PanelCladdingKeyService.CladdingLogicKey);
+            OperationResponse<IReadOnlyDictionary<string, string>> decodedCladdingLogic =
+                _claddingLogic.Decode(storedCladdingLogic);
+            if (!decodedCladdingLogic.Success || decodedCladdingLogic.Data is null)
             {
-                AddIssue(panel.ObjectId, pid,
-                    $"PANEL_CLADDING_SURFACE_SYNC_SURFACE_PID_MISMATCH: {wrongPid.Cid.Trim()}: expected {pid}, found {wrongPid.PanelId.Trim()}");
+                AddIssue(panel.ObjectId, panel.PanelId.Trim(),
+                    $"PANEL_CLADDING_SURFACE_SYNC_LOGIC_INVALID: {panel.ObjectId:D}: {decodedCladdingLogic.Message}");
                 continue;
             }
-
+            IReadOnlyDictionary<string, string> savedCladdingLogic = decodedCladdingLogic.Data;
+            if (snapshot.Scope == PanelCladdingObjectScope.Curves)
+            {
+                PanelCladdingSurfaceSyncCurveSnapshot[] scopedCurves = (snapshot.Curves ??
+                        Array.Empty<PanelCladdingSurfaceSyncCurveSnapshot>())
+                    .Where(curve => curve.PanelObjectId == panel.ObjectId)
+                    .ToArray();
+                if (scopedCurves.Length == 0)
+                {
+                    AddIssue(panel.ObjectId, pid, $"PANEL_CLADDING_SYNC_CURVES_MISSING: {pid}");
+                    continue;
+                }
+                string curvePanelCid = string.IsNullOrWhiteSpace(panel.PanelCid)
+                    ? (pid.StartsWith("PID_", StringComparison.OrdinalIgnoreCase) ? "CID_" + pid[4..] : pid)
+                    : panel.PanelCid.Trim();
+                foreach (PanelCladdingSurfaceSyncCurveSnapshot curve in scopedCurves)
+                {
+                    string desiredCid = $"{curvePanelCid}-{curve.DesiredCode}";
+                    curvePlans.Add(new PanelCladdingSurfaceSyncCurvePlan
+                    {
+                        ObjectId = curve.ObjectId,
+                        PanelObjectId = panel.ObjectId,
+                        PanelId = pid,
+                        ExpectedLayerPath = curve.LayerPath,
+                        DesiredCode = curve.DesiredCode,
+                        DesiredCid = desiredCid,
+                        DesiredAssignedExtrusions = curve.DesiredAssignedExtrusions,
+                        DesiredAssignedExtrusionValues = curve.DesiredAssignedExtrusionValues,
+                        MetadataChanged = !string.Equals(curve.PanelId.Trim(), pid, StringComparison.Ordinal) ||
+                            !string.Equals(curve.Cid.Trim(), desiredCid, StringComparison.Ordinal) ||
+                            !string.Equals(curve.CurveCode.Trim(), curve.DesiredCode, StringComparison.Ordinal) ||
+                            !string.Equals(
+                                curve.AssignedExtrusions.Trim(),
+                                curve.DesiredAssignedExtrusions,
+                                StringComparison.Ordinal) ||
+                            !DictionariesEqual(
+                                curve.AssignedExtrusionValues,
+                                curve.DesiredAssignedExtrusionValues)
+                    });
+                }
+                IReadOnlyDictionary<string, string> curveCellValues = orderedCells.ToDictionary(
+                    cell => cell.UserTextKey,
+                    cell => _keys.NormalizeCladdingValue(cell.Value),
+                    StringComparer.OrdinalIgnoreCase);
+                OperationResponse<string> curveCladdingLogic = _claddingLogic.Encode(
+                    orderedCells,
+                    curveCellValues);
+                if (!curveCladdingLogic.Success || curveCladdingLogic.Data is null)
+                {
+                    AddIssue(panel.ObjectId, pid,
+                        $"PANEL_CLADDING_SYNC_LOGIC_INVALID: {panel.ObjectId:D}: {curveCladdingLogic.Message}");
+                    continue;
+                }
+                panelPlans.Add(new PanelCladdingSurfaceSyncPanelPlan
+                {
+                    ObjectId = panel.ObjectId,
+                    PanelId = pid,
+                    Layout = panel.Layout,
+                    CellValues = curveCellValues,
+                    CladdingLogic = curveCladdingLogic.Data,
+                    CladdingChanged = panel.GridChanged
+                });
+                continue;
+            }
             PanelCladdingSurfaceSyncSurfaceSnapshot[] panelSurfaces = surfaces
-                .Where(surface => string.Equals(
-                    surface.PanelId.Trim(),
-                    pid,
-                    StringComparison.OrdinalIgnoreCase))
+                .Where(surface => surface.PanelObjectId == panel.ObjectId ||
+                    (surface.PanelObjectId == Guid.Empty && string.Equals(
+                        surface.PanelId.Trim(), pid, StringComparison.OrdinalIgnoreCase)))
                 .ToArray();
             if (panelSurfaces.Length == 0)
             {
@@ -155,18 +513,6 @@ public sealed class PanelCladdingSurfaceSyncPlanningService
                     $"PANEL_CLADDING_SURFACE_SYNC_SURFACE_MISSING: {PanelCladdingSpawnPlanningService.BuildSurfaceCid(pid, orderedCells[0].ShortLabel)}");
                 continue;
             }
-            IGrouping<string, PanelCladdingSurfaceSyncSurfaceSnapshot>? duplicateCid = panelSurfaces
-                .Where(surface => !string.IsNullOrWhiteSpace(surface.Cid))
-                .GroupBy(surface => surface.Cid.Trim(), StringComparer.OrdinalIgnoreCase)
-                .FirstOrDefault(group => group.Count() > 1 && group.Any(surface =>
-                    (surface.CoveredCellLabels ?? Array.Empty<string>()).Count == 0));
-            if (duplicateCid is not null)
-            {
-                AddIssue(panel.ObjectId, pid,
-                    $"PANEL_CLADDING_SURFACE_SYNC_DUPLICATE_CID: {duplicateCid.Key}: {duplicateCid.Count()} surfaces");
-                continue;
-            }
-
             var cellValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             var claimedCells = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
             var panelSurfacePlans = new List<PanelCladdingSurfaceSyncSurfacePlan>(panelSurfaces.Length);
@@ -208,11 +554,23 @@ public sealed class PanelCladdingSurfaceSyncPlanningService
                 }
 
                 string materialCode = material.Data;
-                PanelCladdingCell owner = coveredLabels
+                PanelCladdingCell geometryOwner = coveredLabels
                     .Select(label => cellsByLabel[label])
                     .OrderBy(cell => cell.Row)
                     .ThenBy(cell => cell.Column)
                     .First();
+                OperationResponse<string> savedOwner = _claddingLogic.ResolveOwnerLabel(
+                    coveredLabels,
+                    savedCladdingLogic);
+                if (!savedOwner.Success || savedOwner.Data is null)
+                {
+                    panelIssue = $"PANEL_CLADDING_SURFACE_SYNC_LOGIC_INVALID: " +
+                        $"{panel.ObjectId:D}: {savedOwner.Message}";
+                    break;
+                }
+                PanelCladdingCell owner = savedOwner.Data.Length > 0
+                    ? cellsByLabel[savedOwner.Data]
+                    : geometryOwner;
                 foreach (string label in coveredLabels)
                 {
                     PanelCladdingCell cell = cellsByLabel[label];
@@ -227,6 +585,14 @@ public sealed class PanelCladdingSurfaceSyncPlanningService
                 string desiredCid = PanelCladdingSpawnPlanningService.BuildSurfaceCid(
                     pid,
                     owner.ShortLabel);
+                OperationResponse<string> desiredCoverage = _surfaceCoverage.Encode(
+                    owner.ShortLabel,
+                    coveredLabels.Select(label => cellsByLabel[label]));
+                if (!desiredCoverage.Success || desiredCoverage.Data is null)
+                {
+                    panelIssue = desiredCoverage.Message;
+                    break;
+                }
                 panelSurfacePlans.Add(new PanelCladdingSurfaceSyncSurfacePlan
                 {
                     ObjectId = surface.ObjectId,
@@ -238,13 +604,23 @@ public sealed class PanelCladdingSurfaceSyncPlanningService
                     CoveredCellLabels = coveredLabels,
                     ExpectedLayerPath = surface.LayerPath,
                     MaterialCode = materialCode,
+                    DesiredCoverageValue = desiredCoverage.Data,
                     CladdingKeyChanged = !string.Equals(
                         surface.CladdingValue.Trim(),
                         materialCode,
                         StringComparison.Ordinal),
+                    CoverageChanged = !string.Equals(
+                        surface.CoverageValue,
+                        desiredCoverage.Data,
+                        StringComparison.Ordinal) ||
+                        !string.IsNullOrWhiteSpace(surface.LegacyCoverageValue),
                     CidChanged = !string.Equals(
                         surface.Cid.Trim(),
                         desiredCid,
+                        StringComparison.Ordinal),
+                    PidChanged = !string.Equals(
+                        surface.PanelId.Trim(),
+                        pid,
                         StringComparison.Ordinal)
                 });
             }
@@ -261,29 +637,98 @@ public sealed class PanelCladdingSurfaceSyncPlanningService
                 continue;
             }
 
-            bool panelChanged = panel.GridChanged || orderedCells.Any(cell => !string.Equals(
+            OperationResponse<string> desiredCladdingLogic = _claddingLogic.Encode(
+                orderedCells,
+                cellValues);
+            if (!desiredCladdingLogic.Success || desiredCladdingLogic.Data is null)
+            {
+                AddIssue(panel.ObjectId, pid,
+                    $"PANEL_CLADDING_SURFACE_SYNC_LOGIC_INVALID: {panel.ObjectId:D}: {desiredCladdingLogic.Message}");
+                continue;
+            }
+            bool panelChanged = panel.GridChanged ||
+                !string.Equals(
+                    storedCladdingLogic,
+                    desiredCladdingLogic.Data,
+                    StringComparison.Ordinal) ||
+                orderedCells.Any(cell => !string.Equals(
                 _keys.NormalizeCladdingValue(cell.Value),
                 cellValues[cell.UserTextKey],
                 StringComparison.Ordinal));
+            PanelCladdingSurfaceSyncCurveSnapshot[] panelCurves = (snapshot.Curves ??
+                    Array.Empty<PanelCladdingSurfaceSyncCurveSnapshot>())
+                .Where(curve => curve.PanelObjectId == panel.ObjectId)
+                .ToArray();
             surfacePlans.AddRange(panelSurfacePlans);
+            string panelCid = string.IsNullOrWhiteSpace(panel.PanelCid)
+                ? (pid.StartsWith("PID_", StringComparison.OrdinalIgnoreCase) ? "CID_" + pid[4..] : pid)
+                : panel.PanelCid.Trim();
+            foreach (PanelCladdingSurfaceSyncCurveSnapshot curve in panelCurves)
+            {
+                string desiredCid = $"{panelCid}-{curve.DesiredCode}";
+                curvePlans.Add(new PanelCladdingSurfaceSyncCurvePlan
+                {
+                    ObjectId = curve.ObjectId,
+                    PanelObjectId = panel.ObjectId,
+                    PanelId = pid,
+                    ExpectedLayerPath = curve.LayerPath,
+                    DesiredCode = curve.DesiredCode,
+                    DesiredCid = desiredCid,
+                    DesiredAssignedExtrusions = curve.DesiredAssignedExtrusions,
+                    DesiredAssignedExtrusionValues = curve.DesiredAssignedExtrusionValues,
+                    MetadataChanged = !string.Equals(curve.PanelId.Trim(), pid, StringComparison.Ordinal) ||
+                        !string.Equals(curve.Cid.Trim(), desiredCid, StringComparison.Ordinal) ||
+                        !string.Equals(curve.CurveCode.Trim(), curve.DesiredCode, StringComparison.Ordinal) ||
+                        !string.Equals(
+                            curve.AssignedExtrusions.Trim(),
+                            curve.DesiredAssignedExtrusions,
+                            StringComparison.Ordinal) ||
+                        !DictionariesEqual(
+                            curve.AssignedExtrusionValues,
+                            curve.DesiredAssignedExtrusionValues)
+                });
+            }
             panelPlans.Add(new PanelCladdingSurfaceSyncPanelPlan
             {
                 ObjectId = panel.ObjectId,
                 PanelId = pid,
                 Layout = panel.Layout,
                 CellValues = cellValues,
+                CladdingLogic = desiredCladdingLogic.Data,
                 CladdingChanged = panelChanged
             });
         }
 
         return OperationResponse<PanelCladdingSurfaceSyncPlan>.Ok(new PanelCladdingSurfaceSyncPlan
         {
+            Scope = snapshot.Scope,
             SelectedPanelIds = selectedPanelIds,
             Panels = panelPlans,
             Surfaces = surfacePlans,
+            Curves = curvePlans,
             Issues = issues
         });
     }
+
+    private static bool DictionariesEqual(
+        IReadOnlyDictionary<string, string> left,
+        IReadOnlyDictionary<string, string> right)
+    {
+        if (left.Count != right.Count)
+        {
+            return false;
+        }
+        return left.All(item => right.TryGetValue(item.Key, out string? value) &&
+                                string.Equals(item.Value, value, StringComparison.Ordinal));
+    }
+
+    private static string GetUserText(
+        IReadOnlyDictionary<string, string> userText,
+        string requestedKey) =>
+        userText.FirstOrDefault(item => string.Equals(
+            item.Key,
+            requestedKey,
+            StringComparison.OrdinalIgnoreCase)).Value ?? string.Empty;
 
     private static OperationResponse<IReadOnlyList<string>> ResolveCoverageLabels(
         PanelCladdingSurfaceSyncSurfaceSnapshot surface,

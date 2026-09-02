@@ -18,7 +18,10 @@ public interface ILivePanelCladdingRepository
 
 public interface ILivePanelCladdingSpawnService
 {
-    OperationResponse<PanelCladdingSpawnResult> Spawn(string filePath, IReadOnlyList<Guid> objectIds);
+    OperationResponse<PanelCladdingSpawnResult> Spawn(
+        string filePath,
+        IReadOnlyList<Guid> objectIds,
+        PanelCladdingObjectScope scope);
 }
 
 public interface ILivePanelCladdingMatchService
@@ -36,17 +39,42 @@ public interface ILivePanelCladdingClearService
         IReadOnlyList<Guid> objectIds);
 }
 
+public interface IPanelCladdingMatchPlanningService
+{
+    OperationResponse<PanelCladdingMatchPlan> CreatePlan(
+        PanelCladdingMatchPanelSnapshot source,
+        IReadOnlyList<PanelCladdingMatchPanelSnapshot> targets);
+}
+
+public interface ILivePanelCladdingCreateService
+{
+    OperationResponse<PanelCladdingCreateResult> Create(
+        string filePath,
+        IReadOnlyList<Guid> panelObjectIds,
+        IReadOnlyList<Guid> guideCurveObjectIds);
+}
+
+public interface ILivePanelCladdingCurveTemplateService
+{
+    OperationResponse<PanelCladdingCurveTemplateResult> Apply(
+        string filePath,
+        IReadOnlyList<Guid> panelObjectIds,
+        PanelCladdingCurveTemplatePriority priority);
+}
+
 public interface ILivePanelCladdingSurfaceSyncRepository
 {
     OperationResponse<PanelCladdingSurfaceSyncSnapshot> Read(
         string filePath,
-        IReadOnlyList<Guid> panelObjectIds);
+        IReadOnlyList<Guid> panelObjectIds,
+        PanelCladdingObjectScope scope);
 
     OperationResponse<PanelCladdingSurfaceSyncResult> Commit(
         PanelCladdingSurfaceSyncCommitRequest request,
         Func<OperationResponse> finalizeWorkbook,
         IReadOnlyList<PanelCladdingSurfaceSyncTypeResult> types,
-        int matchedSurfaceCount);
+        int matchedSurfaceCount,
+        int matchedCurveCount);
 }
 
 public interface IPanelCladdingSurfaceSyncService
@@ -55,7 +83,8 @@ public interface IPanelCladdingSurfaceSyncService
         string filePath,
         IReadOnlyList<Guid> panelObjectIds,
         string workbookPath,
-        bool allowCreateWorkbook);
+        bool allowCreateWorkbook,
+        PanelCladdingObjectScope scope);
 }
 
 public interface IPreparedPanelCladdingWorkbookUpdate : IDisposable
@@ -71,8 +100,43 @@ public interface IPreparedPanelCladdingWorkbookBatchUpdate : IDisposable
     OperationResponse Commit();
 }
 
+public interface IPreparedPanelCladdingMaterialCatalogUpdate : IDisposable
+{
+    PanelCladdingMaterialCatalogSaveResult Result { get; }
+    OperationResponse Commit();
+}
+
+public interface IPreparedPanelFrameExtrusionCatalogUpdate : IDisposable
+{
+    PanelFrameExtrusionCatalogSaveResult Result { get; }
+    OperationResponse Commit();
+}
+
+public interface IPanelFrameExtrusionScheduleImporter
+{
+    OperationResponse<PanelFrameExtrusionScheduleImportResult> Import(
+        PanelFrameExtrusionScheduleImportRequest request);
+}
+
 public interface IPanelCladdingWorkbookRepository
 {
+    OperationResponse<PanelCladdingMaterialCatalog> ReadMaterialCatalog(string workbookPath) =>
+        OperationResponse<PanelCladdingMaterialCatalog>.Fail("Material catalog operations are not available.");
+
+    OperationResponse<IPreparedPanelCladdingMaterialCatalogUpdate> PrepareMaterialCatalog(
+        PanelCladdingMaterialCatalogSaveRequest request) =>
+        OperationResponse<IPreparedPanelCladdingMaterialCatalogUpdate>.Fail(
+            "Material catalog operations are not available.");
+
+    OperationResponse<PanelFrameExtrusionCatalog> ReadFrameExtrusionCatalog(string workbookPath) =>
+        OperationResponse<PanelFrameExtrusionCatalog>.Fail(
+            "Frame extrusion catalog operations are not available.");
+
+    OperationResponse<IPreparedPanelFrameExtrusionCatalogUpdate> PrepareFrameExtrusionCatalog(
+        PanelFrameExtrusionCatalogSaveRequest request) =>
+        OperationResponse<IPreparedPanelFrameExtrusionCatalogUpdate>.Fail(
+            "Frame extrusion catalog operations are not available.");
+
     OperationResponse<IPreparedPanelCladdingWorkbookUpdate> PrepareUpsert(PanelCladdingWorkbookUpsert request);
 
     OperationResponse<IPreparedPanelCladdingWorkbookBatchUpdate> PrepareBatchUpsert(

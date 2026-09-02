@@ -5,6 +5,7 @@ using PanelCladdingEditor.Application.Services.PanelCladding;
 using PanelCladdingEditor.Contracts.Responses;
 using PanelCladdingEditor.Domain.Models.PanelCladding;
 using Brep = rhinocommon::Rhino.Geometry.Brep;
+using Curve = rhinocommon::Rhino.Geometry.Curve;
 using Layer = rhinocommon::Rhino.DocObjects.Layer;
 using ObjectAttributes = rhinocommon::Rhino.DocObjects.ObjectAttributes;
 using ObjectColorSource = rhinocommon::Rhino.DocObjects.ObjectColorSource;
@@ -18,6 +19,7 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
     private readonly ILivePanelCladdingRepository _layoutRepository;
     private readonly PanelCladdingKeyService _keys;
     private readonly PanelCladdingSpawnPlanningService _planning;
+    private readonly PanelCladdingExtrusionPlanningService _extrusionPlanning = new();
 
     public LivePanelCladdingSpawnService(
         ILivePanelCladdingRepository layoutRepository,
@@ -31,7 +33,8 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
 
     public OperationResponse<PanelCladdingSpawnResult> Spawn(
         string filePath,
-        IReadOnlyList<Guid> objectIds)
+        IReadOnlyList<Guid> objectIds,
+        PanelCladdingObjectScope scope)
     {
         OperationResponse<RhinoDoc> resolved = ResolveDocument(filePath);
         if (!resolved.Success || resolved.Data is null)
@@ -48,25 +51,29 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
             return OperationResponse<PanelCladdingSpawnResult>.Fail("PANEL_CLADDING_PANEL_SELECTION_REQUIRED");
         }
 
-        var prepared = new List<PreparedRegion>();
+        var preparedRegions = new List<PreparedRegion>();
+        var preparedCurves = new List<PreparedCurve>();
         try
         {
             foreach (Guid sourcePanelId in sourcePanelIds)
             {
-                OperationResponse<IReadOnlyList<PreparedRegion>> panel = PreparePanel(
+                OperationResponse<PreparedPanel> panel = PreparePanel(
                     document,
                     filePath,
-                    sourcePanelId);
+                    sourcePanelId,
+                    scope);
                 if (!panel.Success || panel.Data is null)
                 {
                     return OperationResponse<PanelCladdingSpawnResult>.Fail(
                         $"PANEL_CLADDING_PANEL_PREPARE_FAILED: {sourcePanelId:D}: {panel.Message}");
                 }
-                prepared.AddRange(panel.Data);
+                preparedRegions.AddRange(panel.Data.Regions);
+                preparedCurves.AddRange(panel.Data.Curves);
             }
 
-            string? duplicateCid = prepared
-                .GroupBy(item => item.Region.Cid, StringComparer.OrdinalIgnoreCase)
+            string? duplicateCid = preparedRegions.Select(item => item.Region.Cid)
+                .Concat(preparedCurves.Select(item => item.CurvePlan.Cid))
+                .GroupBy(cid => cid, StringComparer.OrdinalIgnoreCase)
                 .FirstOrDefault(group => group.Count() > 1)
                 ?.Key;
             if (duplicateCid is not null)
@@ -74,24 +81,30 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
                 return OperationResponse<PanelCladdingSpawnResult>.Fail(
                     $"PANEL_CLADDING_DUPLICATE_BATCH_CID: {duplicateCid}");
             }
-            foreach (PreparedRegion item in prepared)
+            foreach (string cid in preparedRegions.Select(item => item.Region.Cid)
+                .Concat(preparedCurves.Select(item => item.CurvePlan.Cid)))
             {
                 RhinoObject[]? existing = document.Objects.FindByUserString(
                     PanelCladdingSpawnPlanningService.CidUserTextKey,
-                    item.Region.Cid,
+                    cid,
                     caseSensitive: false);
                 if (existing is { Length: > 0 })
                 {
                     return OperationResponse<PanelCladdingSpawnResult>.Fail(
-                        $"PANEL_CLADDING_CID_ALREADY_EXISTS: {item.Region.Cid}");
+                        $"PANEL_CLADDING_CID_ALREADY_EXISTS: {cid}");
                 }
             }
 
-            uint undoRecord = document.BeginUndoRecord("Spawn Panel Cladding");
-            var createdIds = new List<Guid>(prepared.Count);
+            uint undoRecord = document.BeginUndoRecord(
+                scope == PanelCladdingObjectScope.Surfaces
+                    ? "Spawn Panel Cladding Surfaces"
+                    : "Spawn Panel Cladding Curves");
+            var createdIds = new List<Guid>(preparedRegions.Count + preparedCurves.Count);
+            var surfaceIds = new List<Guid>(preparedRegions.Count);
+            var curveIds = new List<Guid>(preparedCurves.Count);
             try
             {
-                foreach (PreparedRegion item in prepared)
+                foreach (PreparedRegion item in preparedRegions)
                 {
                     OperationResponse<int> layer = EnsureMaterialLayer(document, item.Region);
                     if (!layer.Success)
@@ -119,6 +132,41 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
                             $"PANEL_CLADDING_OBJECT_CREATE_FAILED: {item.Region.Cid}");
                     }
                     createdIds.Add(createdId);
+                    surfaceIds.Add(createdId);
+                }
+
+                if (preparedCurves.Count > 0)
+                {
+                    OperationResponse<int> curveLayer = EnsureLayer(
+                        document,
+                        PanelCladdingExtrusionPlanningService.CurveLayerPath);
+                    if (!curveLayer.Success)
+                    {
+                        RollBackCreatedObjects(document, createdIds);
+                        return OperationResponse<PanelCladdingSpawnResult>.Fail(curveLayer.Message);
+                    }
+                    foreach (PreparedCurve item in preparedCurves)
+                    {
+                        var attributes = new ObjectAttributes
+                        {
+                            Name = item.CurvePlan.Code,
+                            LayerIndex = curveLayer.Data,
+                            ColorSource = ObjectColorSource.ColorFromLayer
+                        };
+                        foreach ((string key, string value) in item.CurvePlan.UserTextWrites)
+                        {
+                            attributes.SetUserString(key, value);
+                        }
+                        Guid createdId = document.Objects.AddCurve(item.Geometry, attributes);
+                        if (createdId == Guid.Empty)
+                        {
+                            RollBackCreatedObjects(document, createdIds);
+                            return OperationResponse<PanelCladdingSpawnResult>.Fail(
+                                $"PANEL_CLADDING_CURVE_CREATE_FAILED: {item.CurvePlan.Code}");
+                        }
+                        createdIds.Add(createdId);
+                        curveIds.Add(createdId);
+                    }
                 }
 
                 document.Views.Redraw();
@@ -126,7 +174,11 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
                 {
                     SourcePanelIds = sourcePanelIds,
                     CreatedObjectIds = createdIds.ToArray(),
-                    Cids = prepared.Select(item => item.Region.Cid).ToArray()
+                    CreatedSurfaceIds = surfaceIds.ToArray(),
+                    CreatedCurveIds = curveIds.ToArray(),
+                    Cids = preparedRegions.Select(item => item.Region.Cid)
+                        .Concat(preparedCurves.Select(item => item.CurvePlan.Cid))
+                        .ToArray()
                 });
             }
             catch (Exception ex)
@@ -145,33 +197,38 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
         }
         finally
         {
-            foreach (PreparedRegion item in prepared)
+            foreach (PreparedRegion item in preparedRegions)
+            {
+                item.Geometry.Dispose();
+            }
+            foreach (PreparedCurve item in preparedCurves)
             {
                 item.Geometry.Dispose();
             }
         }
     }
 
-    private OperationResponse<IReadOnlyList<PreparedRegion>> PreparePanel(
+    private OperationResponse<PreparedPanel> PreparePanel(
         RhinoDoc document,
         string filePath,
-        Guid objectId)
+        Guid objectId,
+        PanelCladdingObjectScope scope)
     {
         RhinoObject? sourceObject = document.Objects.FindId(objectId);
         if (sourceObject?.Geometry is not Brep sourceBrep)
         {
-            return OperationResponse<IReadOnlyList<PreparedRegion>>.Fail("PANEL_CLADDING_BREP_NOT_FOUND");
+            return OperationResponse<PreparedPanel>.Fail("PANEL_CLADDING_BREP_NOT_FOUND");
         }
 
         OperationResponse<PanelCladdingLayout> layoutResponse = _layoutRepository.ReadLayout(filePath, objectId);
         if (!layoutResponse.Success || layoutResponse.Data is null)
         {
-            return OperationResponse<IReadOnlyList<PreparedRegion>>.Fail(layoutResponse.Message);
+            return OperationResponse<PreparedPanel>.Fail(layoutResponse.Message);
         }
         PanelCladdingLayout layout = layoutResponse.Data;
         if (!layout.CanSave)
         {
-            return OperationResponse<IReadOnlyList<PreparedRegion>>.Fail(
+            return OperationResponse<PreparedPanel>.Fail(
                 $"PANEL_CLADDING_UNSUPPORTED_PROJECTION: {layout.GeometryDiagnostic}");
         }
 
@@ -183,16 +240,45 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
             layout.ModelTolerance);
         if (!keySetResponse.Success || keySetResponse.Data is null)
         {
-            return OperationResponse<IReadOnlyList<PreparedRegion>>.Fail(keySetResponse.Message);
+            return OperationResponse<PreparedPanel>.Fail(keySetResponse.Message);
         }
         PanelCladdingKeySet keySet = keySetResponse.Data;
 
-        OperationResponse<PanelCladdingSpawnPlan> planResponse = _planning.CreatePlan(userText, keySet);
-        if (!planResponse.Success || planResponse.Data is null)
+        PanelCladdingSpawnPlan plan;
+        if (scope == PanelCladdingObjectScope.Surfaces)
         {
-            return OperationResponse<IReadOnlyList<PreparedRegion>>.Fail(planResponse.Message);
+            OperationResponse<PanelCladdingSpawnPlan> planResponse = _planning.CreatePlan(userText, keySet);
+            if (!planResponse.Success || planResponse.Data is null)
+            {
+                return OperationResponse<PreparedPanel>.Fail(planResponse.Message);
+            }
+            plan = planResponse.Data;
         }
-        PanelCladdingSpawnPlan plan = planResponse.Data;
+        else
+        {
+            string pid = GetRequiredUserText(
+                userText,
+                PanelCladdingSpawnPlanningService.PanelIdUserTextKey);
+            string cid = GetRequiredUserText(
+                userText,
+                PanelCladdingSpawnPlanningService.CidUserTextKey);
+            if (pid.Length == 0 || cid.Length == 0)
+            {
+                return OperationResponse<PreparedPanel>.Fail(
+                    "PANEL_CLADDING_EXTRUSION_PID_CID_REQUIRED");
+            }
+            OperationResponse<IReadOnlyList<PanelCladdingExtrusionCurvePlan>> curvePlan =
+                _extrusionPlanning.CreatePlan(pid, cid, layout.Width, layout.Height, keySet);
+            if (!curvePlan.Success || curvePlan.Data is null)
+            {
+                return OperationResponse<PreparedPanel>.Fail(curvePlan.Message);
+            }
+            plan = new PanelCladdingSpawnPlan
+            {
+                PanelId = pid,
+                Curves = curvePlan.Data
+            };
+        }
 
         OperationResponse<LivePanelCladdingGeometryGrid> gridResponse =
             LivePanelCladdingGeometryPartitionService.CreateGrid(
@@ -201,13 +287,13 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
                 layout.ModelTolerance);
         if (!gridResponse.Success || gridResponse.Data is null)
         {
-            return OperationResponse<IReadOnlyList<PreparedRegion>>.Fail(gridResponse.Message);
+            return OperationResponse<PreparedPanel>.Fail(gridResponse.Message);
         }
         using LivePanelCladdingGeometryGrid grid = gridResponse.Data;
         var prepared = new List<PreparedRegion>(plan.Regions.Count);
         foreach (PanelCladdingSpawnRegionPlan region in plan.Regions)
         {
-            OperationResponse<Brep> geometry = LivePanelCladdingGeometryPartitionService.JoinRegion(
+            OperationResponse<Brep> geometry = LivePanelCladdingGeometryPartitionService.CreateRegionSurface(
                 grid,
                 region.Cells,
                 layout.ModelTolerance,
@@ -218,11 +304,42 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
                 {
                     item.Geometry.Dispose();
                 }
-                return OperationResponse<IReadOnlyList<PreparedRegion>>.Fail(geometry.Message);
+                return OperationResponse<PreparedPanel>.Fail(geometry.Message);
             }
             prepared.Add(new PreparedRegion(objectId, region, geometry.Data));
         }
-        return OperationResponse<IReadOnlyList<PreparedRegion>>.Ok(prepared);
+        var curves = new List<PreparedCurve>(plan.Curves.Count);
+        foreach (PanelCladdingExtrusionCurvePlan curvePlan in plan.Curves)
+        {
+            OperationResponse<Curve> geometry =
+                LivePanelCladdingGeometryPartitionService.CreateExtrusionCurve(grid, curvePlan);
+            if (!geometry.Success || geometry.Data is null)
+            {
+                foreach (PreparedRegion item in prepared)
+                {
+                    item.Geometry.Dispose();
+                }
+                foreach (PreparedCurve item in curves)
+                {
+                    item.Geometry.Dispose();
+                }
+                return OperationResponse<PreparedPanel>.Fail(geometry.Message);
+            }
+            curves.Add(new PreparedCurve(objectId, curvePlan, geometry.Data));
+        }
+        return OperationResponse<PreparedPanel>.Ok(new PreparedPanel(prepared, curves));
+    }
+
+    private static OperationResponse<int> EnsureLayer(RhinoDoc document, string layerPath)
+    {
+        int layerIndex = document.Layers.FindByFullPath(layerPath, -1);
+        if (layerIndex < 0)
+        {
+            layerIndex = document.Layers.AddPath(layerPath);
+        }
+        return layerIndex < 0
+            ? OperationResponse<int>.Fail($"PANEL_CLADDING_LAYER_CREATE_FAILED: {layerPath}")
+            : OperationResponse<int>.Ok(layerIndex);
     }
 
     private static OperationResponse<int> EnsureMaterialLayer(
@@ -280,6 +397,12 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
         return result;
     }
 
+    private static string GetRequiredUserText(
+        IReadOnlyDictionary<string, string> userText,
+        string key) => userText.TryGetValue(key, out string? value)
+            ? (value ?? string.Empty).Trim()
+            : string.Empty;
+
     private static OperationResponse<RhinoDoc> ResolveDocument(string filePath)
     {
         RhinoDoc? document = RhinoDoc.ActiveDoc;
@@ -320,5 +443,14 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
         Guid SourcePanelId,
         PanelCladdingSpawnRegionPlan Region,
         Brep Geometry);
+
+    private sealed record PreparedCurve(
+        Guid SourcePanelId,
+        PanelCladdingExtrusionCurvePlan CurvePlan,
+        Curve Geometry);
+
+    private sealed record PreparedPanel(
+        IReadOnlyList<PreparedRegion> Regions,
+        IReadOnlyList<PreparedCurve> Curves);
 
 }

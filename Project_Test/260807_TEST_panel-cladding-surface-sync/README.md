@@ -20,12 +20,13 @@ preservation, standalone dependencies, service contracts, and unique Rhino comma
 1. Open and save a Rhino document with at least two configured panel Breps and their spawned
    cladding surfaces.
 2. Move at least one surface per panel from its existing material leaf layer to another valid leaf
-   beneath `03_Material Surfaces (STEP)::<matching family>`; for example move a surface from `GL01` to
+   beneath `04_STEP Surfaces::<matching family>`; the exact legacy `03_Material Surfaces (STEP)` root
+   remains readable for project migration. For example move a surface from `GL01` to
    `GL02` below `Surfaces-Glass`.
 3. Hide one changed surface (or its material layer), and optionally make another surface's
    `Cladding` user text stale without changing its layer.
 4. Select both owning panels before starting the command.
-5. Run `_PanelCladdingSyncFromSurfaces` and type or paste the full path to a closed `.xlsx` typology
+5. Run `_PCSync` and type or paste the full path to a closed `.xlsx` typology
    workbook at the Rhino command line. If the document already stores a workbook path, press Enter
    to accept it.
 6. Confirm the command finds every expected surface, including the hidden surface, by canonical

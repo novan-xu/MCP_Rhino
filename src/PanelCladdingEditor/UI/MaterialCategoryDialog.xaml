@@ -1,0 +1,66 @@
+<Window x:Class="PanelCladdingEditor.UI.MaterialCategoryDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Add material category" Width="430" Height="250" MinWidth="390" MinHeight="230"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize" ShowInTaskbar="False"
+        Background="#F4F6F7" FontFamily="Segoe UI" Foreground="#263239">
+    <Window.Resources>
+        <SolidColorBrush x:Key="BorderBrush" Color="#DDE3E7" />
+        <SolidColorBrush x:Key="MutedBrush" Color="#748087" />
+        <SolidColorBrush x:Key="AccentBrush" Color="#229447" />
+        <Style x:Key="DialogButton" TargetType="Button">
+            <Setter Property="Height" Value="36" />
+            <Setter Property="MinWidth" Value="92" />
+            <Setter Property="Padding" Value="14,0" />
+            <Setter Property="Background" Value="White" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style x:Key="PrimaryDialogButton" BasedOn="{StaticResource DialogButton}" TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+    </Window.Resources>
+    <Grid Background="#F4F6F7">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="76" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="65" />
+        </Grid.RowDefinitions>
+        <Border Grid.Row="0" Background="White" BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="0,0,0,1">
+            <Grid Margin="20,0">
+                <StackPanel VerticalAlignment="Center" Margin="0,0,44,0">
+                    <TextBlock Text="Add material category" FontSize="17" FontWeight="SemiBold" />
+                    <TextBlock Text="Create a category for the project material catalogue."
+                               Foreground="{StaticResource MutedBrush}" FontSize="11" Margin="0,4,0,0" />
+                </StackPanel>
+                <Button Content="×" Width="32" Height="32" HorizontalAlignment="Right"
+                        VerticalAlignment="Center" Style="{StaticResource DialogButton}"
+                        MinWidth="32" Padding="0" FontSize="19" Click="OnCancelClick" />
+            </Grid>
+        </Border>
+        <StackPanel Grid.Row="1" Margin="20,18,20,10">
+            <TextBlock Text="CATEGORY NAME" FontSize="10" FontWeight="SemiBold"
+                       Foreground="{StaticResource MutedBrush}" Margin="0,0,0,6" />
+            <TextBox x:Name="CategoryNameText" Height="37" Padding="10,7" MaxLength="40"
+                     Background="White" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                     FontSize="13" PreviewKeyDown="OnCategoryNamePreviewKeyDown" />
+            <TextBlock x:Name="ValidationText" Foreground="#B42318" FontSize="11" Margin="0,7,0,0"
+                       Visibility="Collapsed" />
+        </StackPanel>
+        <Border Grid.Row="2" Background="#F8FAFA" BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="0,1,0,0">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center"
+                        Margin="20,0">
+                <Button Content="Cancel" Style="{StaticResource DialogButton}" Margin="0,0,8,0"
+                        Click="OnCancelClick" />
+                <Button Content="Add category" Style="{StaticResource PrimaryDialogButton}"
+                        Click="OnConfirmClick" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

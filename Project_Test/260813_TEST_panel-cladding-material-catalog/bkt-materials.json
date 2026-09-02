@@ -1,0 +1,52 @@
+{
+  "modelPath": "\\\\EgnyteDrive\\Projects\\01 Project Folders\\P00020 BayHealth Kent Tower BKT\\03-Design-Eng\\03-BIM\\05-Wireframe\\BKT - Wireframe.3dm",
+  "objectCount": 15374,
+  "layerCount": 57,
+  "usedCodes": [
+    "GLS-003",
+    "GLS-004",
+    "GLS-005",
+    "STN-001",
+    "STN-002",
+    "STN-003",
+    "TER-001"
+  ],
+  "materials": [
+    {
+      "code": "GLS-003",
+      "colorHex": "#71A0AE",
+      "layerPath": "03_Material Surfaces (STEP)::Surfaces-Glass::GLS-003"
+    },
+    {
+      "code": "GLS-004",
+      "colorHex": "#344C54",
+      "layerPath": "03_Material Surfaces (STEP)::Surfaces-Glass::GLS-004"
+    },
+    {
+      "code": "GLS-005",
+      "colorHex": "#507681",
+      "layerPath": "03_Material Surfaces (STEP)::Surfaces-Glass::GLS-005"
+    },
+    {
+      "code": "STN-001",
+      "colorHex": "#A59582",
+      "layerPath": "03_Material Surfaces (STEP)::Surfaces-Stone::STN-001"
+    },
+    {
+      "code": "STN-002",
+      "colorHex": "#82725D",
+      "layerPath": "03_Material Surfaces (STEP)::Surfaces-Stone::STN-002"
+    },
+    {
+      "code": "STN-003",
+      "colorHex": "#BCB1A2",
+      "layerPath": "03_Material Surfaces (STEP)::Surfaces-Stone::STN-003"
+    },
+    {
+      "code": "TER-001",
+      "colorHex": "#B86641",
+      "layerPath": "03_Material Surfaces (STEP)::Surfaces-Terracotta::TER-001"
+    }
+  ],
+  "missingColorCodes": []
+}

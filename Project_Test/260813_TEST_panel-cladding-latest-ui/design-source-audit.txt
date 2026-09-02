@@ -1,0 +1,21 @@
+PanelCladdingEditor design-source audit
+Archive: Design/PanelCladdingEditor/Panel-Cladding-Editor.zip
+Audit date: 2026-08-13
+
+panel-cladding-editor-v2.html
+  archive timestamp: 2026-08-12 19:53:54
+  bytes: 66061
+  JavaScript functions: 46
+  button elements: 19
+
+panel-cladding-editor.html
+  archive timestamp: 2026-08-12 22:14:32
+  bytes: 116167
+  JavaScript functions: 79
+  button elements: 27
+
+Conclusion:
+  panel-cladding-editor.html is the newer and more complete design source. It adds the enabled
+  extrusion workspace, merge/explode/add-H/add-V/delete actions, divider offsets, mullion dialog,
+  five-decimal dimensions, extrusion selection, and cladding topology behavior. The manifest's
+  entryFile value points to the older v2 export and is stale.

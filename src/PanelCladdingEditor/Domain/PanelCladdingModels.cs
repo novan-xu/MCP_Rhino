@@ -59,6 +59,10 @@ public sealed class PanelCladdingLayout
     public IReadOnlyList<double> HorizontalOffsets { get; init; } = Array.Empty<double>();
     public IReadOnlyList<double> VerticalOffsets { get; init; } = Array.Empty<double>();
     public IReadOnlyList<PanelCladdingCell> Cells { get; init; } = Array.Empty<PanelCladdingCell>();
+    public PanelCladdingTopologyState Topology { get; init; } = new();
+    public PanelFrameAssignmentState FrameAssignments { get; init; } = new();
+    public IReadOnlyDictionary<string, string> SourceUserText { get; init; } =
+        new Dictionary<string, string>();
     public PanelPreviewGeometry Preview { get; init; } = new();
     public string WorkbookPath { get; init; } = string.Empty;
 
@@ -72,6 +76,133 @@ public sealed class PanelCladdingKeySet
     public IReadOnlyList<double> HorizontalOffsets { get; init; } = Array.Empty<double>();
     public IReadOnlyList<double> VerticalOffsets { get; init; } = Array.Empty<double>();
     public IReadOnlyList<PanelCladdingCell> Cells { get; init; } = Array.Empty<PanelCladdingCell>();
+    public PanelCladdingTopologyState Topology { get; init; } = new();
+    public PanelFrameAssignmentState FrameAssignments { get; init; } = new();
+}
+
+public enum PanelCladdingTopologyAxis
+{
+    Horizontal,
+    Vertical
+}
+
+public enum PanelCladdingObjectScope
+{
+    Surfaces,
+    Curves
+}
+
+public enum PanelCladdingSaveScope
+{
+    Both,
+    Extrusions,
+    Cladding
+}
+
+public enum PanelCladdingCurveTemplatePriority
+{
+    Horizontal,
+    Vertical
+}
+
+public readonly record struct PanelCladdingSegmentCoordinate(
+    PanelCladdingTopologyAxis Axis,
+    int Track,
+    int Bay);
+
+public sealed record PanelCladdingMergeRun(
+    PanelCladdingTopologyAxis Axis,
+    int Track,
+    int StartBay,
+    int EndBay);
+
+public sealed class PanelCladdingTopologyState
+{
+    public IReadOnlyList<PanelCladdingSegmentCoordinate> MissingSegments { get; init; } =
+        Array.Empty<PanelCladdingSegmentCoordinate>();
+    public IReadOnlyList<PanelCladdingSegmentCoordinate> HiddenSegments { get; init; } =
+        Array.Empty<PanelCladdingSegmentCoordinate>();
+    public IReadOnlyList<PanelCladdingMergeRun> MergeRuns { get; init; } =
+        Array.Empty<PanelCladdingMergeRun>();
+}
+
+public sealed class PanelCladdingTopologyPayloads
+{
+    public string SegmentMask { get; init; } = string.Empty;
+    public string MergeMask { get; init; } = string.Empty;
+    public string HideMask { get; init; } = string.Empty;
+}
+
+public sealed class PanelFrameAssignmentState
+{
+    public IReadOnlyDictionary<string, IReadOnlyList<string>> FrameAssignments { get; init; } =
+        new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
+    public IReadOnlyList<PanelFrameSegmentAssignment> SegmentAssignments { get; init; } =
+        Array.Empty<PanelFrameSegmentAssignment>();
+    public IReadOnlyDictionary<string, PanelFrameProfileDefinition> Definitions { get; init; } =
+        new Dictionary<string, PanelFrameProfileDefinition>(StringComparer.OrdinalIgnoreCase);
+    public IReadOnlyDictionary<string, double> CurveModifiers { get; init; } =
+        new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+
+    public bool IsEmpty => FrameAssignments.Count == 0 && SegmentAssignments.Count == 0;
+}
+
+public sealed record PanelFrameSegmentAssignment(
+    PanelCladdingSegmentCoordinate Segment,
+    IReadOnlyList<string> Codes);
+
+public enum PanelFrameProfileDimension
+{
+    OneDimensional,
+    ZeroDimensional
+}
+
+public enum PanelFrameProfileCalculation
+{
+    Length,
+    FixedQuantity,
+    Spacing
+}
+
+public sealed class PanelFrameProfileDefinition
+{
+    public string Code { get; init; } = string.Empty;
+    public string BaseCode { get; init; } = string.Empty;
+    public string SourceCode { get; init; } = string.Empty;
+    public string Category { get; init; } = string.Empty;
+    public PanelFrameProfileDimension Dimension { get; init; }
+    public PanelFrameProfileCalculation Calculation { get; init; } = PanelFrameProfileCalculation.Length;
+    public double? CalculationValue { get; init; }
+    public string ParentCode { get; init; } = string.Empty;
+}
+
+public sealed class PanelFrameTypologyIdentity
+{
+    public int SchemaVersion { get; init; } = 1;
+    public string TypologyCode { get; init; } = string.Empty;
+    public string FullDigest { get; init; } = string.Empty;
+    public string CanonicalPayload { get; init; } = string.Empty;
+}
+
+public sealed class PanelCladdingAxisCorrespondence
+{
+    public IReadOnlyList<int?> OldToNewTracks { get; init; } = Array.Empty<int?>();
+    public IReadOnlyList<int?> NewToOldTracks { get; init; } = Array.Empty<int?>();
+    public IReadOnlyList<int> NewBayToOldBay { get; init; } = Array.Empty<int>();
+}
+
+public sealed class PanelCladdingLayoutReconciliationResult
+{
+    public PanelCladdingAxisCorrespondence Horizontal { get; init; } = new();
+    public PanelCladdingAxisCorrespondence Vertical { get; init; } = new();
+    public PanelCladdingTopologyState Topology { get; init; } = new();
+}
+
+public sealed class PanelCladdingMatchMapping
+{
+    public IReadOnlyDictionary<string, string> TargetCellValues { get; init; } =
+        new Dictionary<string, string>();
+    public string CladdingLogic { get; init; } = string.Empty;
 }
 
 public sealed class PanelCladdingInferredOffsets
@@ -121,6 +252,105 @@ public sealed class PanelCladdingWorkbookCommitResult
     public bool ReusedExistingType { get; init; }
 }
 
+public sealed class PanelCladdingInferredCurveGeometry
+{
+    public int SourceIndex { get; init; }
+    public string FrameCode { get; init; } = string.Empty;
+    public PanelCladdingTopologyAxis Axis { get; init; }
+    public IReadOnlyList<PanelCladdingSegmentCoordinate> AtomicSegments { get; init; } =
+        Array.Empty<PanelCladdingSegmentCoordinate>();
+}
+
+public sealed class PanelCladdingInferredExtrusionLayout
+{
+    public PanelCladdingTopologyState Topology { get; init; } = new();
+    public IReadOnlyList<PanelCladdingInferredCurveGeometry> Curves { get; init; } =
+        Array.Empty<PanelCladdingInferredCurveGeometry>();
+}
+
+public sealed class PanelCladdingMaterialCatalogItem
+{
+    public string Code { get; init; } = string.Empty;
+    public string Description { get; init; } = string.Empty;
+    public string Category { get; init; } = string.Empty;
+    public string ColorHex { get; init; } = string.Empty;
+}
+
+public sealed class PanelCladdingMaterialCatalog
+{
+    public string WorkbookPath { get; init; } = string.Empty;
+    public IReadOnlyList<PanelCladdingMaterialCatalogItem> Materials { get; init; } =
+        Array.Empty<PanelCladdingMaterialCatalogItem>();
+    public bool UsesLegacyTypeFallback { get; init; }
+}
+
+public sealed class PanelCladdingMaterialCatalogSaveRequest
+{
+    public string WorkbookPath { get; init; } = string.Empty;
+    public bool AllowCreate { get; init; }
+    public bool RemoveLegacyTypeSheets { get; init; } = true;
+    public IReadOnlyList<PanelCladdingMaterialCatalogItem> Materials { get; init; } =
+        Array.Empty<PanelCladdingMaterialCatalogItem>();
+}
+
+public sealed class PanelCladdingMaterialCatalogSaveResult
+{
+    public string WorkbookPath { get; init; } = string.Empty;
+    public int MaterialCount { get; init; }
+    public int RemovedLegacyTypeSheetCount { get; init; }
+}
+
+public sealed class PanelFrameExtrusionCatalogItem
+{
+    public string Code { get; init; } = string.Empty;
+    public string BaseCode { get; init; } = string.Empty;
+    public string SourceCode { get; init; } = string.Empty;
+    public string Description { get; init; } = string.Empty;
+    public string Category { get; init; } = string.Empty;
+    public PanelFrameProfileDimension? Dimension { get; init; }
+    public PanelFrameProfileCalculation Calculation { get; init; } = PanelFrameProfileCalculation.Length;
+    public double? CalculationValue { get; init; }
+    public string ParentCode { get; init; } = string.Empty;
+    public string SourcePdfPath { get; init; } = string.Empty;
+    public int SourcePageNumber { get; init; }
+    public byte[] ThumbnailPng { get; init; } = Array.Empty<byte>();
+}
+
+public sealed class PanelFrameExtrusionCatalog
+{
+    public string WorkbookPath { get; init; } = string.Empty;
+    public IReadOnlyList<PanelFrameExtrusionCatalogItem> Extrusions { get; init; } =
+        Array.Empty<PanelFrameExtrusionCatalogItem>();
+}
+
+public sealed class PanelFrameExtrusionCatalogSaveRequest
+{
+    public string WorkbookPath { get; init; } = string.Empty;
+    public bool AllowCreate { get; init; }
+    public IReadOnlyList<PanelFrameExtrusionCatalogItem> Extrusions { get; init; } =
+        Array.Empty<PanelFrameExtrusionCatalogItem>();
+}
+
+public sealed class PanelFrameExtrusionCatalogSaveResult
+{
+    public string WorkbookPath { get; init; } = string.Empty;
+    public int ExtrusionCount { get; init; }
+}
+
+public sealed class PanelFrameExtrusionScheduleImportRequest
+{
+    public string PdfPath { get; init; } = string.Empty;
+}
+
+public sealed class PanelFrameExtrusionScheduleImportResult
+{
+    public string PdfPath { get; init; } = string.Empty;
+    public IReadOnlyList<PanelFrameExtrusionCatalogItem> Extrusions { get; init; } =
+        Array.Empty<PanelFrameExtrusionCatalogItem>();
+    public IReadOnlyList<int> ImportedPageNumbers { get; init; } = Array.Empty<int>();
+    public bool UsedFramingPageFilter { get; init; }
+}
+
 public sealed class PanelCladdingSaveRequest
 {
     public string FilePath { get; init; } = string.Empty;
@@ -129,13 +359,19 @@ public sealed class PanelCladdingSaveRequest
     public string WorkbookPath { get; init; } = string.Empty;
     public bool AllowCreateWorkbook { get; init; }
     public string SystemCode { get; init; } = string.Empty;
+    public IReadOnlyList<double>? HorizontalOffsets { get; init; }
+    public IReadOnlyList<double>? VerticalOffsets { get; init; }
+    public PanelCladdingTopologyState? Topology { get; init; }
+    public PanelFrameAssignmentState? FrameAssignments { get; init; }
     public IReadOnlyDictionary<string, string> CellValues { get; init; } = new Dictionary<string, string>();
+    public PanelCladdingSaveScope Scope { get; init; } = PanelCladdingSaveScope.Both;
 }
 
 public sealed class PanelCladdingSaveResult
 {
     public Guid ObjectId { get; init; }
     public string TypeCode { get; init; } = string.Empty;
+    public string FrameTypology { get; init; } = string.Empty;
     public string StoredSignature { get; init; } = string.Empty;
     public string WorkbookPath { get; init; } = string.Empty;
     public string SheetName { get; init; } = string.Empty;
@@ -154,17 +390,47 @@ public sealed class PanelCladdingSpawnRegionPlan
         new Dictionary<string, string>();
 }
 
+public enum PanelCladdingExtrusionCurveKind
+{
+    Frame,
+    Segment,
+    Merged
+}
+
+public sealed class PanelCladdingExtrusionCurvePlan
+{
+    public string Code { get; init; } = string.Empty;
+    public PanelCladdingExtrusionCurveKind Kind { get; init; }
+    public PanelCladdingTopologyAxis Axis { get; init; }
+    public double Offset { get; init; }
+    public double Start { get; init; }
+    public double End { get; init; }
+    public IReadOnlyList<PanelCladdingSegmentCoordinate> AtomicSegments { get; init; } =
+        Array.Empty<PanelCladdingSegmentCoordinate>();
+    public IReadOnlyList<string> AssignedExtrusionCodes { get; init; } = Array.Empty<string>();
+    public IReadOnlyDictionary<string, string> AssignedExtrusionValues { get; init; } =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    public string Cid { get; init; } = string.Empty;
+    public string LayerPath { get; init; } = string.Empty;
+    public IReadOnlyDictionary<string, string> UserTextWrites { get; init; } =
+        new Dictionary<string, string>();
+}
+
 public sealed class PanelCladdingSpawnPlan
 {
     public string PanelId { get; init; } = string.Empty;
     public IReadOnlyList<PanelCladdingSpawnRegionPlan> Regions { get; init; } =
         Array.Empty<PanelCladdingSpawnRegionPlan>();
+    public IReadOnlyList<PanelCladdingExtrusionCurvePlan> Curves { get; init; } =
+        Array.Empty<PanelCladdingExtrusionCurvePlan>();
 }
 
 public sealed class PanelCladdingSpawnResult
 {
     public IReadOnlyList<Guid> SourcePanelIds { get; init; } = Array.Empty<Guid>();
     public IReadOnlyList<Guid> CreatedObjectIds { get; init; } = Array.Empty<Guid>();
+    public IReadOnlyList<Guid> CreatedSurfaceIds { get; init; } = Array.Empty<Guid>();
+    public IReadOnlyList<Guid> CreatedCurveIds { get; init; } = Array.Empty<Guid>();
     public IReadOnlyList<string> Cids { get; init; } = Array.Empty<string>();
 }
 
@@ -234,10 +500,96 @@ public sealed class PanelCladdingClearResult
     public int RemovedKeyCount { get; init; }
 }
 
+public sealed class PanelCladdingCreateGuideSnapshot
+{
+    public Guid ObjectId { get; init; }
+    public bool IsOnPanel { get; init; } = true;
+    public IReadOnlyList<PanelPoint3> Samples { get; init; } = Array.Empty<PanelPoint3>();
+}
+
+public sealed class PanelCladdingCreatePanelSnapshot
+{
+    public Guid ObjectId { get; init; }
+    public double XMinimum { get; init; }
+    public double XMaximum { get; init; }
+    public double YMinimum { get; init; }
+    public double YMaximum { get; init; }
+    public double ZMinimum { get; init; }
+    public double ZMaximum { get; init; }
+    public double Tolerance { get; init; }
+    public IReadOnlyList<PanelCladdingCreateGuideSnapshot> Guides { get; init; } =
+        Array.Empty<PanelCladdingCreateGuideSnapshot>();
+    public IReadOnlyDictionary<string, string> UserText { get; init; } =
+        new Dictionary<string, string>();
+}
+
+public sealed class PanelCladdingCreatePanelPlan
+{
+    public Guid ObjectId { get; init; }
+    public IReadOnlyList<double> HorizontalOffsets { get; init; } = Array.Empty<double>();
+    public IReadOnlyList<double> VerticalOffsets { get; init; } = Array.Empty<double>();
+    public IReadOnlyList<string> UserTextDeletes { get; init; } = Array.Empty<string>();
+    public IReadOnlyDictionary<string, string> UserTextWrites { get; init; } =
+        new Dictionary<string, string>();
+    public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
+
+    public int CellCount => (HorizontalOffsets.Count + 1) * (VerticalOffsets.Count + 1);
+}
+
+public sealed class PanelCladdingCreatePlan
+{
+    public IReadOnlyList<PanelCladdingCreatePanelPlan> Panels { get; init; } =
+        Array.Empty<PanelCladdingCreatePanelPlan>();
+}
+
+public sealed class PanelCladdingCreateResult
+{
+    public IReadOnlyList<Guid> SelectedPanelIds { get; init; } = Array.Empty<Guid>();
+    public IReadOnlyList<Guid> UpdatedPanelIds { get; init; } = Array.Empty<Guid>();
+    public int HorizontalOffsetCount { get; init; }
+    public int VerticalOffsetCount { get; init; }
+    public int CellCount { get; init; }
+    public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
+}
+
+public sealed class PanelCladdingCurveTemplatePanelSnapshot
+{
+    public Guid ObjectId { get; init; }
+    public int HorizontalTrackCount { get; init; }
+    public int VerticalTrackCount { get; init; }
+    public bool HasMergeMask { get; init; }
+    public PanelCladdingTopologyState Topology { get; init; } = new();
+}
+
+public sealed class PanelCladdingCurveTemplatePanelPlan
+{
+    public Guid ObjectId { get; init; }
+    public string MergeMask { get; init; } = string.Empty;
+    public IReadOnlyList<string> UserTextDeletes { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<PanelCladdingMergeRun> MergeRuns { get; init; } =
+        Array.Empty<PanelCladdingMergeRun>();
+}
+
+public sealed class PanelCladdingCurveTemplatePlan
+{
+    public PanelCladdingCurveTemplatePriority Priority { get; init; }
+    public IReadOnlyList<PanelCladdingCurveTemplatePanelPlan> Panels { get; init; } =
+        Array.Empty<PanelCladdingCurveTemplatePanelPlan>();
+}
+
+public sealed class PanelCladdingCurveTemplateResult
+{
+    public PanelCladdingCurveTemplatePriority Priority { get; init; }
+    public IReadOnlyList<Guid> SelectedPanelIds { get; init; } = Array.Empty<Guid>();
+    public IReadOnlyList<Guid> UpdatedPanelIds { get; init; } = Array.Empty<Guid>();
+    public int MergeRunCount { get; init; }
+}
+
 public sealed class PanelCladdingSurfaceSyncPanelSnapshot
 {
     public Guid ObjectId { get; init; }
     public string PanelId { get; init; } = string.Empty;
+    public string PanelCid { get; init; } = string.Empty;
     public PanelCladdingLayout Layout { get; init; } = new();
     public bool GridChanged { get; init; }
 }
@@ -245,11 +597,31 @@ public sealed class PanelCladdingSurfaceSyncPanelSnapshot
 public sealed class PanelCladdingSurfaceSyncSurfaceSnapshot
 {
     public Guid ObjectId { get; init; }
+    public Guid PanelObjectId { get; init; }
     public string PanelId { get; init; } = string.Empty;
     public string Cid { get; init; } = string.Empty;
     public string LayerPath { get; init; } = string.Empty;
     public string CladdingValue { get; init; } = string.Empty;
+    public string CoverageValue { get; init; } = string.Empty;
+    public string LegacyCoverageValue { get; init; } = string.Empty;
     public IReadOnlyList<string> CoveredCellLabels { get; init; } = Array.Empty<string>();
+}
+
+public sealed class PanelCladdingSurfaceSyncCurveSnapshot
+{
+    public Guid ObjectId { get; init; }
+    public Guid PanelObjectId { get; init; }
+    public string PanelId { get; init; } = string.Empty;
+    public string Cid { get; init; } = string.Empty;
+    public string CurveCode { get; init; } = string.Empty;
+    public string DesiredCode { get; init; } = string.Empty;
+    public string LayerPath { get; init; } = string.Empty;
+    public string AssignedExtrusions { get; init; } = string.Empty;
+    public string DesiredAssignedExtrusions { get; init; } = string.Empty;
+    public IReadOnlyDictionary<string, string> AssignedExtrusionValues { get; init; } =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    public IReadOnlyDictionary<string, string> DesiredAssignedExtrusionValues { get; init; } =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 }
 
 public sealed class PanelCladdingSurfaceSyncIssue
@@ -268,6 +640,7 @@ public sealed class PanelCladdingWorkbookTypeReference
 
 public sealed class PanelCladdingSurfaceSyncSnapshot
 {
+    public PanelCladdingObjectScope Scope { get; init; } = PanelCladdingObjectScope.Surfaces;
     public string DocumentPath { get; init; } = string.Empty;
     public string WorkbookPath { get; init; } = string.Empty;
     public IReadOnlyList<Guid> SelectedPanelIds { get; init; } = Array.Empty<Guid>();
@@ -275,6 +648,8 @@ public sealed class PanelCladdingSurfaceSyncSnapshot
         Array.Empty<PanelCladdingSurfaceSyncPanelSnapshot>();
     public IReadOnlyList<PanelCladdingSurfaceSyncSurfaceSnapshot> Surfaces { get; init; } =
         Array.Empty<PanelCladdingSurfaceSyncSurfaceSnapshot>();
+    public IReadOnlyList<PanelCladdingSurfaceSyncCurveSnapshot> Curves { get; init; } =
+        Array.Empty<PanelCladdingSurfaceSyncCurveSnapshot>();
     public IReadOnlyList<PanelCladdingSurfaceSyncIssue> Issues { get; init; } =
         Array.Empty<PanelCladdingSurfaceSyncIssue>();
     public IReadOnlyList<PanelCladdingWorkbookTypeReference> ModelTypeAssignments { get; init; } =
@@ -292,9 +667,12 @@ public sealed class PanelCladdingSurfaceSyncSurfacePlan
     public IReadOnlyList<string> CoveredCellLabels { get; init; } = Array.Empty<string>();
     public string ExpectedLayerPath { get; init; } = string.Empty;
     public string MaterialCode { get; init; } = string.Empty;
+    public string DesiredCoverageValue { get; init; } = string.Empty;
     public bool CladdingKeyChanged { get; init; }
+    public bool CoverageChanged { get; init; }
     public bool CidChanged { get; init; }
-    public bool MetadataChanged => CladdingKeyChanged || CidChanged;
+    public bool PidChanged { get; init; }
+    public bool MetadataChanged => CladdingKeyChanged || CoverageChanged || CidChanged || PidChanged;
 }
 
 public sealed class PanelCladdingSurfaceSyncPanelPlan
@@ -304,16 +682,34 @@ public sealed class PanelCladdingSurfaceSyncPanelPlan
     public PanelCladdingLayout Layout { get; init; } = new();
     public IReadOnlyDictionary<string, string> CellValues { get; init; } =
         new Dictionary<string, string>();
+    public string CladdingLogic { get; init; } = string.Empty;
     public bool CladdingChanged { get; init; }
+}
+
+public sealed class PanelCladdingSurfaceSyncCurvePlan
+{
+    public Guid ObjectId { get; init; }
+    public Guid PanelObjectId { get; init; }
+    public string PanelId { get; init; } = string.Empty;
+    public string ExpectedLayerPath { get; init; } = string.Empty;
+    public string DesiredCode { get; init; } = string.Empty;
+    public string DesiredCid { get; init; } = string.Empty;
+    public string DesiredAssignedExtrusions { get; init; } = string.Empty;
+    public IReadOnlyDictionary<string, string> DesiredAssignedExtrusionValues { get; init; } =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    public bool MetadataChanged { get; init; }
 }
 
 public sealed class PanelCladdingSurfaceSyncPlan
 {
+    public PanelCladdingObjectScope Scope { get; init; } = PanelCladdingObjectScope.Surfaces;
     public IReadOnlyList<Guid> SelectedPanelIds { get; init; } = Array.Empty<Guid>();
     public IReadOnlyList<PanelCladdingSurfaceSyncPanelPlan> Panels { get; init; } =
         Array.Empty<PanelCladdingSurfaceSyncPanelPlan>();
     public IReadOnlyList<PanelCladdingSurfaceSyncSurfacePlan> Surfaces { get; init; } =
         Array.Empty<PanelCladdingSurfaceSyncSurfacePlan>();
+    public IReadOnlyList<PanelCladdingSurfaceSyncCurvePlan> Curves { get; init; } =
+        Array.Empty<PanelCladdingSurfaceSyncCurvePlan>();
     public IReadOnlyList<PanelCladdingSurfaceSyncIssue> Issues { get; init; } =
         Array.Empty<PanelCladdingSurfaceSyncIssue>();
 }
@@ -324,14 +720,20 @@ public sealed class PanelCladdingSurfaceSyncPanelWrite
     public string ExpectedGeometryFingerprint { get; init; } = string.Empty;
     public IReadOnlyList<double> HorizontalOffsets { get; init; } = Array.Empty<double>();
     public IReadOnlyList<double> VerticalOffsets { get; init; } = Array.Empty<double>();
+    public PanelCladdingTopologyState Topology { get; init; } = new();
     public IReadOnlyDictionary<string, string> CellValues { get; init; } =
         new Dictionary<string, string>();
+    public string CladdingLogic { get; init; } = string.Empty;
     public string TypeCode { get; init; } = string.Empty;
     public string StoredSignature { get; init; } = string.Empty;
+    public string UnitWidth { get; init; } = string.Empty;
+    public string UnitHeight { get; init; } = string.Empty;
+    public string UnitDimension { get; init; } = string.Empty;
 }
 
 public sealed class PanelCladdingSurfaceSyncCommitRequest
 {
+    public PanelCladdingObjectScope Scope { get; init; } = PanelCladdingObjectScope.Surfaces;
     public string FilePath { get; init; } = string.Empty;
     public string WorkbookPath { get; init; } = string.Empty;
     public IReadOnlyList<Guid> SelectedPanelIds { get; init; } = Array.Empty<Guid>();
@@ -341,6 +743,8 @@ public sealed class PanelCladdingSurfaceSyncCommitRequest
     public IReadOnlyList<string> RemovedWorkbookTypeCodes { get; init; } = Array.Empty<string>();
     public IReadOnlyList<PanelCladdingSurfaceSyncSurfacePlan> SurfaceWrites { get; init; } =
         Array.Empty<PanelCladdingSurfaceSyncSurfacePlan>();
+    public IReadOnlyList<PanelCladdingSurfaceSyncCurvePlan> CurveWrites { get; init; } =
+        Array.Empty<PanelCladdingSurfaceSyncCurvePlan>();
     public IReadOnlyList<PanelCladdingSurfaceSyncPanelWrite> PanelWrites { get; init; } =
         Array.Empty<PanelCladdingSurfaceSyncPanelWrite>();
 }
@@ -356,11 +760,14 @@ public sealed class PanelCladdingSurfaceSyncTypeResult
 
 public sealed class PanelCladdingSurfaceSyncResult
 {
+    public PanelCladdingObjectScope Scope { get; init; } = PanelCladdingObjectScope.Surfaces;
     public IReadOnlyList<Guid> SelectedPanelIds { get; init; } = Array.Empty<Guid>();
     public IReadOnlyList<Guid> SkippedPanelIds { get; init; } = Array.Empty<Guid>();
     public IReadOnlyList<Guid> ChangedPanelIds { get; init; } = Array.Empty<Guid>();
     public IReadOnlyList<Guid> RefreshedSurfaceIds { get; init; } = Array.Empty<Guid>();
+    public IReadOnlyList<Guid> RefreshedCurveIds { get; init; } = Array.Empty<Guid>();
     public int MatchedSurfaceCount { get; init; }
+    public int MatchedCurveCount { get; init; }
     public string WorkbookPath { get; init; } = string.Empty;
     public IReadOnlyList<PanelCladdingSurfaceSyncTypeResult> Types { get; init; } =
         Array.Empty<PanelCladdingSurfaceSyncTypeResult>();

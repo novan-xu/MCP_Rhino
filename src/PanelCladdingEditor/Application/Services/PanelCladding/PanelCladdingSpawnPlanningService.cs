@@ -5,22 +5,57 @@ namespace PanelCladdingEditor.Application.Services.PanelCladding;
 
 public sealed class PanelCladdingSpawnPlanningService
 {
-    public const string MaterialSurfaceRootLayer = "03_Material Surfaces (STEP)";
+    public const string MaterialSurfaceRootLayer = "04_STEP Surfaces";
+    public const string LegacyMaterialSurfaceRootLayer = "03_Material Surfaces (STEP)";
     public const string PanelIdUserTextKey = "CW_1.01_PID";
     public const string CidUserTextKey = "CW_1.02_CID";
     public const string ReleaseUserTextKey = "CW_1.05_RELEASE";
     public const string WallTypeUserTextKey = "CW_1.07_WALL_TYPE";
 
     private readonly PanelCladdingRegionService _regions;
+    private readonly IReadOnlyDictionary<string, PanelColorRgb> _configuredMaterialColors;
+    private readonly PanelCladdingLogicalCellService _logicalCells = new();
+    private readonly PanelCladdingExtrusionPlanningService _extrusions = new();
+    private readonly PanelCladdingSurfaceCoverageService _surfaceCoverage = new();
 
-    public PanelCladdingSpawnPlanningService(PanelCladdingKeyService keys)
+    public PanelCladdingSpawnPlanningService(
+        PanelCladdingKeyService keys,
+        IReadOnlyDictionary<string, PanelColorRgb>? configuredMaterialColors = null)
     {
         _regions = new PanelCladdingRegionService(keys);
+        var colors = new Dictionary<string, PanelColorRgb>(StringComparer.OrdinalIgnoreCase);
+        foreach ((string code, PanelColorRgb color) in configuredMaterialColors ??
+            new Dictionary<string, PanelColorRgb>())
+        {
+            if (!string.IsNullOrWhiteSpace(code))
+            {
+                colors[code.Trim()] = color;
+            }
+        }
+        _configuredMaterialColors = colors;
     }
 
     public OperationResponse<PanelCladdingSpawnPlan> CreatePlan(
         IReadOnlyDictionary<string, string> panelUserText,
         PanelCladdingKeySet keySet)
+    {
+        return CreatePlanCore(panelUserText, keySet, null, null);
+    }
+
+    public OperationResponse<PanelCladdingSpawnPlan> CreatePlan(
+        IReadOnlyDictionary<string, string> panelUserText,
+        PanelCladdingKeySet keySet,
+        double panelWidth,
+        double panelHeight)
+    {
+        return CreatePlanCore(panelUserText, keySet, panelWidth, panelHeight);
+    }
+
+    private OperationResponse<PanelCladdingSpawnPlan> CreatePlanCore(
+        IReadOnlyDictionary<string, string> panelUserText,
+        PanelCladdingKeySet keySet,
+        double? panelWidth,
+        double? panelHeight)
     {
         OperationResponse<KeyValuePair<string, string>> panelId = FindRequiredMetadata(
             panelUserText,
@@ -56,7 +91,16 @@ public sealed class PanelCladdingSpawnPlanningService
             [release.Data.Key] = release.Data.Value.Trim(),
             [wallType.Data.Key] = wallType.Data.Value.Trim()
         };
-        OperationResponse<PanelCladdingRegionSet> regionResponse = _regions.Resolve(keySet.Cells);
+        IReadOnlyDictionary<string, string> expandedValues = _logicalCells.Expand(
+            keySet.Cells,
+            keySet.Topology,
+            keySet.Cells.ToDictionary(
+                cell => cell.UserTextKey,
+                cell => cell.Value,
+                StringComparer.OrdinalIgnoreCase));
+        OperationResponse<PanelCladdingRegionSet> regionResponse = _regions.Resolve(
+            keySet.Cells,
+            expandedValues);
         if (!regionResponse.Success || regionResponse.Data is null)
         {
             return OperationResponse<PanelCladdingSpawnPlan>.Fail(regionResponse.Message);
@@ -73,9 +117,17 @@ public sealed class PanelCladdingSpawnPlanningService
             }
 
             string cid = BuildSurfaceCid(pid, region.OwnerCellLabel);
+            OperationResponse<string> coverage = _surfaceCoverage.Encode(
+                region.OwnerCellLabel,
+                region.Cells);
+            if (!coverage.Success || coverage.Data is null)
+            {
+                return OperationResponse<PanelCladdingSpawnPlan>.Fail(coverage.Message);
+            }
             var writes = new Dictionary<string, string>(inherited, StringComparer.Ordinal)
             {
                 [CidUserTextKey] = cid,
+                [PanelCladdingSurfaceCoverageService.UserTextKey] = coverage.Data,
                 ["Cladding"] = material
             };
             regions.Add(new PanelCladdingSpawnRegionPlan
@@ -85,7 +137,9 @@ public sealed class PanelCladdingSpawnPlanningService
                 CladdingCode = material,
                 Cid = cid,
                 LayerPath = $"{MaterialSurfaceRootLayer}::{ResolveMaterialFamilyLayer(material)}::{material}",
-                LayerColor = ResolveMaterialLayerColor(material),
+                LayerColor = _configuredMaterialColors.TryGetValue(material, out PanelColorRgb configuredColor)
+                    ? configuredColor
+                    : ResolveMaterialLayerColor(material),
                 UserTextWrites = writes
             });
         }
@@ -100,10 +154,37 @@ public sealed class PanelCladdingSpawnPlanningService
             return OperationResponse<PanelCladdingSpawnPlan>.Fail("PANEL_CLADDING_DUPLICATE_PLANNED_CID");
         }
 
+        IReadOnlyList<PanelCladdingExtrusionCurvePlan> curves =
+            Array.Empty<PanelCladdingExtrusionCurvePlan>();
+        if (panelWidth.HasValue && panelHeight.HasValue)
+        {
+            OperationResponse<KeyValuePair<string, string>> panelCid = FindRequiredMetadata(
+                panelUserText,
+                CidUserTextKey,
+                "CID");
+            if (!panelCid.Success)
+            {
+                return OperationResponse<PanelCladdingSpawnPlan>.Fail(panelCid.Message);
+            }
+            OperationResponse<IReadOnlyList<PanelCladdingExtrusionCurvePlan>> extrusionPlan =
+                _extrusions.CreatePlan(
+                    pid,
+                    panelCid.Data.Value,
+                    panelWidth.Value,
+                    panelHeight.Value,
+                    keySet);
+            if (!extrusionPlan.Success || extrusionPlan.Data is null)
+            {
+                return OperationResponse<PanelCladdingSpawnPlan>.Fail(extrusionPlan.Message);
+            }
+            curves = extrusionPlan.Data;
+        }
+
         return OperationResponse<PanelCladdingSpawnPlan>.Ok(new PanelCladdingSpawnPlan
         {
             PanelId = pid,
-            Regions = regions
+            Regions = regions,
+            Curves = curves
         });
     }
 
@@ -118,7 +199,7 @@ public sealed class PanelCladdingSpawnPlanningService
         {
             return "Surfaces-Glass";
         }
-        if (code is "AL" or "ALU" or "ACM" or "ACP" or "MTL" or "SS" or "STL")
+        if (code is "AL" or "ALU" or "ACM" or "ACP" or "MPL" or "MTL" or "SS" or "STL")
         {
             return "Surfaces-Metal";
         }
@@ -143,10 +224,9 @@ public sealed class PanelCladdingSpawnPlanningService
 
     public static bool IsSupportedMaterialSurfaceRoot(string layerName)
     {
-        return string.Equals(
-            layerName?.Trim(),
-            MaterialSurfaceRootLayer,
-            StringComparison.OrdinalIgnoreCase);
+        string normalized = layerName?.Trim() ?? string.Empty;
+        return string.Equals(normalized, MaterialSurfaceRootLayer, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalized, LegacyMaterialSurfaceRootLayer, StringComparison.OrdinalIgnoreCase);
     }
 
     public static string BuildSurfaceCid(string panelId, string cellLabel)

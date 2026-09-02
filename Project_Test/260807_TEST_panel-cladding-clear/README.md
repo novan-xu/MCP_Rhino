@@ -20,7 +20,7 @@ GUID registration.
 2. Assign these keys to the first panel: `CW_4.00_CLADDING_0A`,
    `CW_1.10_CLADDING_TYPE`, `Signature`, `CW_2.03_OFFSET_H0`, `CW_1.01_PID`, and one unrelated key.
 3. Leave the second panel without cladding assignments but give it an offset and PID.
-4. Run `_PanelCladdingClear`, select both Breps, and press Enter.
+4. Run `_PCClear`, select both Breps, and press Enter.
 5. Confirm the first panel loses only the cell/type/signature keys; both panels retain offsets, PID,
    geometry, layer, object name, and unrelated user text.
 6. Confirm the command reports one changed panel and the expected number of removed keys.
