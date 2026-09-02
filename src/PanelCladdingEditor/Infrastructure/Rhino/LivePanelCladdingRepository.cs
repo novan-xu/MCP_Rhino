@@ -297,6 +297,9 @@ public sealed partial class LivePanelCladdingRepository : ILivePanelCladdingRepo
             HorizontalOffsets = keys.Data.HorizontalOffsets,
             VerticalOffsets = keys.Data.VerticalOffsets,
             Cells = keys.Data.Cells,
+            Topology = keys.Data.Topology,
+            FrameAssignments = keys.Data.FrameAssignments,
+            SourceUserText = userText,
             Preview = previewData.Preview,
             WorkbookPath = document.Strings.GetValue(PanelCladdingKeyService.WorkbookPathDocumentKey) ?? string.Empty
         });

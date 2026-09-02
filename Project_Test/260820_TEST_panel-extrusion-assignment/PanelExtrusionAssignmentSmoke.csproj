@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="NativeRuntimeProbe\**\*.cs" />
+    <ProjectReference Include="..\..\src\PanelCladdingEditor\PanelCladdingEditor.csproj"
+                      AdditionalProperties="PanelCladdingTestHost=true" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="RhinoCommon">
+      <HintPath>C:\Program Files\Rhino 8\System\netcore\RhinoCommon.dll</HintPath>
+      <Private>true</Private>
+      <Aliases>rhinocommon</Aliases>
+    </Reference>
+  </ItemGroup>
+</Project>

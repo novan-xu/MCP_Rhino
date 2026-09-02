@@ -120,15 +120,13 @@ internal static class Program
         Assembly assembly = typeof(PanelCladdingClearPlanningService).Assembly;
         Type clearCommand = RequireType(assembly, "PanelCladdingEditor.UI.PanelCladdingClearCommand");
         Type editorCommand = RequireType(assembly, "PanelCladdingEditor.UI.PanelCladdingEditorCommand");
-        Type spawnCommand = RequireType(assembly, "PanelCladdingEditor.UI.PanelCladdingSpawnCommand");
+        Type spawnCommand = RequireType(assembly, "PanelCladdingEditor.UI.PanelCladdingSpawnSrfCommand");
         Type matchCommand = RequireType(assembly, "PanelCladdingEditor.UI.PanelCladdingMatchCommand");
-        Type smokeCommand = RequireType(assembly, "PanelCladdingEditor.UI.PanelCladdingEditorSmokeCommand");
         Require(clearCommand.GUID != Guid.Empty, "Clear command GUID must be explicit and non-empty.");
         Require(new[]
             {
-                clearCommand.GUID, editorCommand.GUID, spawnCommand.GUID,
-                matchCommand.GUID, smokeCommand.GUID
-            }.Distinct().Count() == 5,
+                clearCommand.GUID, editorCommand.GUID, spawnCommand.GUID, matchCommand.GUID
+            }.Distinct().Count() == 4,
             "All PanelCladdingEditor Rhino command GUIDs must be unique.");
         Require(assembly.GetType(
                 "PanelCladdingEditor.Infrastructure.Rhino.Live.PanelCladding.LivePanelCladdingClearService") is not null,

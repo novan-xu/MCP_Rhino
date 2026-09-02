@@ -14,11 +14,11 @@ namespace PanelCladdingEditor.Infrastructure.Rhino.Live.PanelCladding;
 public sealed class LivePanelCladdingMatchService : ILivePanelCladdingMatchService
 {
     private readonly ILivePanelCladdingRepository _repository;
-    private readonly PanelCladdingMatchPlanningService _planning;
+    private readonly IPanelCladdingMatchPlanningService _planning;
 
     public LivePanelCladdingMatchService(
         ILivePanelCladdingRepository repository,
-        PanelCladdingMatchPlanningService planning)
+        IPanelCladdingMatchPlanningService planning)
     {
         _repository = repository;
         _planning = planning;
@@ -96,7 +96,7 @@ public sealed class LivePanelCladdingMatchService : ILivePanelCladdingMatchServi
             ObjectAttributes original = rhinoObject.Attributes.Duplicate();
             ObjectAttributes proposed = rhinoObject.Attributes.Duplicate();
             ApplyPlannedUserText(proposed, targetPlan);
-            prepared.Add(new PreparedTarget(rhinoObject, original, proposed));
+            prepared.Add(new PreparedTarget(rhinoObject, original, proposed, targetPlan));
         }
 
         uint undoRecord = document.BeginUndoRecord("Match Panel Cladding");
@@ -113,6 +113,19 @@ public sealed class LivePanelCladdingMatchService : ILivePanelCladdingMatchServi
                         $"PANEL_CLADDING_MATCH_ATTRIBUTE_COMMIT_FAILED: {target.Object.Id:D}{rollback}");
                 }
                 modified.Add(target);
+                RhinoObject? committed = document.Objects.FindId(target.Object.Id);
+                OperationResponse verified = committed is null
+                    ? OperationResponse.Fail("PANEL_CLADDING_MATCH_TARGET_MISSING_AFTER_COMMIT")
+                    : PanelCladdingMatchPlanningService.ValidateAppliedUserTextPlan(
+                        ReadUserText(committed.Attributes),
+                        target.Plan);
+                if (!verified.Success)
+                {
+                    bool rollbackSucceeded = RestoreOriginalAttributes(document, modified);
+                    string rollback = rollbackSucceeded ? string.Empty : ": ROLLBACK_FAILED";
+                    return OperationResponse<PanelCladdingMatchResult>.Fail(
+                        $"PANEL_CLADDING_MATCH_ATTRIBUTE_VERIFY_FAILED: {target.Object.Id:D}: {verified.Message}{rollback}");
+                }
             }
 
             document.Views.Redraw();
@@ -142,19 +155,35 @@ public sealed class LivePanelCladdingMatchService : ILivePanelCladdingMatchServi
         ObjectAttributes attributes,
         PanelCladdingMatchTargetPlan plan)
     {
-        var deletes = plan.UserTextDeletes.ToHashSet(StringComparer.OrdinalIgnoreCase);
         string?[] existingKeys = attributes.GetUserStrings()?.AllKeys ?? Array.Empty<string?>();
+        IReadOnlyDictionary<string, string> current = ReadUserText(attributes);
+        IReadOnlyDictionary<string, string> desired =
+            PanelCladdingMatchPlanningService.ApplyUserTextPlan(current, plan);
         foreach (string? key in existingKeys)
         {
-            if (key is not null && deletes.Contains(key))
+            if (key is not null && !desired.ContainsKey(key))
             {
                 attributes.DeleteUserString(key);
             }
         }
-        foreach ((string key, string value) in plan.UserTextWrites)
+        foreach ((string key, string value) in desired)
         {
             attributes.SetUserString(key, value);
         }
+    }
+
+    private static IReadOnlyDictionary<string, string> ReadUserText(ObjectAttributes attributes)
+    {
+        string?[] keys = attributes.GetUserStrings()?.AllKeys ?? Array.Empty<string?>();
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string? key in keys)
+        {
+            if (!string.IsNullOrWhiteSpace(key))
+            {
+                result[key] = attributes.GetUserString(key) ?? string.Empty;
+            }
+        }
+        return result;
     }
 
     private static bool RestoreOriginalAttributes(
@@ -203,5 +232,6 @@ public sealed class LivePanelCladdingMatchService : ILivePanelCladdingMatchServi
     private sealed record PreparedTarget(
         RhinoObject Object,
         ObjectAttributes Original,
-        ObjectAttributes Proposed);
+        ObjectAttributes Proposed,
+        PanelCladdingMatchTargetPlan Plan);
 }

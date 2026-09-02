@@ -7,20 +7,37 @@ namespace PanelCladdingEditor.Application.Services.PanelCladding;
 public sealed class PanelCladdingSaveService
 {
     private readonly ILivePanelCladdingRepository _liveRepository;
-    private readonly IPanelCladdingWorkbookRepository _workbookRepository;
-    private readonly IPanelPreviewRenderer _previewRenderer;
+    private readonly PanelCladdingKeyService _keys;
+    private readonly PanelCladdingLogicService _claddingLogic;
+    private readonly PanelCladdingLogicalCellService _logicalCells;
+    private readonly PanelCladdingTopologyNormalizationService _topologyNormalizer;
     private readonly PanelCladdingTypeSignatureService _signatureService;
+    private readonly PanelFrameAssignmentService _frameAssignments;
+    private readonly PanelFrameTypologyService _frameTypology;
+
+    public PanelCladdingSaveService(
+        ILivePanelCladdingRepository liveRepository,
+        PanelCladdingTypeSignatureService signatureService)
+    {
+        _liveRepository = liveRepository;
+        _keys = new PanelCladdingKeyService();
+        _claddingLogic = new PanelCladdingLogicService();
+        _logicalCells = new PanelCladdingLogicalCellService();
+        _topologyNormalizer = new PanelCladdingTopologyNormalizationService(_keys);
+        _signatureService = signatureService;
+        _frameAssignments = new PanelFrameAssignmentService();
+        _frameTypology = new PanelFrameTypologyService(_keys, _frameAssignments);
+    }
 
     public PanelCladdingSaveService(
         ILivePanelCladdingRepository liveRepository,
         IPanelCladdingWorkbookRepository workbookRepository,
         IPanelPreviewRenderer previewRenderer,
         PanelCladdingTypeSignatureService signatureService)
+        : this(liveRepository, signatureService)
     {
-        _liveRepository = liveRepository;
-        _workbookRepository = workbookRepository;
-        _previewRenderer = previewRenderer;
-        _signatureService = signatureService;
+        _ = workbookRepository;
+        _ = previewRenderer;
     }
 
     public OperationResponse<PanelCladdingSaveResult> Save(PanelCladdingSaveRequest request)
@@ -29,6 +46,13 @@ public sealed class PanelCladdingSaveService
         {
             return OperationResponse<PanelCladdingSaveResult>.Fail("PANEL_CLADDING_TARGET_REQUIRED");
         }
+        if (!Enum.IsDefined(request.Scope))
+        {
+            return OperationResponse<PanelCladdingSaveResult>.Fail("PANEL_CLADDING_SAVE_SCOPE_INVALID");
+        }
+
+        bool saveExtrusions = request.Scope is PanelCladdingSaveScope.Extrusions or PanelCladdingSaveScope.Both;
+        bool saveCladding = request.Scope is PanelCladdingSaveScope.Cladding or PanelCladdingSaveScope.Both;
 
         OperationResponse<PanelCladdingLayout> read = _liveRepository.ReadLayout(request.FilePath, request.ObjectId);
         if (!read.Success || read.Data is null)
@@ -43,42 +67,197 @@ public sealed class PanelCladdingSaveService
                 "PANEL_CLADDING_STALE_EDITOR: panel geometry or attributes changed; reload before saving.");
         }
 
-        OperationResponse<PanelCladdingTypeIdentity> identityResponse = _signatureService.Create(
-            layout,
-            request.CellValues,
-            request.SystemCode);
-        if (!identityResponse.Success || identityResponse.Data is null)
+        IReadOnlyList<double> horizontalOffsets = saveExtrusions
+            ? request.HorizontalOffsets ?? layout.HorizontalOffsets
+            : layout.HorizontalOffsets;
+        IReadOnlyList<double> verticalOffsets = saveExtrusions
+            ? request.VerticalOffsets ?? layout.VerticalOffsets
+            : layout.VerticalOffsets;
+        PanelCladdingTopologyState topology = saveExtrusions
+            ? request.Topology ?? layout.Topology
+            : layout.Topology;
+        OperationResponse<PanelCladdingTopologyNormalizationResult> normalizationResponse =
+            _topologyNormalizer.Normalize(
+                horizontalOffsets,
+                verticalOffsets,
+                request.CellValues,
+                topology,
+                layout.Width,
+                layout.Height,
+                layout.ModelTolerance);
+        if (!normalizationResponse.Success || normalizationResponse.Data is null)
         {
-            return OperationResponse<PanelCladdingSaveResult>.Fail(identityResponse.Message);
+            return OperationResponse<PanelCladdingSaveResult>.Fail(normalizationResponse.Message);
         }
-
-        OperationResponse<byte[]> preview = _previewRenderer.RenderPng(layout, 900, 620);
-        if (!preview.Success || preview.Data is null)
+        PanelCladdingTopologyNormalizationResult normalizedEdit = normalizationResponse.Data;
+        horizontalOffsets = normalizedEdit.HorizontalOffsets;
+        verticalOffsets = normalizedEdit.VerticalOffsets;
+        topology = normalizedEdit.Topology;
+        PanelFrameAssignmentState requestedFrameAssignments = saveExtrusions
+            ? request.FrameAssignments ?? layout.FrameAssignments
+            : layout.FrameAssignments;
+        OperationResponse<PanelFrameAssignmentState> normalizedFrameAssignments = _frameAssignments.Normalize(
+            requestedFrameAssignments,
+            horizontalOffsets.Count,
+            verticalOffsets.Count,
+            topology);
+        if (!normalizedFrameAssignments.Success || normalizedFrameAssignments.Data is null)
         {
-            return OperationResponse<PanelCladdingSaveResult>.Fail(preview.Message);
+            return OperationResponse<PanelCladdingSaveResult>.Fail(normalizedFrameAssignments.Message);
         }
-
-        var upsert = new PanelCladdingWorkbookUpsert
+        requestedFrameAssignments = normalizedFrameAssignments.Data;
+        OperationResponse<PanelCladdingKeySet> keySetResponse = _keys.CreateKeySet(
+            horizontalOffsets,
+            verticalOffsets,
+            normalizedEdit.CellValues,
+            layout.Width,
+            layout.Height,
+            layout.ModelTolerance);
+        if (!keySetResponse.Success || keySetResponse.Data is null)
         {
-            WorkbookPath = request.WorkbookPath,
-            Layout = layout,
-            Identity = identityResponse.Data,
-            PreviewPng = preview.Data,
-            AllowCreate = request.AllowCreateWorkbook
+            return OperationResponse<PanelCladdingSaveResult>.Fail(keySetResponse.Message);
+        }
+        var requestedLayout = new PanelCladdingLayout
+        {
+            ObjectId = layout.ObjectId,
+            DocumentRuntimeSerialNumber = layout.DocumentRuntimeSerialNumber,
+            DocumentPath = layout.DocumentPath,
+            ObjectName = layout.ObjectName,
+            LayerFullPath = layout.LayerFullPath,
+            SystemCode = layout.SystemCode,
+            GeometryFingerprint = layout.GeometryFingerprint,
+            GeometryClass = layout.GeometryClass,
+            GeometryDiagnostic = layout.GeometryDiagnostic,
+            Width = layout.Width,
+            Height = layout.Height,
+            ModelTolerance = layout.ModelTolerance,
+            ModelUnitScaleToMillimeters = layout.ModelUnitScaleToMillimeters,
+            HorizontalOffsets = keySetResponse.Data.HorizontalOffsets,
+            VerticalOffsets = keySetResponse.Data.VerticalOffsets,
+            Cells = keySetResponse.Data.Cells,
+            Topology = topology,
+            FrameAssignments = requestedFrameAssignments,
+            SourceUserText = layout.SourceUserText,
+            Preview = layout.Preview,
+            WorkbookPath = layout.WorkbookPath
         };
-        OperationResponse<IPreparedPanelCladdingWorkbookUpdate> preparedResponse = _workbookRepository.PrepareUpsert(upsert);
-        if (!preparedResponse.Success || preparedResponse.Data is null)
+
+        var writes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        PanelCladdingTypeIdentity? finalIdentity = null;
+        PanelFrameTypologyIdentity? finalFrameTypology = null;
+        if (saveCladding)
         {
-            return OperationResponse<PanelCladdingSaveResult>.Fail(preparedResponse.Message);
+            IReadOnlyDictionary<string, string> expandedCellValues = _logicalCells.Expand(
+                requestedLayout.Cells,
+                topology,
+                normalizedEdit.CellValues);
+            OperationResponse<PanelCladdingTypeIdentity> identityResponse = _signatureService.Create(
+                requestedLayout,
+                expandedCellValues,
+                request.SystemCode);
+            if (!identityResponse.Success || identityResponse.Data is null)
+            {
+                return OperationResponse<PanelCladdingSaveResult>.Fail(identityResponse.Message);
+            }
+
+            finalIdentity = identityResponse.Data;
+            IReadOnlyDictionary<string, string> logicalCellValues = _logicalCells.Collapse(
+                requestedLayout.Cells,
+                topology,
+                finalIdentity.NormalizedCellValues);
+            foreach ((string key, string value) in logicalCellValues)
+            {
+                writes[key] = PanelCladdingKeyService.EncodeCellValueForStorage(value);
+            }
+            OperationResponse<string> claddingLogic = _claddingLogic.Encode(
+                requestedLayout.Cells,
+                finalIdentity.NormalizedCellValues);
+            if (!claddingLogic.Success || claddingLogic.Data is null)
+            {
+                return OperationResponse<PanelCladdingSaveResult>.Fail(claddingLogic.Message);
+            }
+            writes[PanelCladdingKeyService.CladdingLogicKey] = claddingLogic.Data;
+            writes[PanelCladdingKeyService.TypeCodeKey] = finalIdentity.TypeCode;
         }
 
-        using IPreparedPanelCladdingWorkbookUpdate prepared = preparedResponse.Data;
-        PanelCladdingTypeIdentity finalIdentity = prepared.Result.Identity;
-        var writes = new Dictionary<string, string>(finalIdentity.NormalizedCellValues, StringComparer.OrdinalIgnoreCase)
+        if (saveExtrusions)
         {
-            [PanelCladdingKeyService.TypeCodeKey] = finalIdentity.TypeCode,
-            [PanelCladdingKeyService.SignatureKey] = finalIdentity.StoredSignature
-        };
+            OperationResponse<IReadOnlyDictionary<string, string>> topologyResponse =
+                _keys.EncodeNonDefaultTopology(
+                    topology,
+                    requestedLayout.HorizontalOffsets.Count,
+                    requestedLayout.VerticalOffsets.Count);
+            if (!topologyResponse.Success || topologyResponse.Data is null)
+            {
+                return OperationResponse<PanelCladdingSaveResult>.Fail(topologyResponse.Message);
+            }
+
+            foreach ((string key, string value) in topologyResponse.Data)
+            {
+                writes[key] = value;
+            }
+            OperationResponse<string> assignmentPayload = _frameAssignments.Encode(
+                requestedFrameAssignments,
+                requestedLayout.HorizontalOffsets.Count,
+                requestedLayout.VerticalOffsets.Count,
+                topology);
+            if (!assignmentPayload.Success || assignmentPayload.Data is null)
+            {
+                return OperationResponse<PanelCladdingSaveResult>.Fail(assignmentPayload.Message);
+            }
+            if (!string.IsNullOrWhiteSpace(assignmentPayload.Data))
+            {
+                writes[PanelCladdingKeyService.FrameAssignmentsKey] = assignmentPayload.Data;
+                OperationResponse<PanelFrameTypologyIdentity> typologyResponse = _frameTypology.Create(
+                    requestedLayout,
+                    requestedFrameAssignments,
+                    request.SystemCode);
+                if (!typologyResponse.Success || typologyResponse.Data is null)
+                {
+                    return OperationResponse<PanelCladdingSaveResult>.Fail(typologyResponse.Message);
+                }
+                finalFrameTypology = typologyResponse.Data;
+                writes[PanelCladdingKeyService.FrameTypologyKey] = finalFrameTypology.TypologyCode;
+            }
+            writes[PanelCladdingKeyService.UnitWidthKey] =
+                PanelCladdingKeyService.FormatUnitDimension(layout.Width);
+            writes[PanelCladdingKeyService.UnitHeightKey] =
+                PanelCladdingKeyService.FormatUnitDimension(layout.Height);
+            writes[PanelCladdingKeyService.UnitDimensionKey] =
+                $"{PanelCladdingKeyService.FormatUnitDimension(layout.Width)}x" +
+                PanelCladdingKeyService.FormatUnitDimension(layout.Height);
+            for (int index = 0; index < requestedLayout.HorizontalOffsets.Count; index++)
+            {
+                writes[PanelCladdingKeyService.GetHorizontalOffsetKey(index)] =
+                    PanelCladdingKeyService.FormatOffset(requestedLayout.HorizontalOffsets[index]);
+            }
+            for (int index = 0; index < requestedLayout.VerticalOffsets.Count; index++)
+            {
+                writes[PanelCladdingKeyService.GetVerticalOffsetKey(index)] =
+                    PanelCladdingKeyService.FormatOffset(requestedLayout.VerticalOffsets[index]);
+            }
+        }
+
+        string[] obsoleteGridKeys = layout.SourceUserText.Keys
+            .Where(key =>
+                ((saveCladding && _keys.IsCladdingCellKey(key)) ||
+                 (saveExtrusions && (
+                     _keys.IsOffsetKey(key) ||
+                     PanelCladdingKeyService.IsTopologyKey(key) ||
+                     string.Equals(key, PanelCladdingKeyService.FrameAssignmentsKey, StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(key, PanelCladdingKeyService.FrameTypologyKey, StringComparison.OrdinalIgnoreCase)))) &&
+                !writes.ContainsKey(key))
+            .ToArray();
+        string[] userTextDeletes = obsoleteGridKeys
+            .Concat(saveCladding
+                ? [PanelCladdingKeyService.LegacyTypeCodeKey]
+                : Array.Empty<string>())
+            .Concat([
+                PanelCladdingKeyService.SignatureKey,
+                PanelCladdingKeyService.LegacySignatureKey
+            ])
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
 
         OperationResponse<PanelAttributeCommitResult> committed = _liveRepository.CommitAttributes(
             new PanelAttributeCommitRequest
@@ -86,15 +265,11 @@ public sealed class PanelCladdingSaveService
                 FilePath = request.FilePath,
                 ObjectId = request.ObjectId,
                 ExpectedGeometryFingerprint = request.ExpectedGeometryFingerprint,
-                UserTextDeletes = new[]
-                {
-                    PanelCladdingKeyService.LegacyTypeCodeKey,
-                    PanelCladdingKeyService.LegacySignatureKey
-                },
+                UserTextDeletes = userTextDeletes,
                 UserTextWrites = writes,
                 WorkbookPath = request.WorkbookPath
             },
-            prepared.Commit);
+            () => OperationResponse.Ok("Panel cladding key/value set prepared."));
         if (!committed.Success || committed.Data is null)
         {
             return OperationResponse<PanelCladdingSaveResult>.Fail(committed.Message);
@@ -103,14 +278,28 @@ public sealed class PanelCladdingSaveService
         return OperationResponse<PanelCladdingSaveResult>.Ok(new PanelCladdingSaveResult
         {
             ObjectId = request.ObjectId,
-            TypeCode = finalIdentity.TypeCode,
-            StoredSignature = finalIdentity.StoredSignature,
-            WorkbookPath = prepared.Result.WorkbookPath,
-            SheetName = prepared.Result.SheetName,
-            ReusedExistingType = prepared.Result.ReusedExistingType
-        }, prepared.Result.ReusedExistingType
-            ? "Existing panel cladding type reused."
-            : "New panel cladding type created.");
+            TypeCode = finalIdentity?.TypeCode ??
+                GetUserText(layout.SourceUserText, PanelCladdingKeyService.TypeCodeKey),
+            FrameTypology = finalFrameTypology?.TypologyCode ??
+                (saveExtrusions
+                    ? string.Empty
+                    : GetUserText(layout.SourceUserText, PanelCladdingKeyService.FrameTypologyKey)),
+            StoredSignature = string.Empty,
+            WorkbookPath = request.WorkbookPath,
+            SheetName = string.Empty,
+            ReusedExistingType = false
+        }, request.Scope switch
+        {
+            PanelCladdingSaveScope.Extrusions => "Panel extrusion key/value set saved to Rhino.",
+            PanelCladdingSaveScope.Cladding => "Panel cladding key/value set saved to Rhino.",
+            _ => "Panel extrusion and cladding key/value sets saved to Rhino."
+        });
     }
+
+    private static string GetUserText(
+        IReadOnlyDictionary<string, string> userText,
+        string requestedKey) =>
+        userText.FirstOrDefault(item =>
+            string.Equals(item.Key, requestedKey, StringComparison.OrdinalIgnoreCase)).Value ?? string.Empty;
 }
 

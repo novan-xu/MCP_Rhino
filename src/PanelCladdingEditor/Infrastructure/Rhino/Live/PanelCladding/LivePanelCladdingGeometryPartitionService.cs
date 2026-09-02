@@ -2,32 +2,92 @@ extern alias rhinocommon;
 
 using System.Globalization;
 using System.Text.RegularExpressions;
+using PanelCladdingEditor.Application.Services.PanelCladding;
 using PanelCladdingEditor.Contracts.Responses;
 using PanelCladdingEditor.Domain.Models.PanelCladding;
 using AreaMassProperties = rhinocommon::Rhino.Geometry.AreaMassProperties;
 using Brep = rhinocommon::Rhino.Geometry.Brep;
 using BrepEdge = rhinocommon::Rhino.Geometry.BrepEdge;
+using Curve = rhinocommon::Rhino.Geometry.Curve;
 using EdgeAdjacency = rhinocommon::Rhino.Geometry.EdgeAdjacency;
 using Mesh = rhinocommon::Rhino.Geometry.Mesh;
 using MeshingParameters = rhinocommon::Rhino.Geometry.MeshingParameters;
 using Plane = rhinocommon::Rhino.Geometry.Plane;
 using PlaneFitResult = rhinocommon::Rhino.Geometry.PlaneFitResult;
 using Point3d = rhinocommon::Rhino.Geometry.Point3d;
+using Polyline = rhinocommon::Rhino.Geometry.Polyline;
 using Vector3d = rhinocommon::Rhino.Geometry.Vector3d;
 
 namespace PanelCladdingEditor.Infrastructure.Rhino.Live.PanelCladding;
 
 internal static partial class LivePanelCladdingGeometryPartitionService
 {
+    public static OperationResponse<PanelCladdingCreatePanelSnapshot> BuildCreateSnapshot(
+        Guid objectId,
+        Brep source,
+        IReadOnlyList<LivePanelCladdingGuideCurve> guides,
+        IReadOnlyDictionary<string, string> userText,
+        double tolerance)
+    {
+        OperationResponse<LocalPanelFrame> frameResponse = BuildLocalFrame(source, tolerance);
+        if (!frameResponse.Success || frameResponse.Data is null)
+        {
+            return OperationResponse<PanelCladdingCreatePanelSnapshot>.Fail(frameResponse.Message);
+        }
+        LocalPanelFrame local = frameResponse.Data;
+        var guideSnapshots = new List<PanelCladdingCreateGuideSnapshot>(guides.Count);
+        foreach (LivePanelCladdingGuideCurve guide in guides)
+        {
+            Point3d[] points = SampleGuideCurve(guide.Curve);
+            guideSnapshots.Add(new PanelCladdingCreateGuideSnapshot
+            {
+                ObjectId = guide.ObjectId,
+                IsOnPanel = HasMeaningfulPanelOverlap(source, guide.Curve, local, tolerance),
+                Samples = points.Select(point =>
+                {
+                    Vector3d delta = point - local.Frame.Origin;
+                    return new PanelPoint3(
+                        delta * local.Frame.XAxis,
+                        delta * local.Frame.YAxis,
+                        delta * local.Frame.ZAxis);
+                }).ToArray()
+            });
+        }
+        return OperationResponse<PanelCladdingCreatePanelSnapshot>.Ok(
+            new PanelCladdingCreatePanelSnapshot
+            {
+                ObjectId = objectId,
+                XMinimum = local.XMin,
+                XMaximum = local.XMax,
+                YMinimum = local.YMin,
+                YMaximum = local.YMax,
+                ZMinimum = local.ZMin,
+                ZMaximum = local.ZMax,
+                Tolerance = tolerance,
+                Guides = guideSnapshots,
+                UserText = new Dictionary<string, string>(userText, StringComparer.OrdinalIgnoreCase)
+            });
+    }
+
     public static OperationResponse<PanelCladdingInferredOffsets> InferOffsets(
         Brep source,
         IReadOnlyList<Brep> claddingSurfaces,
         double tolerance)
     {
-        if (claddingSurfaces is null || claddingSurfaces.Count == 0)
+        return InferOffsets(source, claddingSurfaces, Array.Empty<Curve>(), tolerance);
+    }
+
+    public static OperationResponse<PanelCladdingInferredOffsets> InferOffsets(
+        Brep source,
+        IReadOnlyList<Brep> claddingSurfaces,
+        IReadOnlyList<Curve> extrusionCurves,
+        double tolerance)
+    {
+        if ((claddingSurfaces is null || claddingSurfaces.Count == 0) &&
+            (extrusionCurves is null || extrusionCurves.Count == 0))
         {
             return OperationResponse<PanelCladdingInferredOffsets>.Fail(
-                "PANEL_CLADDING_SURFACE_SYNC_SURFACE_MISSING");
+                "PANEL_CLADDING_SYNC_GEOMETRY_MISSING");
         }
 
         OperationResponse<LocalPanelFrame> frameResponse = BuildLocalFrame(source, tolerance);
@@ -44,7 +104,7 @@ internal static partial class LivePanelCladdingGeometryPartitionService
         var verticalCandidates = new List<double>();
         var horizontalCandidates = new List<double>();
 
-        foreach (Brep surface in claddingSurfaces)
+        foreach (Brep surface in claddingSurfaces ?? Array.Empty<Brep>())
         {
             foreach (BrepEdge edge in surface.Edges)
             {
@@ -86,6 +146,20 @@ internal static partial class LivePanelCladdingGeometryPartitionService
                     }
                 }
             }
+        }
+
+        foreach (Curve curve in extrusionCurves ?? Array.Empty<Curve>())
+        {
+            AddDividerCandidate(
+                curve,
+                local.Frame,
+                local.XMin,
+                local.YMin,
+                width,
+                height,
+                axisTolerance,
+                horizontalCandidates,
+                verticalCandidates);
         }
 
         return OperationResponse<PanelCladdingInferredOffsets>.Ok(
@@ -149,55 +223,707 @@ internal static partial class LivePanelCladdingGeometryPartitionService
         }
 
         return OperationResponse<LivePanelCladdingGeometryGrid>.Ok(
-            new LivePanelCladdingGeometryGrid(cells));
+            new LivePanelCladdingGeometryGrid(
+                source,
+                cells,
+                local.Frame,
+                local.XMin,
+                local.XMax,
+                local.YMin,
+                local.YMax,
+                xBoundaries,
+                yBoundaries,
+                tolerance));
     }
 
-    public static OperationResponse<Brep> JoinRegion(
+    public static OperationResponse<Curve> CreateExtrusionCurve(
+        LivePanelCladdingGeometryGrid grid,
+        PanelCladdingExtrusionCurvePlan plan)
+    {
+        IEnumerable<LivePanelCladdingGeometryCell> sourceCells;
+        double target;
+        if (plan.Kind == PanelCladdingExtrusionCurveKind.Frame)
+        {
+            sourceCells = plan.Code switch
+            {
+                "FRM_0" => grid.Cells.Where(cell => cell.Cell.Row == 0),
+                "FRM_1" => grid.Cells.Where(cell => cell.Cell.Row == grid.Cells.Max(item => item.Cell.Row)),
+                "FRM_2" => grid.Cells.Where(cell => cell.Cell.Column == 0),
+                "FRM_3" => grid.Cells.Where(cell => cell.Cell.Column == grid.Cells.Max(item => item.Cell.Column)),
+                _ => Array.Empty<LivePanelCladdingGeometryCell>()
+            };
+            target = plan.Code switch
+            {
+                "FRM_0" => grid.YMin,
+                "FRM_1" => grid.YMax,
+                "FRM_2" => grid.XMin,
+                "FRM_3" => grid.XMax,
+                _ => double.NaN
+            };
+        }
+
+        else
+        {
+            sourceCells = plan.AtomicSegments.Select(segment => grid.Cells.FirstOrDefault(cell =>
+                    segment.Axis == PanelCladdingTopologyAxis.Horizontal
+                        ? cell.Cell.Column == segment.Bay && cell.Cell.Row == segment.Track
+                        : cell.Cell.Column == segment.Track && cell.Cell.Row == segment.Bay))
+                .Where(cell => cell is not null)
+                .Cast<LivePanelCladdingGeometryCell>();
+            target = plan.Axis == PanelCladdingTopologyAxis.Horizontal
+                ? grid.YMin + plan.Offset
+                : grid.XMin + plan.Offset;
+        }
+
+        LivePanelCladdingGeometryCell[] cells = sourceCells.Distinct().ToArray();
+        if (cells.Length == 0 || double.IsNaN(target))
+        {
+            return OperationResponse<Curve>.Fail(
+                $"PANEL_CLADDING_EXTRUSION_SOURCE_CELL_MISSING: {plan.Code}");
+        }
+
+        double extent = Math.Max(grid.XMax - grid.XMin, grid.YMax - grid.YMin);
+        double axisTolerance = Math.Max(grid.Tolerance * 10d, extent * 1e-7d);
+        var pieces = new List<Curve>();
+        try
+        {
+            foreach (LivePanelCladdingGeometryCell cell in cells)
+            {
+                BrepEdge? best = cell.Geometry.Edges
+                    .Where(edge => edge.Valence == EdgeAdjacency.Naked)
+                    .Select(edge => new { Edge = edge, Score = ScoreEdge(edge, grid.Frame, plan.Axis, target, axisTolerance) })
+                    .Where(item => item.Score >= 0d)
+                    .OrderBy(item => item.Score)
+                    .Select(item => item.Edge)
+                    .FirstOrDefault();
+                if (best is null)
+                {
+                    return OperationResponse<Curve>.Fail(
+                        $"PANEL_CLADDING_EXTRUSION_EDGE_NOT_FOUND: {plan.Code}: {cell.Cell.ShortLabel}");
+                }
+                pieces.Add(best.DuplicateCurve());
+            }
+
+            Curve[] joined = Curve.JoinCurves(pieces, grid.Tolerance);
+            if (joined.Length != 1)
+            {
+                foreach (Curve curve in joined)
+                {
+                    curve.Dispose();
+                }
+                return OperationResponse<Curve>.Fail(
+                    $"PANEL_CLADDING_EXTRUSION_JOIN_FAILED: {plan.Code}: {joined.Length} curves");
+            }
+            return OperationResponse<Curve>.Ok(joined[0]);
+        }
+        finally
+        {
+            foreach (Curve piece in pieces)
+            {
+                piece.Dispose();
+            }
+        }
+    }
+
+    public static bool IsAssociated(Brep source, Brep candidate, double tolerance)
+    {
+        Point3d[] points = candidate.Vertices.Select(vertex => vertex.Location).ToArray();
+        if (points.Length == 0)
+        {
+            using AreaMassProperties? area = AreaMassProperties.Compute(candidate);
+            points = area is null ? Array.Empty<Point3d>() : [area.Centroid];
+        }
+        return PointsLieOnPanel(source, points, tolerance);
+    }
+
+    public static bool IsAssociated(Brep source, Curve candidate, double tolerance) =>
+        PointsLieOnPanel(source, SampleCurve(candidate, 12), tolerance);
+
+    public static OperationResponse<PanelCladdingInferredExtrusionLayout> InferExtrusionTopology(
+        Brep source,
+        IReadOnlyList<Curve> curves,
+        IReadOnlyList<double> horizontalOffsets,
+        IReadOnlyList<double> verticalOffsets,
+        double tolerance)
+    {
+        if (curves is null || curves.Count == 0)
+        {
+            return OperationResponse<PanelCladdingInferredExtrusionLayout>.Fail(
+                "PANEL_CLADDING_SYNC_CURVES_MISSING");
+        }
+        OperationResponse<LocalPanelFrame> frameResponse = BuildLocalFrame(source, tolerance);
+        if (!frameResponse.Success || frameResponse.Data is null)
+        {
+            return OperationResponse<PanelCladdingInferredExtrusionLayout>.Fail(frameResponse.Message);
+        }
+        LocalPanelFrame local = frameResponse.Data;
+        double width = local.XMax - local.XMin;
+        double height = local.YMax - local.YMin;
+        double axisTolerance = Math.Max(tolerance * 10d, Math.Max(width, height) * 1e-7d);
+        double[] xCuts = [0d, .. verticalOffsets, width];
+        double[] yCuts = [0d, .. horizontalOffsets, height];
+        var inferredCurves = new List<PanelCladdingInferredCurveGeometry>(curves.Count);
+        var present = new HashSet<PanelCladdingSegmentCoordinate>();
+        var mergeRuns = new List<PanelCladdingMergeRun>();
+        var frameCodes = new HashSet<string>(StringComparer.Ordinal);
+
+        for (int sourceIndex = 0; sourceIndex < curves.Count; sourceIndex++)
+        {
+            Curve curve = curves[sourceIndex];
+            Point3d[] samples = SampleCurve(curve, 16);
+            var localPoints = samples.Select(point =>
+            {
+                Vector3d delta = point - local.Frame.Origin;
+                return (X: delta * local.Frame.XAxis - local.XMin,
+                    Y: delta * local.Frame.YAxis - local.YMin);
+            }).ToArray();
+            double xSpan = localPoints.Max(point => point.X) - localPoints.Min(point => point.X);
+            double ySpan = localPoints.Max(point => point.Y) - localPoints.Min(point => point.Y);
+            bool horizontal = ySpan <= axisTolerance && xSpan > axisTolerance;
+            bool vertical = xSpan <= axisTolerance && ySpan > axisTolerance;
+            if (!horizontal && !vertical)
+            {
+                return OperationResponse<PanelCladdingInferredExtrusionLayout>.Fail(
+                    $"PANEL_CLADDING_SYNC_CURVE_NOT_GRID_ALIGNED: {sourceIndex}");
+            }
+
+            PanelCladdingTopologyAxis axis = horizontal
+                ? PanelCladdingTopologyAxis.Horizontal
+                : PanelCladdingTopologyAxis.Vertical;
+            double primary = horizontal
+                ? localPoints.Average(point => point.Y)
+                : localPoints.Average(point => point.X);
+            double secondaryMin = horizontal
+                ? localPoints.Min(point => point.X)
+                : localPoints.Min(point => point.Y);
+            double secondaryMax = horizontal
+                ? localPoints.Max(point => point.X)
+                : localPoints.Max(point => point.Y);
+            double primaryExtent = horizontal ? height : width;
+            string frameCode = string.Empty;
+            if (Math.Abs(primary) <= axisTolerance)
+            {
+                frameCode = horizontal ? "FRM_0" : "FRM_2";
+            }
+            else if (Math.Abs(primary - primaryExtent) <= axisTolerance)
+            {
+                frameCode = horizontal ? "FRM_1" : "FRM_3";
+            }
+            if (frameCode.Length > 0)
+            {
+                if (!frameCodes.Add(frameCode))
+                {
+                    return OperationResponse<PanelCladdingInferredExtrusionLayout>.Fail(
+                        $"PANEL_CLADDING_SYNC_DUPLICATE_FRAME_CURVE: {frameCode}");
+                }
+                inferredCurves.Add(new PanelCladdingInferredCurveGeometry
+                {
+                    SourceIndex = sourceIndex,
+                    FrameCode = frameCode,
+                    Axis = axis
+                });
+                continue;
+            }
+
+            IReadOnlyList<double> offsets = horizontal ? horizontalOffsets : verticalOffsets;
+            int track = FindNearestIndex(offsets, primary, axisTolerance);
+            if (track < 0)
+            {
+                return OperationResponse<PanelCladdingInferredExtrusionLayout>.Fail(
+                    $"PANEL_CLADDING_SYNC_CURVE_TRACK_NOT_FOUND: {sourceIndex}");
+            }
+            double[] cuts = horizontal ? xCuts : yCuts;
+            var atoms = new List<PanelCladdingSegmentCoordinate>();
+            for (int bay = 0; bay < cuts.Length - 1; bay++)
+            {
+                if (secondaryMin <= cuts[bay] + axisTolerance &&
+                    secondaryMax >= cuts[bay + 1] - axisTolerance)
+                {
+                    atoms.Add(new PanelCladdingSegmentCoordinate(axis, track, bay));
+                }
+            }
+            if (atoms.Count == 0 || atoms.Select(atom => atom.Bay).Zip(
+                atoms.Select(atom => atom.Bay).Skip(1),
+                (left, right) => right == left + 1).Any(consecutive => !consecutive))
+            {
+                return OperationResponse<PanelCladdingInferredExtrusionLayout>.Fail(
+                    $"PANEL_CLADDING_SYNC_CURVE_SPAN_INVALID: {sourceIndex}");
+            }
+            foreach (PanelCladdingSegmentCoordinate atom in atoms)
+            {
+                if (!present.Add(atom))
+                {
+                    return OperationResponse<PanelCladdingInferredExtrusionLayout>.Fail(
+                        $"PANEL_CLADDING_SYNC_OVERLAPPING_CURVES: {axis}:{track}:{atom.Bay}");
+                }
+            }
+            if (atoms.Count > 1)
+            {
+                mergeRuns.Add(new PanelCladdingMergeRun(
+                    axis,
+                    track,
+                    atoms[0].Bay,
+                    atoms[^1].Bay));
+            }
+            inferredCurves.Add(new PanelCladdingInferredCurveGeometry
+            {
+                SourceIndex = sourceIndex,
+                Axis = axis,
+                AtomicSegments = atoms
+            });
+        }
+
+        string[] missingFrames = new[] { "FRM_0", "FRM_1", "FRM_2", "FRM_3" }
+            .Where(code => !frameCodes.Contains(code))
+            .ToArray();
+        if (missingFrames.Length > 0)
+        {
+            return OperationResponse<PanelCladdingInferredExtrusionLayout>.Fail(
+                $"PANEL_CLADDING_SYNC_FRAME_CURVES_MISSING: {string.Join(",", missingFrames)}");
+        }
+
+        var missing = new List<PanelCladdingSegmentCoordinate>();
+        for (int track = 0; track < horizontalOffsets.Count; track++)
+        {
+            for (int bay = 0; bay < xCuts.Length - 1; bay++)
+            {
+                var atom = new PanelCladdingSegmentCoordinate(PanelCladdingTopologyAxis.Horizontal, track, bay);
+                if (!present.Contains(atom)) missing.Add(atom);
+            }
+        }
+        for (int track = 0; track < verticalOffsets.Count; track++)
+        {
+            for (int bay = 0; bay < yCuts.Length - 1; bay++)
+            {
+                var atom = new PanelCladdingSegmentCoordinate(PanelCladdingTopologyAxis.Vertical, track, bay);
+                if (!present.Contains(atom)) missing.Add(atom);
+            }
+        }
+        return OperationResponse<PanelCladdingInferredExtrusionLayout>.Ok(
+            new PanelCladdingInferredExtrusionLayout
+            {
+                Topology = new PanelCladdingTopologyState
+                {
+                    MissingSegments = missing,
+                    MergeRuns = mergeRuns
+                },
+                Curves = inferredCurves
+            });
+    }
+
+    private static void AddDividerCandidate(
+        Curve curve,
+        Plane frame,
+        double xMin,
+        double yMin,
+        double width,
+        double height,
+        double tolerance,
+        ICollection<double> horizontal,
+        ICollection<double> vertical)
+    {
+        Point3d[] points = SampleCurve(curve, 12);
+        var local = points.Select(point =>
+        {
+            Vector3d delta = point - frame.Origin;
+            return (X: delta * frame.XAxis, Y: delta * frame.YAxis);
+        }).ToArray();
+        double lxMin = local.Min(point => point.X);
+        double lxMax = local.Max(point => point.X);
+        double lyMin = local.Min(point => point.Y);
+        double lyMax = local.Max(point => point.Y);
+        if (lxMax - lxMin <= tolerance && lyMax - lyMin > tolerance)
+        {
+            double relative = local.Average(point => point.X) - xMin;
+            if (relative > tolerance && relative < width - tolerance) vertical.Add(relative);
+        }
+        else if (lyMax - lyMin <= tolerance && lxMax - lxMin > tolerance)
+        {
+            double relative = local.Average(point => point.Y) - yMin;
+            if (relative > tolerance && relative < height - tolerance) horizontal.Add(relative);
+        }
+    }
+
+    private static int FindNearestIndex(IReadOnlyList<double> values, double target, double tolerance)
+    {
+        int result = -1;
+        double best = double.MaxValue;
+        for (int index = 0; index < values.Count; index++)
+        {
+            double distance = Math.Abs(values[index] - target);
+            if (distance <= tolerance && distance < best)
+            {
+                result = index;
+                best = distance;
+            }
+        }
+        return result;
+    }
+
+    private static bool PointsLieOnPanel(Brep source, IReadOnlyList<Point3d> points, double tolerance)
+    {
+        if (points.Count == 0) return false;
+        double distanceTolerance = Math.Max(tolerance * 10d, 1e-5d);
+        return points.All(point =>
+        {
+            Point3d closest = source.ClosestPoint(point);
+            return closest.IsValid && closest.DistanceTo(point) <= distanceTolerance;
+        });
+    }
+
+    private static bool HasMeaningfulPanelOverlap(
+        Brep source,
+        Curve curve,
+        LocalPanelFrame panel,
+        double tolerance)
+    {
+        Point3d[] samples = SampleGuideCurve(curve);
+        if (samples.Length < 2)
+        {
+            return false;
+        }
+        var local = samples.Select(point =>
+        {
+            Vector3d delta = point - panel.Frame.Origin;
+            return (X: delta * panel.Frame.XAxis, Y: delta * panel.Frame.YAxis);
+        }).ToArray();
+        double xMinimum = local.Min(point => point.X);
+        double xMaximum = local.Max(point => point.X);
+        double yMinimum = local.Min(point => point.Y);
+        double yMaximum = local.Max(point => point.Y);
+        double xSpan = xMaximum - xMinimum;
+        double ySpan = yMaximum - yMinimum;
+        double extent = Math.Max(panel.XMax - panel.XMin, panel.YMax - panel.YMin);
+        double probeTolerance = Math.Max(tolerance * 10d, extent * 1e-7d);
+
+        bool vertical = ySpan >= Math.Max(xSpan * 2d, probeTolerance);
+        bool horizontal = xSpan >= Math.Max(ySpan * 2d, probeTolerance);
+        if (!vertical && !horizontal)
+        {
+            return false;
+        }
+
+        double primary = vertical
+            ? local.Select(point => point.X).OrderBy(value => value).ElementAt(local.Length / 2)
+            : local.Select(point => point.Y).OrderBy(value => value).ElementAt(local.Length / 2);
+        double primaryMinimum = vertical ? panel.XMin : panel.YMin;
+        double primaryMaximum = vertical ? panel.XMax : panel.YMax;
+        if (primary <= primaryMinimum + probeTolerance ||
+            primary >= primaryMaximum - probeTolerance)
+        {
+            return false;
+        }
+
+        double secondaryMinimum = vertical ? yMinimum : xMinimum;
+        double secondaryMaximum = vertical ? yMaximum : xMaximum;
+        double panelSecondaryMinimum = vertical ? panel.YMin : panel.XMin;
+        double panelSecondaryMaximum = vertical ? panel.YMax : panel.XMax;
+        double overlapStart = Math.Max(secondaryMinimum, panelSecondaryMinimum);
+        double overlapEnd = Math.Min(secondaryMaximum, panelSecondaryMaximum);
+        if (overlapEnd - overlapStart <= probeTolerance)
+        {
+            return false;
+        }
+
+        double distanceTolerance = Math.Max(tolerance * 10d, 1e-5d);
+        foreach (double fraction in new[] { 0.1d, 0.5d, 0.9d })
+        {
+            double secondary = overlapStart + (overlapEnd - overlapStart) * fraction;
+            Point3d target = vertical
+                ? panel.Frame.PointAt(primary, secondary)
+                : panel.Frame.PointAt(secondary, primary);
+            if (!curve.ClosestPoint(target, out double parameter))
+            {
+                return false;
+            }
+            Point3d point = curve.PointAt(parameter);
+            Vector3d delta = point - panel.Frame.Origin;
+            double actualPrimary = vertical
+                ? delta * panel.Frame.XAxis
+                : delta * panel.Frame.YAxis;
+            double actualSecondary = vertical
+                ? delta * panel.Frame.YAxis
+                : delta * panel.Frame.XAxis;
+            if (Math.Abs(actualPrimary - primary) > probeTolerance ||
+                Math.Abs(actualSecondary - secondary) > probeTolerance)
+            {
+                return false;
+            }
+            Point3d closest = source.ClosestPoint(point);
+            if (!closest.IsValid || closest.DistanceTo(point) > distanceTolerance)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static Point3d[] SampleCurve(Curve curve, int segmentCount)
+    {
+        return Enumerable.Range(0, segmentCount + 1)
+            .Select(index => curve.PointAt(curve.Domain.ParameterAt((double)index / segmentCount)))
+            .ToArray();
+    }
+
+    private static double ScoreEdge(
+        BrepEdge edge,
+        Plane frame,
+        PanelCladdingTopologyAxis axis,
+        double target,
+        double tolerance)
+    {
+        const int sampleCount = 8;
+        var primary = new double[sampleCount + 1];
+        var secondary = new double[sampleCount + 1];
+        for (int index = 0; index <= sampleCount; index++)
+        {
+            Point3d point = edge.PointAt(edge.Domain.ParameterAt((double)index / sampleCount));
+            Vector3d delta = point - frame.Origin;
+            double x = delta * frame.XAxis;
+            double y = delta * frame.YAxis;
+            primary[index] = axis == PanelCladdingTopologyAxis.Horizontal ? y : x;
+            secondary[index] = axis == PanelCladdingTopologyAxis.Horizontal ? x : y;
+        }
+        if (primary.Max() - primary.Min() > tolerance || secondary.Max() - secondary.Min() <= tolerance)
+        {
+            return -1d;
+        }
+        double distance = Math.Abs(primary.Average() - target);
+        return distance <= tolerance ? distance : -1d;
+    }
+
+    public static OperationResponse<Brep> CreateRegionSurface(
         LivePanelCladdingGeometryGrid grid,
         IReadOnlyList<PanelCladdingCell> regionCells,
         double tolerance,
         string cid)
     {
-        var pieces = new List<Brep>(regionCells.Count);
+        if (grid.Source.Faces.Count != 1)
+        {
+            return OperationResponse<Brep>.Fail(
+                $"PANEL_CLADDING_REGION_SINGLE_FACE_SOURCE_REQUIRED: {cid}: " +
+                $"source has {grid.Source.Faces.Count} faces.");
+        }
+
+        var boundaryService = new PanelCladdingRegionBoundaryService();
+        OperationResponse<IReadOnlyList<PanelCladdingRegionBoundarySegment>> boundary =
+            boundaryService.CreateBoundary(
+                grid.Cells.Select(cell => cell.Cell).ToArray(),
+                regionCells);
+        if (!boundary.Success || boundary.Data is null)
+        {
+            return OperationResponse<Brep>.Fail(
+                $"PANEL_CLADDING_REGION_BOUNDARY_FAILED: {cid}: {boundary.Message}");
+        }
+
+        var expectedLabels = regionCells
+            .Select(cell => cell.ShortLabel)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (expectedLabels.Count == grid.Cells.Count &&
+            grid.Cells.All(cell => expectedLabels.Contains(cell.Cell.ShortLabel)))
+        {
+            Brep complete = grid.Source.DuplicateBrep();
+            return complete.Faces.Count == 1
+                ? OperationResponse<Brep>.Ok(complete)
+                : DisposeAndFail(
+                    complete,
+                    $"PANEL_CLADDING_REGION_SINGLE_FACE_CREATE_FAILED: {cid}");
+        }
+
+        PanelCladdingRegionBoundarySegment[] internalSegments = boundary.Data
+            .Where(segment => !segment.IsPanelPerimeter)
+            .ToArray();
+        if (internalSegments.Length == 0)
+        {
+            return OperationResponse<Brep>.Fail(
+                $"PANEL_CLADDING_REGION_INTERNAL_BOUNDARY_MISSING: {cid}");
+        }
+
+        var atomicCurves = new List<Curve>(internalSegments.Length);
+        var splitCurves = new List<Curve>();
         try
         {
-            foreach (PanelCladdingCell cell in regionCells)
+            foreach (PanelCladdingRegionBoundarySegment segment in internalSegments)
             {
-                LivePanelCladdingGeometryCell? geometryCell = grid.Cells.FirstOrDefault(item =>
-                    string.Equals(item.Cell.ShortLabel, cell.ShortLabel, StringComparison.OrdinalIgnoreCase));
-                if (geometryCell is null)
+                OperationResponse<Curve> curve = CreateRegionBoundaryCurve(grid, segment, cid);
+                if (!curve.Success || curve.Data is null)
                 {
                     return OperationResponse<Brep>.Fail(
-                        $"PANEL_CLADDING_REGION_CELL_GEOMETRY_MISSING: {cid}: {cell.ShortLabel}");
+                        curve.Message);
                 }
-                pieces.Add(geometryCell.Geometry.DuplicateBrep());
-            }
-            if (pieces.Count == 1)
-            {
-                Brep result = pieces[0];
-                pieces.Clear();
-                return OperationResponse<Brep>.Ok(result);
+                atomicCurves.Add(curve.Data);
             }
 
-            Brep[] joined = Brep.JoinBreps(pieces, tolerance);
-            if (joined.Length != 1)
+            splitCurves.AddRange(Curve.JoinCurves(atomicCurves, tolerance));
+            if (splitCurves.Count == 0)
             {
-                foreach (Brep result in joined)
-                {
-                    result.Dispose();
-                }
                 return OperationResponse<Brep>.Fail(
-                    $"PANEL_CLADDING_REGION_JOIN_FAILED: {cid} produced {joined.Length} Breps.");
+                    $"PANEL_CLADDING_REGION_BOUNDARY_JOIN_FAILED: {cid}");
             }
-            return OperationResponse<Brep>.Ok(joined[0]);
+
+            using Brep? split = grid.Source.Faces[0].Split(splitCurves, tolerance);
+            if (split is null)
+            {
+                return OperationResponse<Brep>.Fail(
+                    $"PANEL_CLADDING_REGION_FACE_SPLIT_FAILED: {cid}");
+            }
+
+            var matches = new List<Brep>();
+            try
+            {
+                foreach (var face in split.Faces)
+                {
+                    Brep candidate = face.DuplicateFace(true);
+                    OperationResponse<IReadOnlyList<string>> coverage = ResolveCoveredCellLabels(
+                        candidate,
+                        grid,
+                        tolerance,
+                        cid);
+                    bool exactCoverage = coverage.Success && coverage.Data is not null &&
+                        coverage.Data.Count == expectedLabels.Count &&
+                        coverage.Data.All(expectedLabels.Contains);
+                    if (exactCoverage && candidate.Faces.Count == 1)
+                    {
+                        matches.Add(candidate);
+                    }
+                    else
+                    {
+                        candidate.Dispose();
+                    }
+                }
+
+                if (matches.Count != 1)
+                {
+                    return OperationResponse<Brep>.Fail(
+                        $"PANEL_CLADDING_REGION_FACE_SELECTION_FAILED: {cid}: " +
+                        $"expected one face, found {matches.Count}.");
+                }
+
+                Brep result = matches[0];
+                matches.Clear();
+                return OperationResponse<Brep>.Ok(result);
+            }
+            finally
+            {
+                foreach (Brep match in matches)
+                {
+                    match.Dispose();
+                }
+            }
         }
         finally
         {
-            foreach (Brep piece in pieces)
+            foreach (Curve curve in splitCurves)
             {
-                piece.Dispose();
+                curve.Dispose();
+            }
+            foreach (Curve curve in atomicCurves)
+            {
+                curve.Dispose();
             }
         }
+    }
+
+    private static OperationResponse<Curve> CreateRegionBoundaryCurve(
+        LivePanelCladdingGeometryGrid grid,
+        PanelCladdingRegionBoundarySegment segment,
+        string cid)
+    {
+        LivePanelCladdingGeometryCell? geometryCell = grid.Cells.FirstOrDefault(item =>
+            string.Equals(
+                item.Cell.ShortLabel,
+                segment.Cell.ShortLabel,
+                StringComparison.OrdinalIgnoreCase));
+        if (geometryCell is null)
+        {
+            return OperationResponse<Curve>.Fail(
+                $"PANEL_CLADDING_REGION_CELL_GEOMETRY_MISSING: {cid}: {segment.Cell.ShortLabel}");
+        }
+
+        bool vertical = segment.Side is PanelCladdingCellBoundarySide.Left or
+            PanelCladdingCellBoundarySide.Right;
+        double primary = segment.Side switch
+        {
+            PanelCladdingCellBoundarySide.Left => grid.XBoundaries[segment.Cell.Column],
+            PanelCladdingCellBoundarySide.Right => grid.XBoundaries[segment.Cell.Column + 1],
+            PanelCladdingCellBoundarySide.Bottom => grid.YBoundaries[segment.Cell.Row],
+            PanelCladdingCellBoundarySide.Top => grid.YBoundaries[segment.Cell.Row + 1],
+            _ => double.NaN
+        };
+        double secondaryMinimum = vertical
+            ? grid.YBoundaries[segment.Cell.Row]
+            : grid.XBoundaries[segment.Cell.Column];
+        double secondaryMaximum = vertical
+            ? grid.YBoundaries[segment.Cell.Row + 1]
+            : grid.XBoundaries[segment.Cell.Column + 1];
+        double extent = Math.Max(grid.XMax - grid.XMin, grid.YMax - grid.YMin);
+        double axisTolerance = Math.Max(grid.Tolerance * 10d, extent * 1e-7d);
+
+        BrepEdge? edge = geometryCell.Geometry.Edges
+            .Where(candidate => candidate.Valence == EdgeAdjacency.Naked)
+            .Select(candidate => new
+            {
+                Edge = candidate,
+                Score = ScoreRegionBoundaryEdge(
+                    candidate,
+                    grid.Frame,
+                    vertical,
+                    primary,
+                    secondaryMinimum,
+                    secondaryMaximum,
+                    axisTolerance)
+            })
+            .Where(candidate => candidate.Score >= 0d)
+            .OrderBy(candidate => candidate.Score)
+            .Select(candidate => candidate.Edge)
+            .FirstOrDefault();
+        return edge is null
+            ? OperationResponse<Curve>.Fail(
+                $"PANEL_CLADDING_REGION_BOUNDARY_CURVE_MISSING: {cid}: " +
+                $"{segment.Cell.ShortLabel}:{segment.Side}")
+            : OperationResponse<Curve>.Ok(edge.DuplicateCurve());
+    }
+
+    private static double ScoreRegionBoundaryEdge(
+        BrepEdge edge,
+        Plane frame,
+        bool vertical,
+        double expectedPrimary,
+        double expectedSecondaryMinimum,
+        double expectedSecondaryMaximum,
+        double tolerance)
+    {
+        const int sampleCount = 12;
+        var primary = new double[sampleCount + 1];
+        var secondary = new double[sampleCount + 1];
+        for (int index = 0; index <= sampleCount; index++)
+        {
+            Point3d point = edge.PointAt(edge.Domain.ParameterAt((double)index / sampleCount));
+            Vector3d delta = point - frame.Origin;
+            double x = delta * frame.XAxis;
+            double y = delta * frame.YAxis;
+            primary[index] = vertical ? x : y;
+            secondary[index] = vertical ? y : x;
+        }
+
+        double primarySpan = primary.Max() - primary.Min();
+        double primaryDistance = Math.Abs(primary.Average() - expectedPrimary);
+        double secondaryStartDistance = Math.Abs(secondary.Min() - expectedSecondaryMinimum);
+        double secondaryEndDistance = Math.Abs(secondary.Max() - expectedSecondaryMaximum);
+        if (primarySpan > tolerance ||
+            primaryDistance > tolerance ||
+            secondaryStartDistance > tolerance ||
+            secondaryEndDistance > tolerance)
+        {
+            return -1d;
+        }
+        return primarySpan + primaryDistance + secondaryStartDistance + secondaryEndDistance;
+    }
+
+    private static OperationResponse<Brep> DisposeAndFail(Brep brep, string message)
+    {
+        brep.Dispose();
+        return OperationResponse<Brep>.Fail(message);
     }
 
     public static OperationResponse<IReadOnlyList<string>> ResolveCoveredCellLabels(
@@ -472,11 +1198,14 @@ internal static partial class LivePanelCladdingGeometryPartitionService
             frame = OrientFrame(fitted);
         }
 
-        var localPoints = new List<(double X, double Y)>(combined.Vertices.Count);
+        var localPoints = new List<(double X, double Y, double Z)>(combined.Vertices.Count);
         foreach (var vertex in combined.Vertices)
         {
             Vector3d delta = new Point3d(vertex) - frame.Origin;
-            localPoints.Add((delta * frame.XAxis, delta * frame.YAxis));
+            localPoints.Add((
+                delta * frame.XAxis,
+                delta * frame.YAxis,
+                delta * frame.ZAxis));
         }
         return OperationResponse<LocalPanelFrame>.Ok(new LocalPanelFrame
         {
@@ -484,8 +1213,23 @@ internal static partial class LivePanelCladdingGeometryPartitionService
             XMin = localPoints.Min(point => point.X),
             XMax = localPoints.Max(point => point.X),
             YMin = localPoints.Min(point => point.Y),
-            YMax = localPoints.Max(point => point.Y)
+            YMax = localPoints.Max(point => point.Y),
+            ZMin = localPoints.Min(point => point.Z),
+            ZMax = localPoints.Max(point => point.Z)
         });
+    }
+
+    private static Point3d[] SampleGuideCurve(Curve curve)
+    {
+        if (curve.TryGetPolyline(out Polyline polyline) && polyline.Count >= 2)
+        {
+            return Enumerable.Range(0, polyline.Count)
+                .Select(index => polyline[index])
+                .ToArray();
+        }
+        return new[] { 0d, 0.25d, 0.5d, 0.75d, 1d }
+            .Select(curve.PointAtNormalizedLength)
+            .ToArray();
     }
 
     private static Plane OrientFrame(Plane source)
@@ -556,17 +1300,49 @@ internal static partial class LivePanelCladdingGeometryPartitionService
         public double XMax { get; init; }
         public double YMin { get; init; }
         public double YMax { get; init; }
+        public double ZMin { get; init; }
+        public double ZMax { get; init; }
     }
 }
 
+internal sealed record LivePanelCladdingGuideCurve(Guid ObjectId, Curve Curve);
+
 internal sealed class LivePanelCladdingGeometryGrid : IDisposable
 {
-    public LivePanelCladdingGeometryGrid(IReadOnlyList<LivePanelCladdingGeometryCell> cells)
+    public LivePanelCladdingGeometryGrid(
+        Brep source,
+        IReadOnlyList<LivePanelCladdingGeometryCell> cells,
+        Plane frame,
+        double xMin,
+        double xMax,
+        double yMin,
+        double yMax,
+        IReadOnlyList<double> xBoundaries,
+        IReadOnlyList<double> yBoundaries,
+        double tolerance)
     {
+        Source = source;
         Cells = cells;
+        Frame = frame;
+        XMin = xMin;
+        XMax = xMax;
+        YMin = yMin;
+        YMax = yMax;
+        XBoundaries = xBoundaries;
+        YBoundaries = yBoundaries;
+        Tolerance = tolerance;
     }
 
+    public Brep Source { get; }
     public IReadOnlyList<LivePanelCladdingGeometryCell> Cells { get; }
+    public Plane Frame { get; }
+    public double XMin { get; }
+    public double XMax { get; }
+    public double YMin { get; }
+    public double YMax { get; }
+    public IReadOnlyList<double> XBoundaries { get; }
+    public IReadOnlyList<double> YBoundaries { get; }
+    public double Tolerance { get; }
 
     public void Dispose()
     {

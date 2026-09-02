@@ -25,7 +25,7 @@ $products = @(
     [pscustomobject]@{
         Name     = 'PanelCladdingEditor'
         Project  = Join-Path $repoRoot 'src\PanelCladdingEditor\PanelCladdingEditor.csproj'
-        Rhp      = Join-Path $repoRoot "src\PanelCladdingEditor\bin\$Configuration\net8.0\PanelCladdingEditor.rhp"
+        Rhp      = Join-Path $repoRoot "src\PanelCladdingEditor\bin\$Configuration\net8.0-windows\PanelCladdingEditor.rhp"
         Manifest = Join-Path $repoRoot 'Packaging\PanelCladdingEditor\package-manifest.json'
     }
 )

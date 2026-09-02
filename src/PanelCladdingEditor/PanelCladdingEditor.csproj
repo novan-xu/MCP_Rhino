@@ -1,7 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>PanelCladdingEditor</RootNamespace>
@@ -21,20 +23,17 @@
 
   <ItemGroup>
     <PackageReference Include="DocumentFormat.OpenXml" Version="3.5.1" />
+    <PackageReference Include="PdfPig.Rendering.Skia" Version="0.1.15.4" />
     <PackageReference Include="System.Drawing.Common" Version="7.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App.WindowsForms" />
   </ItemGroup>
 
   <ItemGroup>
     <Reference Include="RhinoCommon" Aliases="rhinocommon">
       <HintPath>C:\Program Files\Rhino 8\System\netcore\RhinoCommon.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="Rhino.UI">
-      <HintPath>C:\Program Files\Rhino 8\System\netcore\Rhino.UI.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="Eto">
-      <HintPath>C:\Program Files\Rhino 8\System\Eto.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>

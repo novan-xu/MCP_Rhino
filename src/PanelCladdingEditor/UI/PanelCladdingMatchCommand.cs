@@ -21,13 +21,13 @@ namespace PanelCladdingEditor.UI;
 [Guid("998E28BC-E9B9-420D-A348-98A5F6B9C089")]
 public sealed class PanelCladdingMatchCommand : RhinoCommand
 {
-    public override string EnglishName => "PanelCladdingMatch";
+    public override string EnglishName => "PCMatchSrf";
 
     protected override Result RunCommand(RhinoDoc doc, RunMode mode)
     {
         if (doc is null || string.IsNullOrWhiteSpace(doc.Path))
         {
-            RhinoApp.WriteLine("PanelCladdingMatch requires a saved active document.");
+            RhinoApp.WriteLine("PCMatchSrf requires a saved active document.");
             return Result.Failure;
         }
 
@@ -61,7 +61,7 @@ public sealed class PanelCladdingMatchCommand : RhinoCommand
         }
 
         RhinoApp.WriteLine(
-            $"PanelCladdingMatch copied the configuration from {response.Data.SourceObjectId:D} " +
+            $"PCMatchSrf copied the cladding cell assignments from {response.Data.SourceObjectId:D} " +
             $"to {response.Data.UpdatedTargetIds.Count} panel(s).");
         return Result.Success;
     }
@@ -69,7 +69,7 @@ public sealed class PanelCladdingMatchCommand : RhinoCommand
     private static TargetSelection SelectTargets()
     {
         using var getter = new GetObject();
-        getter.SetCommandPrompt("Select unconfigured target panel Breps");
+        getter.SetCommandPrompt("Select target panel Breps for cladding cell matching");
         getter.EnablePreSelect(enable: true, ignoreUnacceptablePreselectedObjects: true);
         getter.GeometryFilter = ObjectType.Brep;
         getter.GroupSelect = true;
@@ -99,7 +99,7 @@ public sealed class PanelCladdingMatchCommand : RhinoCommand
     {
         var targetIds = targetObjectIds.ToHashSet();
         using var getter = new GetObject();
-        getter.SetCommandPrompt("Select one configured source panel Brep");
+        getter.SetCommandPrompt("Select one source panel Brep for cladding cell matching");
         getter.EnablePreSelect(enable: false, ignoreUnacceptablePreselectedObjects: true);
         getter.GeometryFilter = ObjectType.Brep;
         getter.SubObjectSelect = false;
@@ -120,7 +120,7 @@ public sealed class PanelCladdingMatchCommand : RhinoCommand
                 false,
                 false,
                 Guid.Empty,
-                "Select one configured source Brep that is not a target panel.");
+                "Select one source Brep that is not a target panel.");
     }
 
     private readonly record struct TargetSelection(

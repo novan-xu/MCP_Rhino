@@ -58,7 +58,7 @@ internal static class Program
         Console.WriteLine("[OK] valid panels continue when another selected panel has a missing CID");
 
         VerifyWorkflow(keys, snapshot);
-        Console.WriteLine("[OK] end-to-end orchestration, writes, workbook commit, and no-change model pruning");
+        Console.WriteLine("[OK] end-to-end orchestration writes Rhino cladding keys without workbook type sheets");
 
         VerifyBatchWorkbook(keys, plan);
         Console.WriteLine("[OK] workbook reuse plus managed-type pruning with unrelated-sheet preservation");
@@ -103,7 +103,7 @@ internal static class Program
             {
                 Surface(Guid.NewGuid(), own[0].PanelId, own[0].Cid, own[0].LayerPath, own[0].CladdingValue)
             }).ToArray())),
-            "DUPLICATE_CID");
+            "CELL_OVERLAP");
         RequireIsolatedIssue(
             planner.CreatePlan(Snapshot(new[] { panel }, own.Concat(new[]
             {
@@ -113,15 +113,21 @@ internal static class Program
             }).ToArray())),
             "UNEXPECTED_CID");
 
-        PanelCladdingSurfaceSyncSurfaceSnapshot wrongPid = Surface(
-            own[0].ObjectId,
-            "OTHER-PANEL",
-            own[0].Cid,
-            own[0].LayerPath,
-            own[0].CladdingValue);
-        RequireIsolatedIssue(
+        var wrongPid = new PanelCladdingSurfaceSyncSurfaceSnapshot
+        {
+            ObjectId = own[0].ObjectId,
+            PanelObjectId = panel.ObjectId,
+            PanelId = "OTHER-PANEL",
+            Cid = own[0].Cid,
+            LayerPath = own[0].LayerPath,
+            CladdingValue = own[0].CladdingValue,
+            CoveredCellLabels = own[0].CoveredCellLabels
+        };
+        PanelCladdingSurfaceSyncPlan wrongPidPlan = RequireData(
             planner.CreatePlan(Snapshot(new[] { panel }, new[] { wrongPid }.Concat(own.Skip(1)).ToArray())),
-            "SURFACE_PID_MISMATCH");
+            "Plan stale PID repair");
+        Require(wrongPidPlan.Issues.Count == 0 && wrongPidPlan.Surfaces.Any(surface => surface.PidChanged),
+            "A geometry-associated surface with a stale PID must be repaired instead of rejected.");
 
         PanelCladdingSurfaceSyncSurfaceSnapshot wrongRoot = Surface(
             own[0].ObjectId,
@@ -137,7 +143,7 @@ internal static class Program
             own[0].ObjectId,
             own[0].PanelId,
             own[0].Cid,
-            "03_Material Surfaces (STEP)::Surfaces-Metal::GL01",
+            "04_STEP Surfaces::Surfaces-Metal::GL01",
             own[0].CladdingValue);
         RequireIsolatedIssue(
             planner.CreatePlan(Snapshot(new[] { panel }, new[] { wrongFamily }.Concat(own.Skip(1)).ToArray())),
@@ -374,7 +380,8 @@ internal static class Program
                     snapshot.DocumentPath,
                     snapshot.Panels.Select(panel => panel.ObjectId).ToArray(),
                     workbookPath,
-                    allowCreateWorkbook: true),
+                    allowCreateWorkbook: true,
+                    PanelCladdingObjectScope.Surfaces),
                 "Run surface sync workflow");
             PanelCladdingSurfaceSyncCommitRequest request = live.LastCommitRequest ??
                 throw new InvalidOperationException("Live commit was not invoked.");
@@ -385,57 +392,23 @@ internal static class Program
                     write.HorizontalOffsets.SequenceEqual(snapshot.Panels[0].Layout.HorizontalOffsets) &&
                     write.VerticalOffsets.SequenceEqual(snapshot.Panels[0].Layout.VerticalOffsets) &&
                     !string.IsNullOrWhiteSpace(write.TypeCode) &&
-                    write.StoredSignature.StartsWith("v3:sha256:", StringComparison.Ordinal)),
+                    write.StoredSignature.StartsWith("v4:sha256:", StringComparison.Ordinal)),
                 "Final panel writes must carry normalized cells, type codes, and signatures.");
             Require(result.MatchedSurfaceCount == 8 && result.ChangedPanelIds.Count == 2 &&
                     result.RefreshedSurfaceIds.Count == 2 && result.Types.Count == 2,
                 "Workflow result counts are incorrect.");
             Require(result.Types.Select(type => type.TypeCode).Distinct().Count() == 1,
-                "Equal final configurations must reuse one type in the workflow batch.");
-            Require(File.Exists(workbookPath), "Workflow did not commit the typology workbook.");
-
-            PanelCladdingSurfaceSyncTypeResult usedType = result.Types[0];
-            PanelCladdingLayout unusedLayout = BuildLayout(PanelOneId, FinalMaterials);
-            var unusedValues = unusedLayout.Cells.ToDictionary(
-                cell => cell.UserTextKey,
-                cell => cell.Value,
-                StringComparer.OrdinalIgnoreCase);
-            unusedValues[unusedLayout.Cells[0].UserTextKey] = "GL99";
-            PanelCladdingTypeIdentity unusedIdentity = RequireData(
-                new PanelCladdingTypeSignatureService(keys).Create(unusedLayout, unusedValues, "WT01"),
-                "Create workflow unused identity");
-            string unusedTypeCode;
-            var workbookRepository = new OpenXmlPanelCladdingWorkbookRepository();
-            using (IPreparedPanelCladdingWorkbookBatchUpdate addUnused = RequireData(
-                workbookRepository.PrepareBatchUpsert(new PanelCladdingWorkbookBatchUpsert
-                {
-                    WorkbookPath = workbookPath,
-                    AllowCreate = false,
-                    Items = new[]
-                    {
-                        new PanelCladdingWorkbookUpsert
-                        {
-                            WorkbookPath = workbookPath,
-                            Layout = unusedLayout,
-                            Identity = unusedIdentity,
-                            PreviewPng = RequireData(
-                                new PanelPreviewRenderer().RenderPng(unusedLayout, 480, 320),
-                                "Render workflow unused preview"),
-                            AllowCreate = false
-                        }
-                    }
-                }),
-                "Add workflow unused type"))
-            {
-                unusedTypeCode = addUnused.Results[0].Result.Identity.TypeCode;
-                Require(addUnused.Commit().Success, "Workflow unused type commit failed.");
-            }
+                "Equal final configurations must calculate one shared cladding type key.");
+            Require(result.Types.All(type => string.IsNullOrEmpty(type.SheetName) && !type.ReusedExistingType),
+                "Surface sync must return Rhino-only cladding keys without worksheet assignments.");
+            Require(!File.Exists(workbookPath), "Surface sync must not create a typology workbook.");
 
             PanelCladdingSurfaceSyncPanelSnapshot[] unchangedPanels =
             {
                 Panel(PanelOneId, "PID_PANEL_01", BuildLayout(PanelOneId, FinalMaterials)),
                 Panel(PanelTwoId, "PID_PANEL_02", BuildLayout(PanelTwoId, FinalMaterials))
             };
+            PanelCladdingSurfaceSyncTypeResult usedType = result.Types[0];
             PanelCladdingSurfaceSyncSnapshot unchangedSnapshot = Snapshot(
                 unchangedPanels,
                 BuildSurfaces("PID_PANEL_01", FinalMaterials)
@@ -447,26 +420,25 @@ internal static class Program
                     TypeCode = usedType.TypeCode,
                     StoredSignature = usedType.StoredSignature
                 }).ToArray());
-            var pruneLive = new CapturingLiveRepository(unchangedSnapshot);
-            IPanelCladdingSurfaceSyncService pruneService = new PanelCladdingSurfaceSyncService(
-                pruneLive,
-                workbookRepository,
-                new PanelPreviewRenderer(),
+            var unchangedLive = new CapturingLiveRepository(unchangedSnapshot);
+            IPanelCladdingSurfaceSyncService unchangedService = new PanelCladdingSurfaceSyncService(
+                unchangedLive,
                 new PanelCladdingTypeSignatureService(keys),
                 new PanelCladdingSurfaceSyncPlanningService(keys));
-            PanelCladdingSurfaceSyncResult pruneResult = RequireData(
-                pruneService.Sync(
+            PanelCladdingSurfaceSyncResult unchangedResult = RequireData(
+                unchangedService.Sync(
                     unchangedSnapshot.DocumentPath,
                     unchangedSnapshot.SelectedPanelIds,
                     workbookPath,
-                    allowCreateWorkbook: false),
-                "Run no-change workbook-pruning workflow");
-            PanelCladdingSurfaceSyncCommitRequest pruneRequest = pruneLive.LastCommitRequest ??
-                throw new InvalidOperationException("No-change pruning did not invoke live commit.");
-            Require(pruneRequest.PanelWrites.Count == 0 && pruneRequest.SurfaceWrites.Count == 0,
-                "No-change pruning must not invent Rhino attribute writes.");
-            Require(pruneResult.RemovedWorkbookTypeCodes.SequenceEqual(new[] { unusedTypeCode }),
-                "No-change sync did not remove the workbook type unused by the Rhino model.");
+                    allowCreateWorkbook: false,
+                    PanelCladdingObjectScope.Surfaces),
+                "Run no-change Rhino-key workflow");
+            PanelCladdingSurfaceSyncCommitRequest unchangedRequest = unchangedLive.LastCommitRequest ??
+                throw new InvalidOperationException("No-change sync did not invoke live commit.");
+            Require(unchangedRequest.PanelWrites.Count == 0 && unchangedRequest.SurfaceWrites.Count == 0,
+                "No-change sync must not invent Rhino attribute writes.");
+            Require(unchangedResult.RemovedWorkbookTypeCodes.Count == 0 && !File.Exists(workbookPath),
+                "No-change sync must not prune or create workbook type sheets.");
 
             PanelCladdingSurfaceSyncPanelSnapshot badPanel = snapshot.Panels[0];
             string missingCid = PanelCladdingSpawnPlanningService.BuildSurfaceCid(
@@ -491,7 +463,8 @@ internal static class Program
                     partialSnapshot.DocumentPath,
                     partialSnapshot.SelectedPanelIds,
                     partialWorkbookPath,
-                    allowCreateWorkbook: true),
+                    allowCreateWorkbook: true,
+                    PanelCladdingObjectScope.Surfaces),
                 "Run partial surface sync workflow");
             PanelCladdingSurfaceSyncCommitRequest partialRequest = partialLive.LastCommitRequest ??
                 throw new InvalidOperationException("Partial live commit was not invoked.");
@@ -503,8 +476,8 @@ internal static class Program
             Require(partialResult.SkippedPanelIds.SequenceEqual(new[] { badPanel.ObjectId }) &&
                     partialResult.Issues.Count == 1 && partialResult.MatchedSurfaceCount == 4,
                 "The partial workflow result must expose skipped-panel details and valid matches.");
-            Require(File.Exists(partialWorkbookPath),
-                "The valid panel's typology workbook was not committed in the partial workflow.");
+            Require(!File.Exists(partialWorkbookPath),
+                "Partial surface sync must not create a typology workbook.");
         }
         finally
         {
@@ -588,38 +561,37 @@ internal static class Program
         Assembly assembly = typeof(PanelCladdingSurfaceSyncPlanningService).Assembly;
         Type syncCommand = RequireType(
             assembly,
-            "PanelCladdingEditor.UI.PanelCladdingSyncFromSurfacesCommand");
+            "PanelCladdingEditor.UI.PanelCladdingSyncSrfCommand");
         Type editorCommand = RequireType(assembly, "PanelCladdingEditor.UI.PanelCladdingEditorCommand");
-        Type spawnCommand = RequireType(assembly, "PanelCladdingEditor.UI.PanelCladdingSpawnCommand");
+        Type spawnCommand = RequireType(assembly, "PanelCladdingEditor.UI.PanelCladdingSpawnSrfCommand");
         Type matchCommand = RequireType(assembly, "PanelCladdingEditor.UI.PanelCladdingMatchCommand");
         Type clearCommand = RequireType(assembly, "PanelCladdingEditor.UI.PanelCladdingClearCommand");
-        Type smokeCommand = RequireType(assembly, "PanelCladdingEditor.UI.PanelCladdingEditorSmokeCommand");
         Require(syncCommand.GUID != Guid.Empty, "Sync command GUID must be explicit and non-empty.");
         Require(new[]
             {
                 syncCommand.GUID, editorCommand.GUID, spawnCommand.GUID,
-                matchCommand.GUID, clearCommand.GUID, smokeCommand.GUID
-            }.Distinct().Count() == 6,
+                matchCommand.GUID, clearCommand.GUID
+            }.Distinct().Count() == 5,
             "All PanelCladdingEditor Rhino command GUIDs must be unique.");
         Type liveRepository = RequireType(
             assembly,
             "PanelCladdingEditor.Infrastructure.Rhino.Live.PanelCladding.LivePanelCladdingSurfaceSyncRepository");
         MethodInfo enumeratorFactory = liveRepository.GetMethod(
-                "CreateSurfaceEnumeratorSettings",
+                "CreateSyncObjectEnumeratorSettings",
                 BindingFlags.NonPublic | BindingFlags.Static) ??
-            throw new InvalidOperationException("Hidden-surface enumerator settings factory is missing.");
+            throw new InvalidOperationException("Hidden sync-object enumerator settings factory is missing.");
         object enumeratorSettings = enumeratorFactory.Invoke(null, null) ??
-            throw new InvalidOperationException("Hidden-surface enumerator settings factory returned null.");
+            throw new InvalidOperationException("Hidden sync-object enumerator settings factory returned null.");
         foreach (string enabledProperty in new[]
         {
             "NormalObjects", "LockedObjects", "HiddenObjects", "ActiveObjects"
         })
         {
             bool enabled = (bool)(enumeratorSettings.GetType().GetProperty(enabledProperty)?.GetValue(enumeratorSettings) ?? false);
-            Require(enabled, $"Surface enumeration must enable {enabledProperty}.");
+            Require(enabled, $"Sync-object enumeration must enable {enabledProperty}.");
         }
         bool referenceObjects = (bool)(enumeratorSettings.GetType().GetProperty("ReferenceObjects")?.GetValue(enumeratorSettings) ?? true);
-        Require(!referenceObjects, "Surface enumeration must continue excluding reference objects.");
+        Require(!referenceObjects, "Sync-object enumeration must continue excluding reference objects.");
         Require(typeof(IPanelCladdingWorkbookRepository).GetMethod(
                 nameof(IPanelCladdingWorkbookRepository.PrepareBatchUpsert)) is not null,
             "Batch workbook preparation contract is missing.");
@@ -629,8 +601,9 @@ internal static class Program
         MethodInfo sync = typeof(IPanelCladdingSurfaceSyncService).GetMethod(
                 nameof(IPanelCladdingSurfaceSyncService.Sync)) ??
             throw new InvalidOperationException("Surface sync service contract is missing.");
-        Require(sync.GetParameters().Length == 4,
-            "Surface sync service must accept document, panel ids, workbook, and create policy.");
+        Require(sync.GetParameters().Length == 5 &&
+                sync.GetParameters()[4].ParameterType == typeof(PanelCladdingObjectScope),
+            "Sync service must accept document, panel ids, workbook, create policy, and object-family scope.");
 
         string[] forbidden = { "MCP_Rhino", "ModelContextProtocol", "Microsoft.Extensions.Hosting" };
         Require(!assembly.GetReferencedAssemblies().Any(reference => forbidden.Any(token =>
@@ -692,6 +665,13 @@ internal static class Program
             }
         }
 
+        var sourceUserText = cells.ToDictionary(
+            cell => cell.UserTextKey,
+            cell => cell.Value,
+            StringComparer.OrdinalIgnoreCase);
+        sourceUserText[PanelCladdingKeyService.CladdingLogicKey] = RequireData(
+            new PanelCladdingLogicService().Encode(cells, sourceUserText),
+            "Encode fixture cladding logic");
         return new PanelCladdingLayout
         {
             ObjectId = objectId,
@@ -706,6 +686,7 @@ internal static class Program
             HorizontalOffsets = new[] { horizontalOffset },
             VerticalOffsets = new[] { verticalOffset },
             Cells = cells,
+            SourceUserText = sourceUserText,
             Preview = BuildPreview(cells)
         };
     }
@@ -787,13 +768,15 @@ internal static class Program
         string layerPath,
         string claddingValue)
     {
+        string cellLabel = cid[(cid.LastIndexOf('-') + 1)..].Trim().ToUpperInvariant();
         return new PanelCladdingSurfaceSyncSurfaceSnapshot
         {
             ObjectId = objectId,
             PanelId = pid,
             Cid = cid,
             LayerPath = layerPath,
-            CladdingValue = claddingValue
+            CladdingValue = claddingValue,
+            CoverageValue = cellLabel
         };
     }
 
@@ -876,7 +859,8 @@ internal static class Program
 
         public OperationResponse<PanelCladdingSurfaceSyncSnapshot> Read(
             string filePath,
-            IReadOnlyList<Guid> panelObjectIds)
+            IReadOnlyList<Guid> panelObjectIds,
+            PanelCladdingObjectScope scope)
         {
             return OperationResponse<PanelCladdingSurfaceSyncSnapshot>.Ok(_snapshot);
         }
@@ -885,7 +869,8 @@ internal static class Program
             PanelCladdingSurfaceSyncCommitRequest request,
             Func<OperationResponse> finalizeWorkbook,
             IReadOnlyList<PanelCladdingSurfaceSyncTypeResult> types,
-            int matchedSurfaceCount)
+            int matchedSurfaceCount,
+            int matchedCurveCount)
         {
             LastCommitRequest = request;
             OperationResponse finalized = finalizeWorkbook();
@@ -900,7 +885,9 @@ internal static class Program
                     SkippedPanelIds = request.SkippedPanelIds,
                     ChangedPanelIds = request.PanelWrites.Select(write => write.ObjectId).ToArray(),
                     RefreshedSurfaceIds = request.SurfaceWrites.Select(write => write.ObjectId).ToArray(),
+                    RefreshedCurveIds = request.CurveWrites.Select(write => write.ObjectId).ToArray(),
                     MatchedSurfaceCount = matchedSurfaceCount,
+                    MatchedCurveCount = matchedCurveCount,
                     WorkbookPath = request.WorkbookPath,
                     Types = types,
                     Issues = request.Issues,

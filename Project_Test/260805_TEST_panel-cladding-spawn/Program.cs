@@ -43,7 +43,7 @@ internal static class Program
             "A plain panel identifier must preserve the legacy CID naming behavior.");
 
         PanelCladdingSpawnRegionPlan glass = plan.Regions[0];
-        Require(glass.LayerPath == "03_Material Surfaces (STEP)::Surfaces-Glass::GL01",
+        Require(glass.LayerPath == "04_STEP Surfaces::Surfaces-Glass::GL01",
             "GL01 did not route to the required glass material layer.");
         Require(plan.Regions[1].LayerPath == glass.LayerPath,
             "Cells using the same material must reuse one layer path.");
@@ -59,7 +59,7 @@ internal static class Program
                 !glass.UserTextWrites.ContainsKey("WallType"),
             "Noncanonical metadata aliases must be ignored.");
         Require(glass.UserTextWrites["Cladding"] == "GL01", "Normalized cladding information is missing.");
-        Require(plan.Regions[2].LayerPath == "03_Material Surfaces (STEP)::Surfaces-Stone::STN02",
+        Require(plan.Regions[2].LayerPath == "04_STEP Surfaces::Surfaces-Stone::STN02",
             "STN02 did not route to the stone material family.");
         Console.WriteLine("[OK] PID-derived CIDs, metadata inheritance, blank-cell handling, and material layers");
 
@@ -134,14 +134,14 @@ internal static class Program
     private static void VerifyCommandContract()
     {
         Assembly assembly = typeof(PanelCladdingSpawnPlanningService).Assembly;
-        Type spawnCommand = assembly.GetType("PanelCladdingEditor.UI.PanelCladdingSpawnCommand") ??
-            throw new InvalidOperationException("PanelCladdingSpawn command is missing.");
+        Type spawnCommand = assembly.GetType("PanelCladdingEditor.UI.PanelCladdingSpawnSrfCommand") ??
+            throw new InvalidOperationException("PanelCladdingSpawnSrf command is missing.");
+        Type spawnCurveCommand = assembly.GetType("PanelCladdingEditor.UI.PanelCladdingSpawnCrvCommand") ??
+            throw new InvalidOperationException("PanelCladdingSpawnCrv command is missing.");
         Type editorCommand = assembly.GetType("PanelCladdingEditor.UI.PanelCladdingEditorCommand") ??
             throw new InvalidOperationException("PanelCladdingEditor command is missing.");
-        Type smokeCommand = assembly.GetType("PanelCladdingEditor.UI.PanelCladdingEditorSmokeCommand") ??
-            throw new InvalidOperationException("PanelCladdingEditorSmoke command is missing.");
         Require(spawnCommand.GUID != Guid.Empty, "Spawn command GUID must be explicit and non-empty.");
-        Require(new[] { spawnCommand.GUID, editorCommand.GUID, smokeCommand.GUID }.Distinct().Count() == 3,
+        Require(new[] { spawnCommand.GUID, spawnCurveCommand.GUID, editorCommand.GUID }.Distinct().Count() == 3,
             "Rhino command GUIDs must be unique.");
         Require(assembly.GetType("PanelCladdingEditor.Infrastructure.Rhino.Live.PanelCladding.LivePanelCladdingSpawnService") is not null,
             "Live spawn adapter is missing.");
@@ -149,8 +149,9 @@ internal static class Program
         MethodInfo spawn = typeof(ILivePanelCladdingSpawnService).GetMethod(nameof(ILivePanelCladdingSpawnService.Spawn)) ??
             throw new InvalidOperationException("Live spawn contract is missing.");
         ParameterInfo[] parameters = spawn.GetParameters();
-        Require(parameters.Length == 2 && parameters[1].ParameterType == typeof(IReadOnlyList<Guid>),
-            "Live spawn contract must accept a batch of selected panel object IDs.");
+        Require(parameters.Length == 3 && parameters[1].ParameterType == typeof(IReadOnlyList<Guid>) &&
+                parameters[2].ParameterType == typeof(PanelCladdingObjectScope),
+            "Live spawn contract must accept selected panel object IDs and an object-family scope.");
 
         string[] forbidden = { "MCP_Rhino", "ModelContextProtocol", "Microsoft.Extensions.Hosting" };
         Require(!assembly.GetReferencedAssemblies().Any(reference => forbidden.Any(token =>

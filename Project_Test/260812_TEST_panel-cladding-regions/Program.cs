@@ -48,19 +48,23 @@ internal static class Program
         object grid = RequireReflectedData(gridResponse, "Create planar geometry grid");
         using IDisposable disposableGrid = (IDisposable)grid;
 
-        MethodInfo joinRegion = service.GetMethod("JoinRegion", BindingFlags.Public | BindingFlags.Static) ??
-            throw new InvalidOperationException("JoinRegion is missing.");
-        object joinResponse = joinRegion.Invoke(null, new object[]
+        MethodInfo createRegionSurface = service.GetMethod(
+            "CreateRegionSurface",
+            BindingFlags.Public | BindingFlags.Static) ??
+            throw new InvalidOperationException("CreateRegionSurface is missing.");
+        object joinResponse = createRegionSurface.Invoke(null, new object[]
         {
             grid,
             keySet.Cells.Take(2).ToArray(),
             0.001d,
             "CID_BKT_REGION_01-0A"
-        }) ?? throw new InvalidOperationException("JoinRegion returned null.");
+        }) ?? throw new InvalidOperationException("CreateRegionSurface returned null.");
         using Brep joined = (Brep)RequireReflectedData(joinResponse, "Join two atomic cells");
         using AreaMassProperties? joinedArea = AreaMassProperties.Compute(joined);
         Require(joinedArea is not null && Math.Abs(joinedArea.Area - 10_000d) < 0.01d,
             "Joined 0A/1A Brep area is incorrect.");
+        Require(joined.Faces.Count == 1,
+            $"Parent-linked 0A/1A must be one trimmed face, not {joined.Faces.Count} joined faces.");
 
         MethodInfo resolveCoverage = service.GetMethod(
             "ResolveCoveredCellLabels",
@@ -97,7 +101,7 @@ internal static class Program
         Require(!partialSuccess && (partialMessage.Contains("PARTIAL_CELL", StringComparison.Ordinal) ||
                 partialMessage.Contains("AREA_MISMATCH", StringComparison.Ordinal)),
             $"A partial atomic-cell surface must fail coverage validation: {partialMessage}");
-        Console.WriteLine("[OK] Rhino Brep partition, region join, footprint recovery, and partial-cell rejection");
+        Console.WriteLine("[OK] Rhino Brep partition, single-face region creation, footprint recovery, and partial-cell rejection");
     }
 
     private static void VerifyRegionResolution(PanelCladdingKeyService keys)
@@ -171,10 +175,10 @@ internal static class Program
         PanelCladdingTypeIdentity merged = RequireData(
             signatures.Create(layout, Values(layout), "WT01"),
             "Create merged identity");
-        Require(merged.SchemaVersion == 3 &&
-                merged.StoredSignature.StartsWith("v3:sha256:", StringComparison.Ordinal) &&
+        Require(merged.SchemaVersion == 4 &&
+                merged.StoredSignature.StartsWith("v4:sha256:", StringComparison.Ordinal) &&
                 merged.CanonicalPayload.Contains("1A:0A;", StringComparison.Ordinal),
-            "v3 identity must serialize normalized owner references.");
+            "v4 identity must serialize normalized owner references.");
 
         PanelCladdingLayout separateLayout = BuildLayout(
             BuildKeySet("GLS-001", "GLS-001", "GLS-002"),
@@ -195,7 +199,7 @@ internal static class Program
             "Create shifted-offset identity");
         Require(merged.FullDigest != shifted.FullDigest,
             "Different candidate-boundary offsets must not reuse one type identity.");
-        Console.WriteLine("[OK] v3 signatures distinguish region topology and offset geometry");
+        Console.WriteLine("[OK] v4 signatures distinguish region, extrusion topology, and offset geometry");
     }
 
     private static void VerifySurfaceSync(PanelCladdingKeyService keys)
