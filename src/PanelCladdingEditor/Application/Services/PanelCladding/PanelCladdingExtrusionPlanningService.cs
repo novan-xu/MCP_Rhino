@@ -6,9 +6,13 @@ namespace PanelCladdingEditor.Application.Services.PanelCladding;
 
 public sealed class PanelCladdingExtrusionPlanningService
 {
-    public const string CurveLayerPath = "02_CW Extrusions::Curves-PNL::Main Frame";
+    public const string PanelSurfaceLayerRootPath = "01_CW Panels::Surfaces-PNL";
+    public const string CurveLayerRootPath = "02_CW Extrusions::Curves-PNL";
     public const string CurveUserTextKey = "CRV";
     public const string AssignedExtrusionsUserTextKey = "Extrusions";
+    public static readonly PanelColorRgb MainFrameObjectColor = new(0, 0, 255);
+    public static readonly PanelColorRgb HorizontalObjectColor = new(128, 0, 128);
+    public static readonly PanelColorRgb VerticalObjectColor = new(0, 100, 0);
     private readonly PanelFrameProfileFormulaService _formulas = new();
 
     public OperationResponse<IReadOnlyList<PanelCladdingExtrusionCurvePlan>> CreatePlan(
@@ -16,7 +20,8 @@ public sealed class PanelCladdingExtrusionPlanningService
         string panelCid,
         double panelWidth,
         double panelHeight,
-        PanelCladdingKeySet keySet)
+        PanelCladdingKeySet keySet,
+        string sourcePanelLayerPath)
     {
         if (string.IsNullOrWhiteSpace(panelId) || string.IsNullOrWhiteSpace(panelCid))
         {
@@ -27,6 +32,13 @@ public sealed class PanelCladdingExtrusionPlanningService
         {
             return OperationResponse<IReadOnlyList<PanelCladdingExtrusionCurvePlan>>.Fail(
                 "PANEL_CLADDING_EXTRUSION_PANEL_EXTENT_INVALID");
+        }
+
+        OperationResponse<string> curveLayer = ResolveCurveLayerPath(sourcePanelLayerPath);
+        if (!curveLayer.Success || curveLayer.Data is null)
+        {
+            return OperationResponse<IReadOnlyList<PanelCladdingExtrusionCurvePlan>>.Fail(
+                curveLayer.Message);
         }
 
         var curves = new List<PanelCladdingExtrusionCurvePlan>
@@ -162,11 +174,43 @@ public sealed class PanelCladdingExtrusionPlanningService
                 AssignedExtrusionCodes = assignedCodes,
                 AssignedExtrusionValues = assignedValues,
                 Cid = curveCid,
-                LayerPath = CurveLayerPath,
+                LayerPath = curveLayer.Data,
+                ObjectColor = ResolveObjectColor(curve.Kind, curve.Axis),
                 UserTextWrites = userText
             });
         }
         return OperationResponse<IReadOnlyList<PanelCladdingExtrusionCurvePlan>>.Ok(attributed);
+    }
+
+    public static PanelColorRgb ResolveObjectColor(
+        PanelCladdingExtrusionCurveKind kind,
+        PanelCladdingTopologyAxis axis) =>
+        kind == PanelCladdingExtrusionCurveKind.Frame
+            ? MainFrameObjectColor
+            : axis == PanelCladdingTopologyAxis.Horizontal
+                ? HorizontalObjectColor
+                : VerticalObjectColor;
+
+    public static OperationResponse<string> ResolveCurveLayerPath(string sourcePanelLayerPath)
+    {
+        string source = (sourcePanelLayerPath ?? string.Empty).Trim();
+        string requiredPrefix = PanelSurfaceLayerRootPath + "::";
+        if (!source.StartsWith(requiredPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return OperationResponse<string>.Fail(
+                $"PANEL_CLADDING_PANEL_LAYER_NOT_SUPPORTED: {sourcePanelLayerPath}");
+        }
+
+        string suffix = source[requiredPrefix.Length..];
+        if (suffix.Length == 0 || suffix.Split(
+                new[] { "::" },
+                StringSplitOptions.None).Any(string.IsNullOrWhiteSpace))
+        {
+            return OperationResponse<string>.Fail(
+                $"PANEL_CLADDING_PANEL_TYPE_LAYER_REQUIRED: {sourcePanelLayerPath}");
+        }
+
+        return OperationResponse<string>.Ok($"{CurveLayerRootPath}::{suffix}");
     }
 
     private static void AddAtomicCurves(

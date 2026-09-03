@@ -466,6 +466,7 @@ public sealed class PanelCladdingSurfaceSyncPlanningService
                         DesiredCid = desiredCid,
                         DesiredAssignedExtrusions = curve.DesiredAssignedExtrusions,
                         DesiredAssignedExtrusionValues = curve.DesiredAssignedExtrusionValues,
+                        DesiredObjectColor = curve.DesiredObjectColor,
                         MetadataChanged = !string.Equals(curve.PanelId.Trim(), pid, StringComparison.Ordinal) ||
                             !string.Equals(curve.Cid.Trim(), desiredCid, StringComparison.Ordinal) ||
                             !string.Equals(curve.CurveCode.Trim(), curve.DesiredCode, StringComparison.Ordinal) ||
@@ -475,7 +476,8 @@ public sealed class PanelCladdingSurfaceSyncPlanningService
                                 StringComparison.Ordinal) ||
                             !DictionariesEqual(
                                 curve.AssignedExtrusionValues,
-                                curve.DesiredAssignedExtrusionValues)
+                                curve.DesiredAssignedExtrusionValues) ||
+                            curve.ObjectColorChanged
                     });
                 }
                 IReadOnlyDictionary<string, string> curveCellValues = orderedCells.ToDictionary(
@@ -676,6 +678,7 @@ public sealed class PanelCladdingSurfaceSyncPlanningService
                     DesiredCid = desiredCid,
                     DesiredAssignedExtrusions = curve.DesiredAssignedExtrusions,
                     DesiredAssignedExtrusionValues = curve.DesiredAssignedExtrusionValues,
+                    DesiredObjectColor = curve.DesiredObjectColor,
                     MetadataChanged = !string.Equals(curve.PanelId.Trim(), pid, StringComparison.Ordinal) ||
                         !string.Equals(curve.Cid.Trim(), desiredCid, StringComparison.Ordinal) ||
                         !string.Equals(curve.CurveCode.Trim(), curve.DesiredCode, StringComparison.Ordinal) ||
@@ -685,7 +688,8 @@ public sealed class PanelCladdingSurfaceSyncPlanningService
                             StringComparison.Ordinal) ||
                         !DictionariesEqual(
                             curve.AssignedExtrusionValues,
-                            curve.DesiredAssignedExtrusionValues)
+                            curve.DesiredAssignedExtrusionValues) ||
+                        curve.ObjectColorChanged
                 });
             }
             panelPlans.Add(new PanelCladdingSurfaceSyncPanelPlan

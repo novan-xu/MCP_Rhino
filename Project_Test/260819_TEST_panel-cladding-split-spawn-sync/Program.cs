@@ -33,15 +33,16 @@ internal static class Program
             [30d], [40d], new Dictionary<string, string>(), 100d, 80d, 0.001d));
         IReadOnlyList<PanelCladdingExtrusionCurvePlan> curves = Required(
             new PanelCladdingExtrusionPlanningService().CreatePlan(
-                "PID_SAMPLE", "CID_SAMPLE", 100d, 80d, blankGrid));
+                "PID_SAMPLE", "CID_SAMPLE", 100d, 80d, blankGrid,
+                "01_CW Panels::Surfaces-PNL::WT-01"));
         Require(curves.Count > 4 && curves.All(curve =>
-                curve.LayerPath == PanelCladdingExtrusionPlanningService.CurveLayerPath),
+                curve.LayerPath == "02_CW Extrusions::Curves-PNL::WT-01"),
             "Curve planning did not work independently of cladding assignments.");
 
         Require(Enum.GetValues<PanelCladdingObjectScope>().SequenceEqual(
                 [PanelCladdingObjectScope.Surfaces, PanelCladdingObjectScope.Curves]),
             "Object-family scope contract changed unexpectedly.");
-        Console.WriteLine("[OK] combined commands are absent and four scoped commands are registered.");
+        Console.WriteLine("[OK] legacy combined spawn/sync commands are absent and four scoped commands are registered.");
         Console.WriteLine("[OK] curve spawn planning succeeds with blank cladding assignments.");
         Console.WriteLine("[OK] surface/curve scope is explicit in the shared application contract.");
     }

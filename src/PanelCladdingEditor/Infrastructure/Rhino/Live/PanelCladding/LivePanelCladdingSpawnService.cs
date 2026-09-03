@@ -88,7 +88,8 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
                     PanelCladdingSpawnPlanningService.CidUserTextKey,
                     cid,
                     caseSensitive: false);
-                if (existing is { Length: > 0 })
+                if (existing is { Length: > 0 } && existing.Any(item =>
+                        IsManagedCidConflict(document, item, scope)))
                 {
                     return OperationResponse<PanelCladdingSpawnResult>.Fail(
                         $"PANEL_CLADDING_CID_ALREADY_EXISTS: {cid}");
@@ -137,21 +138,31 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
 
                 if (preparedCurves.Count > 0)
                 {
-                    OperationResponse<int> curveLayer = EnsureLayer(
-                        document,
-                        PanelCladdingExtrusionPlanningService.CurveLayerPath);
-                    if (!curveLayer.Success)
-                    {
-                        RollBackCreatedObjects(document, createdIds);
-                        return OperationResponse<PanelCladdingSpawnResult>.Fail(curveLayer.Message);
-                    }
+                    var curveLayers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
                     foreach (PreparedCurve item in preparedCurves)
                     {
+                        if (!curveLayers.TryGetValue(item.CurvePlan.LayerPath, out int curveLayerIndex))
+                        {
+                            OperationResponse<int> curveLayer = EnsureLayer(
+                                document,
+                                item.CurvePlan.LayerPath);
+                            if (!curveLayer.Success)
+                            {
+                                RollBackCreatedObjects(document, createdIds);
+                                return OperationResponse<PanelCladdingSpawnResult>.Fail(curveLayer.Message);
+                            }
+                            curveLayerIndex = curveLayer.Data;
+                            curveLayers[item.CurvePlan.LayerPath] = curveLayerIndex;
+                        }
                         var attributes = new ObjectAttributes
                         {
                             Name = item.CurvePlan.Code,
-                            LayerIndex = curveLayer.Data,
-                            ColorSource = ObjectColorSource.ColorFromLayer
+                            LayerIndex = curveLayerIndex,
+                            ObjectColor = System.Drawing.Color.FromArgb(
+                                item.CurvePlan.ObjectColor.Red,
+                                item.CurvePlan.ObjectColor.Green,
+                                item.CurvePlan.ObjectColor.Blue),
+                            ColorSource = ObjectColorSource.ColorFromObject
                         };
                         foreach ((string key, string value) in item.CurvePlan.UserTextWrites)
                         {
@@ -208,11 +219,12 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
         }
     }
 
-    private OperationResponse<PreparedPanel> PreparePanel(
+    internal OperationResponse<PreparedPanel> PreparePanel(
         RhinoDoc document,
         string filePath,
         Guid objectId,
-        PanelCladdingObjectScope scope)
+        PanelCladdingObjectScope scope,
+        bool allowEmptySurfacePlan = false)
     {
         RhinoObject? sourceObject = document.Objects.FindId(objectId);
         if (sourceObject?.Geometry is not Brep sourceBrep)
@@ -247,7 +259,9 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
         PanelCladdingSpawnPlan plan;
         if (scope == PanelCladdingObjectScope.Surfaces)
         {
-            OperationResponse<PanelCladdingSpawnPlan> planResponse = _planning.CreatePlan(userText, keySet);
+            OperationResponse<PanelCladdingSpawnPlan> planResponse = allowEmptySurfacePlan
+                ? _planning.CreateUpdatePlan(userText, keySet)
+                : _planning.CreatePlan(userText, keySet);
             if (!planResponse.Success || planResponse.Data is null)
             {
                 return OperationResponse<PreparedPanel>.Fail(planResponse.Message);
@@ -268,7 +282,13 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
                     "PANEL_CLADDING_EXTRUSION_PID_CID_REQUIRED");
             }
             OperationResponse<IReadOnlyList<PanelCladdingExtrusionCurvePlan>> curvePlan =
-                _extrusionPlanning.CreatePlan(pid, cid, layout.Width, layout.Height, keySet);
+                _extrusionPlanning.CreatePlan(
+                    pid,
+                    cid,
+                    layout.Width,
+                    layout.Height,
+                    keySet,
+                    layout.LayerFullPath);
             if (!curvePlan.Success || curvePlan.Data is null)
             {
                 return OperationResponse<PreparedPanel>.Fail(curvePlan.Message);
@@ -330,7 +350,7 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
         return OperationResponse<PreparedPanel>.Ok(new PreparedPanel(prepared, curves));
     }
 
-    private static OperationResponse<int> EnsureLayer(RhinoDoc document, string layerPath)
+    internal static OperationResponse<int> EnsureLayer(RhinoDoc document, string layerPath)
     {
         int layerIndex = document.Layers.FindByFullPath(layerPath, -1);
         if (layerIndex < 0)
@@ -342,7 +362,7 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
             : OperationResponse<int>.Ok(layerIndex);
     }
 
-    private static OperationResponse<int> EnsureMaterialLayer(
+    internal static OperationResponse<int> EnsureMaterialLayer(
         RhinoDoc document,
         PanelCladdingSpawnRegionPlan cell)
     {
@@ -397,6 +417,24 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
         return result;
     }
 
+    private static bool IsManagedCidConflict(
+        RhinoDoc document,
+        RhinoObject rhinoObject,
+        PanelCladdingObjectScope scope)
+    {
+        string layerPath = rhinoObject.Attributes.LayerIndex >= 0
+            ? document.Layers[rhinoObject.Attributes.LayerIndex]?.FullPath ?? string.Empty
+            : string.Empty;
+        return scope switch
+        {
+            PanelCladdingObjectScope.Surfaces => rhinoObject.Geometry is Brep &&
+                PanelCladdingSpawnPlanningService.IsManagedSurfaceLayerPath(layerPath),
+            PanelCladdingObjectScope.Curves => rhinoObject.Geometry is Curve &&
+                PanelCladdingSpawnPlanningService.IsManagedExtrusionLayerPath(layerPath),
+            _ => false
+        };
+    }
+
     private static string GetRequiredUserText(
         IReadOnlyDictionary<string, string> userText,
         string key) => userText.TryGetValue(key, out string? value)
@@ -439,17 +477,17 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
         }
     }
 
-    private sealed record PreparedRegion(
+    internal sealed record PreparedRegion(
         Guid SourcePanelId,
         PanelCladdingSpawnRegionPlan Region,
         Brep Geometry);
 
-    private sealed record PreparedCurve(
+    internal sealed record PreparedCurve(
         Guid SourcePanelId,
         PanelCladdingExtrusionCurvePlan CurvePlan,
         Curve Geometry);
 
-    private sealed record PreparedPanel(
+    internal sealed record PreparedPanel(
         IReadOnlyList<PreparedRegion> Regions,
         IReadOnlyList<PreparedCurve> Curves);
 

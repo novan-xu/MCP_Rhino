@@ -412,6 +412,7 @@ public sealed class PanelCladdingExtrusionCurvePlan
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     public string Cid { get; init; } = string.Empty;
     public string LayerPath { get; init; } = string.Empty;
+    public PanelColorRgb ObjectColor { get; init; }
     public IReadOnlyDictionary<string, string> UserTextWrites { get; init; } =
         new Dictionary<string, string>();
 }
@@ -622,6 +623,10 @@ public sealed class PanelCladdingSurfaceSyncCurveSnapshot
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     public IReadOnlyDictionary<string, string> DesiredAssignedExtrusionValues { get; init; } =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    public bool UsesObjectColor { get; init; }
+    public PanelColorRgb ObjectColor { get; init; }
+    public PanelColorRgb DesiredObjectColor { get; init; }
+    public bool ObjectColorChanged => !UsesObjectColor || ObjectColor != DesiredObjectColor;
 }
 
 public sealed class PanelCladdingSurfaceSyncIssue
@@ -697,6 +702,7 @@ public sealed class PanelCladdingSurfaceSyncCurvePlan
     public string DesiredAssignedExtrusions { get; init; } = string.Empty;
     public IReadOnlyDictionary<string, string> DesiredAssignedExtrusionValues { get; init; } =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    public PanelColorRgb DesiredObjectColor { get; init; }
     public bool MetadataChanged { get; init; }
 }
 

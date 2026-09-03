@@ -5,11 +5,25 @@ This plug-in is independent of MCP_Rhino. Its product identity is
 it with `Install-PanelCladdingEditor.ps1`.
 
 The Rhino command surface uses the `PC` prefix: `_PCEditor`, `_PCCreate`, `_PCClear`,
-`_PCCrvTemplate`, `_PCMatchSrf`, `_PCMatchCrv`, `_PCSpawnSrf`, `_PCSpawnCrv`, `_PCSyncSrf`, and
-`_PCSyncCrv`. `PCCrvTemplate` assigns a full-run horizontal or vertical merge mask only to selected
+`_PCCrvTemplate`, `_PCMatchSrf`, `_PCMatchCrv`, `_PCSpawnSrf`, `_PCSpawnCrv`, `_PCSyncSrf`,
+`_PCSyncCrv`, and `_PCUpdate`. `PCUpdate` treats the selected panels' saved attributes as
+authoritative and reconciles all CID-bearing managed surfaces and curves: matching objects are
+rebuilt, missing objects are created, and stale or duplicate objects are deleted. `PCCrvTemplate`
+assigns a full-run horizontal or vertical merge mask only to selected
 panel Breps that do not already have a merge code. A one-row/one-column case with no applicable
 run remains mask-free. Surface commands operate only on cladding Breps; curve commands operate only
 on extrusion curves.
+
+`PCUpdate` participates in Rhino's command-owned Undo record when invoked from the command line and
+opens its own record only when called without an active command record. A successful batch therefore
+appears as one normal Rhino Undo entry without attempting an unsupported nested record.
+Existing managed dependencies can remain object-locked, object-hidden, or on locked/hidden managed
+layers: update and stale/duplicate deletion bypass those mutation modes without unlocking/showing
+the objects or changing layer state, and retained object-level mode is preserved.
+Managed extrusion curves use object colors by planned type: main-frame curves are Blue
+(`RGB 0,0,255`), horizontal intermediate curves are Purple (`RGB 128,0,128`), and vertical
+intermediate curves are DarkGreen (`RGB 0,100,0`). `PCSpawnCrv` applies the colors to new curves,
+while `PCUpdate` and `PCSyncCrv` correct existing curves within the selected-panel scope.
 
 Panel cladding saves persist material-independent cell ownership under
 `CW_2.08_CLADDING_LOGIC`. `PCSyncSrf` combines that saved owner graph with current Rhino surface
@@ -56,7 +70,7 @@ activate it.
 The installed RHP and its private dependencies live at
 `%LOCALAPPDATA%\PanelCladdingEditor\plugin\<version>`. The installer writes the complete Rhino 8
 current-user registration directly: root product/startup metadata, `PlugIn\FileName`, and the exact
-ten-command `CommandList`. It does not rely on Rhino consuming a shorthand root `FileName` during
+eleven-command `CommandList`. It does not rely on Rhino consuming a shorthand root `FileName` during
 first startup. Installer validation rejects shorthand-only, partial, stale-command, or mixed
 registrations. It removes the legacy `PanelCladdingEditor` and `BayHealthPanelCladdingEditor` roots
 from Rhino Package Manager discovery. Do not place the RHP under

@@ -8,6 +8,7 @@ using PanelCladdingEditor.Domain.Models.PanelCladding;
 using Brep = rhinocommon::Rhino.Geometry.Brep;
 using Curve = rhinocommon::Rhino.Geometry.Curve;
 using ObjectAttributes = rhinocommon::Rhino.DocObjects.ObjectAttributes;
+using ObjectColorSource = rhinocommon::Rhino.DocObjects.ObjectColorSource;
 using ObjectEnumeratorSettings = rhinocommon::Rhino.DocObjects.ObjectEnumeratorSettings;
 using ObjectType = rhinocommon::Rhino.DocObjects.ObjectType;
 using RhinoDoc = rhinocommon::Rhino.RhinoDoc;
@@ -127,7 +128,8 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
             }
             string layerPath = GetLayerPath(document, rhinoObject);
             if (scope == PanelCladdingObjectScope.Surfaces &&
-                rhinoObject.Geometry is Brep surfaceGeometry && IsUnderMaterialSurfaceRoot(layerPath))
+                rhinoObject.Geometry is Brep surfaceGeometry &&
+                PanelCladdingSpawnPlanningService.IsManagedSurfaceLayerPath(layerPath))
             {
                 discoveredSurfaces.Add(new SurfaceReadCandidate(
                     rhinoObject,
@@ -144,10 +146,8 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
                         PanelCladdingSurfaceCoverageService.LegacyUserTextKey)));
                 continue;
             }
-            if (rhinoObject.Geometry is Curve curveGeometry && string.Equals(
-                layerPath,
-                PanelCladdingExtrusionPlanningService.CurveLayerPath,
-                StringComparison.OrdinalIgnoreCase))
+            if (rhinoObject.Geometry is Curve curveGeometry &&
+                PanelCladdingSpawnPlanningService.IsManagedExtrusionLayerPath(layerPath))
             {
                 discoveredCurves.Add(new CurveReadCandidate(
                     rhinoObject,
@@ -159,7 +159,12 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
                         rhinoObject.Attributes,
                         PanelCladdingExtrusionPlanningService.AssignedExtrusionsUserTextKey),
                     ReadExtrusionValues(rhinoObject.Attributes),
-                    layerPath));
+                    layerPath,
+                    rhinoObject.Attributes.ColorSource == ObjectColorSource.ColorFromObject,
+                    new PanelColorRgb(
+                        rhinoObject.Attributes.ObjectColor.R,
+                        rhinoObject.Attributes.ObjectColor.G,
+                        rhinoObject.Attributes.ObjectColor.B)));
             }
         }
 
@@ -550,7 +555,8 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
                     panelCid,
                     inferredLayout.Data.Width,
                     inferredLayout.Data.Height,
-                    keySet);
+                    keySet,
+                    panel.Layout.LayerFullPath);
                 if (!expectedCurves.Success || expectedCurves.Data is null)
                 {
                     AddPanelIssue(panel, expectedCurves.Message);
@@ -582,7 +588,10 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
                         AssignedExtrusions = sourceCurve.AssignedExtrusions,
                         DesiredAssignedExtrusions = string.Join(';', expected.AssignedExtrusionCodes),
                         AssignedExtrusionValues = sourceCurve.AssignedExtrusionValues,
-                        DesiredAssignedExtrusionValues = expected.AssignedExtrusionValues
+                        DesiredAssignedExtrusionValues = expected.AssignedExtrusionValues,
+                        UsesObjectColor = sourceCurve.UsesObjectColor,
+                        ObjectColor = sourceCurve.ObjectColor,
+                        DesiredObjectColor = expected.ObjectColor
                     });
                 }
                 if (curveMappingFailed)
@@ -850,6 +859,11 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
                 proposed.SetUserString(code, value);
             }
             proposed.Name = curveWrite.DesiredCode;
+            proposed.ObjectColor = System.Drawing.Color.FromArgb(
+                curveWrite.DesiredObjectColor.Red,
+                curveWrite.DesiredObjectColor.Green,
+                curveWrite.DesiredObjectColor.Blue);
+            proposed.ColorSource = ObjectColorSource.ColorFromObject;
             prepared.Add(new PreparedObject(rhinoObject, original, proposed, null));
         }
 
@@ -1278,14 +1292,6 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
             : string.Empty;
     }
 
-    private static bool IsUnderMaterialSurfaceRoot(string layerPath)
-    {
-        string root = (layerPath ?? string.Empty).Split(
-            new[] { "::" },
-            StringSplitOptions.None)[0];
-        return PanelCladdingSpawnPlanningService.IsSupportedMaterialSurfaceRoot(root);
-    }
-
     private static bool RestoreOriginalAttributes(
         RhinoDoc document,
         IReadOnlyList<PreparedObject> modified)
@@ -1372,5 +1378,7 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
         string CurveCode,
         string AssignedExtrusions,
         IReadOnlyDictionary<string, string> AssignedExtrusionValues,
-        string LayerPath);
+        string LayerPath,
+        bool UsesObjectColor,
+        PanelColorRgb ObjectColor);
 }

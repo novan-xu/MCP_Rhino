@@ -39,19 +39,32 @@ internal static class Program
 
         IReadOnlyList<PanelCladdingExtrusionCurvePlan> curves = Required(
             new PanelCladdingExtrusionPlanningService().CreatePlan(
-                "PID_BKT_N2_06_04", "CID_BKT_N2_06_04", 100d, 80d, keySet),
+                "PID_BKT_N2_06_04", "CID_BKT_N2_06_04", 100d, 80d, keySet,
+                "01_CW Panels::Surfaces-PNL::WT-04"),
             "Plan extrusion curves");
         Require(curves.Count == 8, $"Expected 8 curve objects, got {curves.Count}.");
         Require(curves.Select(curve => curve.Code).OrderBy(code => code).SequenceEqual(new[]
         {
             "FRM_0", "FRM_1", "FRM_2", "FRM_3", "INT_0A–B", "INT_0C", "INT_A0", "INT_B"
         }.OrderBy(code => code)), "Curve codes did not reflect deleted/merged topology.");
-        Require(curves.All(curve => curve.LayerPath == PanelCladdingExtrusionPlanningService.CurveLayerPath),
+        Require(curves.All(curve => curve.LayerPath ==
+                "02_CW Extrusions::Curves-PNL::WT-04"),
             "A curve was planned on the wrong layer.");
         Require(curves.All(curve => curve.Cid == $"CID_BKT_N2_06_04-{curve.Code}" &&
             curve.UserTextWrites["CRV"] == curve.Code &&
             curve.UserTextWrites["CW_1.01_PID"] == "PID_BKT_N2_06_04"),
             "Curve PID/CRV/CID metadata was not canonical.");
+        Require(curves.Where(curve => curve.Kind == PanelCladdingExtrusionCurveKind.Frame)
+                .All(curve => curve.ObjectColor == new PanelColorRgb(0, 0, 255)),
+            "Main-frame curves were not planned in Blue.");
+        Require(curves.Where(curve => curve.Kind != PanelCladdingExtrusionCurveKind.Frame &&
+                                      curve.Axis == PanelCladdingTopologyAxis.Horizontal)
+                .All(curve => curve.ObjectColor == new PanelColorRgb(128, 0, 128)),
+            "Horizontal intermediate curves were not planned in Purple.");
+        Require(curves.Where(curve => curve.Kind != PanelCladdingExtrusionCurveKind.Frame &&
+                                      curve.Axis == PanelCladdingTopologyAxis.Vertical)
+                .All(curve => curve.ObjectColor == new PanelColorRgb(0, 100, 0)),
+            "Vertical intermediate curves were not planned in DarkGreen.");
         Console.WriteLine("[OK] topology expands into underscore-named frame/segment/merge curves with canonical metadata.");
 
         Require(PanelCladdingSpawnPlanningService.MaterialSurfaceRootLayer == "04_STEP Surfaces" &&
@@ -128,7 +141,10 @@ internal static class Program
                         ["1D-ALU-H0651"] = "(LL+4)*2",
                         ["1D-GSK-001"] = "LL+4"
                     },
-                    LayerPath = PanelCladdingExtrusionPlanningService.CurveLayerPath
+                    UsesObjectColor = true,
+                    ObjectColor = new PanelColorRgb(1, 2, 3),
+                    DesiredObjectColor = new PanelColorRgb(0, 0, 255),
+                    LayerPath = "02_CW Extrusions::Curves-PNL::WT-04"
                 }
             ]
         };
@@ -172,8 +188,9 @@ internal static class Program
             curveWrite.DesiredCid == "CID_BKT_N2_06_04-FRM_0" &&
             curveWrite.DesiredAssignedExtrusions == "1D-ALU-H0651;1D-GSK-001" &&
             curveWrite.DesiredAssignedExtrusionValues["1D-ALU-H0651"] == "(LL+4)*2" &&
-            curveWrite.DesiredAssignedExtrusionValues["1D-GSK-001"] == "LL+4",
-            "Geometry-associated curve metadata was not repaired.");
+            curveWrite.DesiredAssignedExtrusionValues["1D-GSK-001"] == "LL+4" &&
+            curveWrite.DesiredObjectColor == new PanelColorRgb(0, 0, 255),
+            "Geometry-associated curve metadata/color was not repaired.");
         Console.WriteLine("[OK] scoped sync plans repair only its own object family and retains five-decimal unit dimensions.");
     }
 

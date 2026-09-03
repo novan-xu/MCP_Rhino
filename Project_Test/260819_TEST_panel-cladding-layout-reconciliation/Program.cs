@@ -138,7 +138,8 @@ internal static class Program
                     VerticalOffsets = baseKeySet.VerticalOffsets,
                     Cells = baseKeySet.Cells,
                     Topology = refined
-                }));
+                },
+                "01_CW Panels::Surfaces-PNL::WT-01"));
         string[] mergedVerticalCodes = curves
             .Where(curve => curve.Axis == PanelCladdingTopologyAxis.Vertical &&
                 curve.Kind == PanelCladdingExtrusionCurveKind.Merged)

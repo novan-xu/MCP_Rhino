@@ -242,7 +242,8 @@ internal static class Program
         };
         IReadOnlyList<PanelCladdingExtrusionCurvePlan> curves = Required(
             new PanelCladdingExtrusionPlanningService().CreatePlan(
-                "PID_FRAME_01", "CID_FRAME_01", layout.Width, layout.Height, keySet),
+                "PID_FRAME_01", "CID_FRAME_01", layout.Width, layout.Height, keySet,
+                "01_CW Panels::Surfaces-PNL::WT-01"),
             "plan assigned extrusion curves");
         PanelCladdingExtrusionCurvePlan frame = curves.Single(curve => curve.Code == "FRM_0");
         Require(frame.UserTextWrites[PanelCladdingExtrusionPlanningService.AssignedExtrusionsUserTextKey] ==
@@ -292,7 +293,8 @@ internal static class Program
         };
         PanelCladdingExtrusionCurvePlan curve = Required(
                 new PanelCladdingExtrusionPlanningService().CreatePlan(
-                    "PID_FORMULA", "CID_FORMULA", layout.Width, layout.Height, keySet),
+                    "PID_FORMULA", "CID_FORMULA", layout.Width, layout.Height, keySet,
+                    "01_CW Panels::Surfaces-PNL::WT-01"),
                 "plan configured formulas")
             .Single(item => item.Code == "FRM_3");
         Require(curve.UserTextWrites["1D-H0579"] == "(LL+4)*2", "1D quantity formula is incorrect.");

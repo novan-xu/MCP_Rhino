@@ -9,6 +9,7 @@ using AreaMassProperties = rhinocommon::Rhino.Geometry.AreaMassProperties;
 using Brep = rhinocommon::Rhino.Geometry.Brep;
 using BrepEdge = rhinocommon::Rhino.Geometry.BrepEdge;
 using Curve = rhinocommon::Rhino.Geometry.Curve;
+using CurveSimplifyOptions = rhinocommon::Rhino.Geometry.CurveSimplifyOptions;
 using EdgeAdjacency = rhinocommon::Rhino.Geometry.EdgeAdjacency;
 using Mesh = rhinocommon::Rhino.Geometry.Mesh;
 using MeshingParameters = rhinocommon::Rhino.Geometry.MeshingParameters;
@@ -314,7 +315,9 @@ internal static partial class LivePanelCladdingGeometryPartitionService
                 return OperationResponse<Curve>.Fail(
                     $"PANEL_CLADDING_EXTRUSION_JOIN_FAILED: {plan.Code}: {joined.Length} curves");
             }
-            return OperationResponse<Curve>.Ok(joined[0]);
+            Curve simplified = SimplifyExtrusionCurve(joined[0], grid.Tolerance);
+            joined[0].Dispose();
+            return OperationResponse<Curve>.Ok(simplified);
         }
         finally
         {
@@ -323,6 +326,35 @@ internal static partial class LivePanelCladdingGeometryPartitionService
                 piece.Dispose();
             }
         }
+    }
+
+    internal static Curve SimplifyExtrusionCurve(Curve source, double tolerance)
+    {
+        double fitTolerance = Math.Max(tolerance, 1e-9d);
+        double angleTolerance = Math.PI / 180d;
+        Curve? simplified = source.Simplify(
+            CurveSimplifyOptions.All,
+            fitTolerance,
+            angleTolerance);
+        Curve candidate = simplified is null || ReferenceEquals(simplified, source)
+            ? source.DuplicateCurve()
+            : simplified;
+        Curve? fitted = candidate.Fit(3, fitTolerance, angleTolerance);
+        if (fitted is not null &&
+            CountNurbsControlPoints(fitted) < CountNurbsControlPoints(candidate))
+        {
+            candidate.Dispose();
+            return fitted;
+        }
+
+        fitted?.Dispose();
+        return candidate;
+    }
+
+    private static int CountNurbsControlPoints(Curve curve)
+    {
+        using var nurbs = curve.ToNurbsCurve();
+        return nurbs?.Points.Count ?? int.MaxValue;
     }
 
     public static bool IsAssociated(Brep source, Brep candidate, double tolerance)

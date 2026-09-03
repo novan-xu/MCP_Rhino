@@ -111,7 +111,8 @@ internal static class Program
                 "CID_BKT_N1_01_07",
                 90d,
                 160d,
-                keySet));
+                keySet,
+                "01_CW Panels::Surfaces-PNL::WT-01"));
         HashSet<PanelCladdingSegmentCoordinate> plannedAtoms = curves
             .SelectMany(curve => curve.AtomicSegments)
             .ToHashSet();

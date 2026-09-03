@@ -127,6 +127,15 @@ portable GitHub CLI. For commit / push / pull-request / merge requests on this l
   last-write times of the plug-in key root, `PlugIn`, and `CommandList` before assuming an assembly,
   identity, or packaging fault. Evidence and reproduction:
   `Project_Exet/260826_EXET_panel-cladding-plugin-registration.md`.
+- **Production registry attestation memo:** Installer success, `-Mode Validate`, and registry
+  readback from the same agent execution context are not proof of a host-persistent registration;
+  that context may virtualize registry writes while filesystem moves persist. If host-persistent
+  registry access is not independently established, build and stage only—do not activate, repair,
+  move, or retire the prior RHP. After the installer exits, verify from an independent host process
+  or ordinary user PowerShell that `PlugIn\FileName` names the new existing RHP, `CommandList` is
+  exact, and all three key timestamps advanced. Only then report installation/validation as passed.
+  After Rhino starts, also verify the exact RHP is loaded and that root/`CommandList` advanced while
+  installer-owned `PlugIn` did not; otherwise restore the prior reachable RHP and report failure.
 
 ## Document Priority
 

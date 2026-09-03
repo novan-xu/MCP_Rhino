@@ -7,6 +7,7 @@ public sealed class PanelCladdingSpawnPlanningService
 {
     public const string MaterialSurfaceRootLayer = "04_STEP Surfaces";
     public const string LegacyMaterialSurfaceRootLayer = "03_Material Surfaces (STEP)";
+    public const string ExtrusionRootLayer = "02_CW Extrusions";
     public const string PanelIdUserTextKey = "CW_1.01_PID";
     public const string CidUserTextKey = "CW_1.02_CID";
     public const string ReleaseUserTextKey = "CW_1.05_RELEASE";
@@ -39,23 +40,39 @@ public sealed class PanelCladdingSpawnPlanningService
         IReadOnlyDictionary<string, string> panelUserText,
         PanelCladdingKeySet keySet)
     {
-        return CreatePlanCore(panelUserText, keySet, null, null);
+        return CreatePlanCore(panelUserText, keySet, null, null, null, allowEmptyRegions: false);
+    }
+
+    public OperationResponse<PanelCladdingSpawnPlan> CreateUpdatePlan(
+        IReadOnlyDictionary<string, string> panelUserText,
+        PanelCladdingKeySet keySet)
+    {
+        return CreatePlanCore(panelUserText, keySet, null, null, null, allowEmptyRegions: true);
     }
 
     public OperationResponse<PanelCladdingSpawnPlan> CreatePlan(
         IReadOnlyDictionary<string, string> panelUserText,
         PanelCladdingKeySet keySet,
         double panelWidth,
-        double panelHeight)
+        double panelHeight,
+        string sourcePanelLayerPath)
     {
-        return CreatePlanCore(panelUserText, keySet, panelWidth, panelHeight);
+        return CreatePlanCore(
+            panelUserText,
+            keySet,
+            panelWidth,
+            panelHeight,
+            sourcePanelLayerPath,
+            allowEmptyRegions: false);
     }
 
     private OperationResponse<PanelCladdingSpawnPlan> CreatePlanCore(
         IReadOnlyDictionary<string, string> panelUserText,
         PanelCladdingKeySet keySet,
         double? panelWidth,
-        double? panelHeight)
+        double? panelHeight,
+        string? sourcePanelLayerPath,
+        bool allowEmptyRegions)
     {
         OperationResponse<KeyValuePair<string, string>> panelId = FindRequiredMetadata(
             panelUserText,
@@ -144,7 +161,7 @@ public sealed class PanelCladdingSpawnPlanningService
             });
         }
 
-        if (regions.Count == 0)
+        if (regions.Count == 0 && !allowEmptyRegions)
         {
             return OperationResponse<PanelCladdingSpawnPlan>.Fail(
                 "PANEL_CLADDING_NO_POPULATED_CELLS: no cladding surfaces were planned.");
@@ -172,7 +189,8 @@ public sealed class PanelCladdingSpawnPlanningService
                     panelCid.Data.Value,
                     panelWidth.Value,
                     panelHeight.Value,
-                    keySet);
+                    keySet,
+                    sourcePanelLayerPath ?? string.Empty);
             if (!extrusionPlan.Success || extrusionPlan.Data is null)
             {
                 return OperationResponse<PanelCladdingSpawnPlan>.Fail(extrusionPlan.Message);
@@ -227,6 +245,19 @@ public sealed class PanelCladdingSpawnPlanningService
         string normalized = layerName?.Trim() ?? string.Empty;
         return string.Equals(normalized, MaterialSurfaceRootLayer, StringComparison.OrdinalIgnoreCase) ||
             string.Equals(normalized, LegacyMaterialSurfaceRootLayer, StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool IsManagedSurfaceLayerPath(string layerPath) =>
+        IsAtOrBelowLayerRoot(layerPath, MaterialSurfaceRootLayer);
+
+    public static bool IsManagedExtrusionLayerPath(string layerPath) =>
+        IsAtOrBelowLayerRoot(layerPath, ExtrusionRootLayer);
+
+    private static bool IsAtOrBelowLayerRoot(string layerPath, string rootLayer)
+    {
+        string normalized = layerPath?.Trim() ?? string.Empty;
+        return string.Equals(normalized, rootLayer, StringComparison.OrdinalIgnoreCase) ||
+            normalized.StartsWith(rootLayer + "::", StringComparison.OrdinalIgnoreCase);
     }
 
     public static string BuildSurfaceCid(string panelId, string cellLabel)
