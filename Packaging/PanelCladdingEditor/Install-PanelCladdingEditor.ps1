@@ -61,7 +61,8 @@ function Get-PanelExpectedCommands {
         'PCSpawnCrv',
         'PCSpawnSrf',
         'PCSyncCrv',
-        'PCSyncSrf'
+        'PCSyncSrf',
+        'PCUpdate'
     )
 }
 

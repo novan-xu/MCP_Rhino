@@ -71,7 +71,7 @@ public sealed class PanelCladdingSpawnSrfCommand : RhinoCommand
         return Result.Success;
     }
 
-    private static OperationResponse<IReadOnlyDictionary<string, PanelColorRgb>> ResolveMaterialColors(
+    internal static OperationResponse<IReadOnlyDictionary<string, PanelColorRgb>> ResolveMaterialColors(
         RhinoDoc document)
     {
         string workbookPath = document.Strings.GetValue(

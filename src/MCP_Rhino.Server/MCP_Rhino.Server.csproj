@@ -104,8 +104,14 @@
                         ..\..\Project_Test\260825_TEST_cladding-surface-coverage-metadata\**\*.cs;
                         ..\..\Project_Test\260825_TEST_pcsync-srf-offset-refresh\**\*.cs;
                         ..\..\Project_Test\260825_TEST_pcsync-srf-unmarked-offset-clearing\**\*.cs;
-                        ..\..\Project_Test\260826_TEST_extrusion-assignment-dropzone\**\*.cs;
-                        ..\..\Project_Test\260804_TEST_direct-rhp-plugin-identity\RhpExecutableProbe\**\*.cs;
+                       ..\..\Project_Test\260826_TEST_extrusion-assignment-dropzone\**\*.cs;
+                       ..\..\Project_Test\260903_TEST_panel-cladding-managed-cid-scope\**\*.cs;
+                       ..\..\Project_Test\260903_TEST_panel-cladding-update-command\**\*.cs;
+                       ..\..\Project_Test\260903_TEST_pc-curve-display-colors\**\*.cs;
+                       ..\..\Project_Test\260903_TEST_pcupdate-locked-managed-objects\**\*.cs;
+                       ..\..\Project_Test\260903_TEST_pcupdate-command-undo\**\*.cs;
+                       ..\..\Project_Test\260903_TEST_pcspawncrv-curve-simplification\**\*.cs;
+                       ..\..\Project_Test\260804_TEST_direct-rhp-plugin-identity\RhpExecutableProbe\**\*.cs;
                       ..\..\Project_Test\260805_TEST_rhino-plugin-assembly-identity\PluginAssemblyIdentityProbe\**\*.cs;
                       ..\..\Project_Test\260805_TEST_grasshopper-authoring-tools\ApiProbe\**\*.cs"
              LinkBase="Project_Test" />

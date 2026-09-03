@@ -53,7 +53,8 @@ $expectedCommands = @(
     'PCSpawnCrv',
     'PCSpawnSrf',
     'PCSyncCrv',
-    'PCSyncSrf'
+    'PCSyncSrf',
+    'PCUpdate'
 )
 
 function Assert-FullRegistration {

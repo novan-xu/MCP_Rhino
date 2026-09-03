@@ -24,6 +24,13 @@ public interface ILivePanelCladdingSpawnService
         PanelCladdingObjectScope scope);
 }
 
+public interface ILivePanelCladdingUpdateService
+{
+    OperationResponse<PanelCladdingUpdateResult> Update(
+        string filePath,
+        IReadOnlyList<Guid> panelObjectIds);
+}
+
 public interface ILivePanelCladdingMatchService
 {
     OperationResponse<PanelCladdingMatchResult> Match(
