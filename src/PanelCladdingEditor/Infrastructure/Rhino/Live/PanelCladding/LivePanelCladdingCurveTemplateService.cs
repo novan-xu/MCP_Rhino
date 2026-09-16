@@ -149,6 +149,7 @@ public sealed class LivePanelCladdingCurveTemplateService : ILivePanelCladdingCu
             Priority = plan.Priority,
             SelectedPanelIds = selectedIds,
             UpdatedPanelIds = updatedIds,
+            SkippedPanelIds = plan.SkippedPanelIds,
             MergeRunCount = plan.Panels.Sum(panel => panel.MergeRuns.Count)
         });
 

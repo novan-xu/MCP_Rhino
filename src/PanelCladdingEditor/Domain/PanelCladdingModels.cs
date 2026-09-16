@@ -576,6 +576,7 @@ public sealed class PanelCladdingCurveTemplatePlan
     public PanelCladdingCurveTemplatePriority Priority { get; init; }
     public IReadOnlyList<PanelCladdingCurveTemplatePanelPlan> Panels { get; init; } =
         Array.Empty<PanelCladdingCurveTemplatePanelPlan>();
+    public IReadOnlyList<Guid> SkippedPanelIds { get; init; } = Array.Empty<Guid>();
 }
 
 public sealed class PanelCladdingCurveTemplateResult
@@ -583,6 +584,7 @@ public sealed class PanelCladdingCurveTemplateResult
     public PanelCladdingCurveTemplatePriority Priority { get; init; }
     public IReadOnlyList<Guid> SelectedPanelIds { get; init; } = Array.Empty<Guid>();
     public IReadOnlyList<Guid> UpdatedPanelIds { get; init; } = Array.Empty<Guid>();
+    public IReadOnlyList<Guid> SkippedPanelIds { get; init; } = Array.Empty<Guid>();
     public int MergeRunCount { get; init; }
 }
 

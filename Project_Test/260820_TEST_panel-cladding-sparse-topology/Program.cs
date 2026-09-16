@@ -20,7 +20,7 @@ internal static class Program
         Console.WriteLine("[OK] missing, merge, and hide states persist independently.");
         Console.WriteLine("[OK] hide-only save removes stale default masks and writes only 2.07.");
         Console.WriteLine("[OK] absent topology masks parse, match, and spawn as defaults.");
-        Console.WriteLine("[OK] PCCrvTemplate requires an absent merge code and no-ops when no merge is possible.");
+        Console.WriteLine("[OK] PCCrvTemplate skips configured merge codes and no-ops when no merge is possible.");
         Console.WriteLine("[OK] surface sync uses sparse persistence while signatures retain full canonical masks.");
         return 0;
     }
@@ -186,7 +186,7 @@ internal static class Program
                 VerticalOffsets = layout.VerticalOffsets,
                 Cells = layout.Cells,
                 Topology = new PanelCladdingTopologyState()
-            }, layout.Width, layout.Height);
+            }, layout.Width, layout.Height, layout.LayerFullPath);
         Require(spawned.Success && spawned.Data is not null && spawned.Data.Curves.Count > 0,
             $"Absent default masks did not permit extrusion planning: {spawned.Message}");
     }
@@ -232,10 +232,10 @@ internal static class Program
                 HasMergeMask = true
             }
         ], PanelCladdingCurveTemplatePriority.Horizontal);
-        Require(!configured.Success && configured.Message.Contains(
-                "MERGE_MASK_ALREADY_CONFIGURED",
-                StringComparison.Ordinal),
-            "PCCrvTemplate did not reject an existing nonblank merge code.");
+        Require(configured.Success && configured.Data is not null &&
+                configured.Data.Panels.Count == 0 && configured.Data.SkippedPanelIds.SequenceEqual(
+                    [Guid.Parse("A8200000-0000-0000-0000-000000000203")]),
+            "PCCrvTemplate did not skip an existing nonblank merge code.");
 
         Require(!PanelCladdingKeyService.HasNonblankMergeMask(new Dictionary<string, string>()) &&
                 !PanelCladdingKeyService.HasNonblankMergeMask(new Dictionary<string, string>

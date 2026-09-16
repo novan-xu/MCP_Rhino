@@ -8,6 +8,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using PanelCladdingEditor.Application.Interfaces;
 using PanelCladdingEditor.Application.Services.PanelCladding;
 using PanelCladdingEditor.Contracts.Responses;
 using PanelCladdingEditor.Domain.Models.PanelCladding;
@@ -18,6 +19,7 @@ public partial class PanelCladdingEditorWindow : Window
 {
     private const string FrameExtrusionDragFormat = "PanelCladdingEditor.FrameExtrusionCode";
     private readonly PanelCladdingEditorController _controller;
+    private readonly IPanelViewportHighlight? _viewportHighlight;
     private readonly PanelCladdingLogicalCellService _logicalCells = new();
     private readonly PanelCladdingTopologyNormalizationService _topologyNormalizer =
         new(new PanelCladdingKeyService());
@@ -56,14 +58,19 @@ public partial class PanelCladdingEditorWindow : Window
     private Point _extrusionDragStart;
     private string _workbookPath = string.Empty;
 
-    public PanelCladdingEditorWindow(PanelCladdingEditorController controller)
+    public PanelCladdingEditorWindow(
+        PanelCladdingEditorController controller,
+        IPanelViewportHighlight? viewportHighlight = null)
     {
         _controller = controller;
+        _viewportHighlight = viewportHighlight;
         InitializeComponent();
         MaterialLegend.ItemsSource = _materials;
         MaterialSelect.ItemsSource = _materials;
         ExtrusionLegend.ItemsSource = _availableFrameExtrusions;
         Closing += OnWindowClosing;
+        IsVisibleChanged += (_, _) => UpdateViewportHighlightVisibility();
+        StateChanged += (_, _) => UpdateViewportHighlightVisibility();
         PreviewKeyDown += OnWindowPreviewKeyDown;
         _toastTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2.6d) };
         _toastTimer.Tick += (_, _) =>
@@ -148,14 +155,21 @@ public partial class PanelCladdingEditorWindow : Window
         {
             _isLoading = false;
         }
+        _viewportHighlight?.SetTarget(response.Data.DocumentRuntimeSerialNumber, response.Data.ObjectId);
+        UpdateViewportHighlightVisibility();
         return OperationResponse.Ok();
     }
 
     protected override void OnClosed(EventArgs e)
     {
+        _viewportHighlight?.Dispose();
+        _toastTimer.Stop();
         EditorClosed?.Invoke(this, EventArgs.Empty);
         base.OnClosed(e);
     }
+
+    private void UpdateViewportHighlightVisibility() =>
+        _viewportHighlight?.SetVisible(IsVisible && WindowState != WindowState.Minimized);
 
     private PanelCladdingLayout BuildWorkingLayout()
     {
