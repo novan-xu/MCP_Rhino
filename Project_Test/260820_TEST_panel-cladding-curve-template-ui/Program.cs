@@ -20,15 +20,21 @@ namespace PanelCladdingCurveTemplateUiSmoke;
 internal static class Program
 {
     [STAThread]
-    private static void Main()
+    private static void Main(string[] args)
     {
         VerifyCurveTemplatePlanning();
+        VerifyCurveTemplateBatches();
         VerifyCommandAndMutationContracts();
-        VerifyResponsiveMaterialCatalogue();
-        VerifyFooterLabelsFit();
 
         Console.WriteLine("[OK] H/V curve-template masks preserve topology and round-trip canonically.");
+        Console.WriteLine("[OK] Mixed/all-configured batches skip existing masks; duplicates, no-runs, and invalid inputs are handled.");
         Console.WriteLine("[OK] PCCrvTemplate command, one-record Undo, and rollback contracts passed.");
+        if (args.Contains("--curve-template-only", StringComparer.Ordinal))
+        {
+            return;
+        }
+        VerifyResponsiveMaterialCatalogue();
+        VerifyFooterLabelsFit();
         Console.WriteLine("[OK] Material catalogue uses longest-code tile width and responsive wrapping.");
         Console.WriteLine("[OK] Save Extrusions, Save Cladding, and Save Both fit at constrained width.");
     }
@@ -100,10 +106,10 @@ internal static class Program
                 Topology = decodedHorizontal
             }
         ], PanelCladdingCurveTemplatePriority.Horizontal);
-        Require(!alreadyConfigured.Success && alreadyConfigured.Message.Contains(
-                "MERGE_MASK_ALREADY_CONFIGURED",
-                StringComparison.Ordinal),
-            "PCCrvTemplate did not reject a panel with an existing merge code.");
+        Require(alreadyConfigured.Success && alreadyConfigured.Data is not null &&
+                alreadyConfigured.Data.Panels.Count == 0 &&
+                alreadyConfigured.Data.SkippedPanelIds.SequenceEqual([panelId]),
+            "PCCrvTemplate did not skip a panel with an existing merge code.");
 
         PanelCladdingCurveTemplatePanelPlan vertical = RequirePlan(
             planner.CreatePlan([snapshot], PanelCladdingCurveTemplatePriority.Vertical));
@@ -129,6 +135,103 @@ internal static class Program
             PanelCladdingCurveTemplatePriority.Horizontal);
         Require(!empty.Success && empty.Message.Contains("SELECTION_REQUIRED", StringComparison.Ordinal),
             "An empty curve-template plan did not fail before mutation.");
+    }
+
+    private static void VerifyCurveTemplateBatches()
+    {
+        var keys = new PanelCladdingKeyService();
+        var planner = new PanelCladdingCurveTemplatePlanningService(keys);
+        var configured = new PanelCladdingCurveTemplatePanelSnapshot
+        {
+            ObjectId = Guid.Parse("A9160000-0000-0000-0000-000000000001"),
+            HorizontalTrackCount = 2,
+            VerticalTrackCount = 3,
+            HasMergeMask = true,
+            Topology = new PanelCladdingTopologyState
+            {
+                MergeRuns = [new(PanelCladdingTopologyAxis.Vertical, 0, 0, 1)]
+            }
+        };
+        var first = new PanelCladdingCurveTemplatePanelSnapshot
+        {
+            ObjectId = Guid.Parse("A9160000-0000-0000-0000-000000000002"),
+            HorizontalTrackCount = 2,
+            VerticalTrackCount = 3
+        };
+        var second = new PanelCladdingCurveTemplatePanelSnapshot
+        {
+            ObjectId = Guid.Parse("A9160000-0000-0000-0000-000000000003"),
+            HorizontalTrackCount = 1,
+            VerticalTrackCount = 2
+        };
+        var noRuns = new PanelCladdingCurveTemplatePanelSnapshot
+        {
+            ObjectId = Guid.Parse("A9160000-0000-0000-0000-000000000004")
+        };
+        PanelCladdingMergeRun[] originalRuns = configured.Topology.MergeRuns.ToArray();
+        foreach (PanelCladdingCurveTemplatePriority priority in Enum.GetValues<PanelCladdingCurveTemplatePriority>())
+        {
+            PanelCladdingCurveTemplatePanelPlan expectedFirst = RequirePlan(planner.CreatePlan([first], priority));
+            PanelCladdingCurveTemplatePanelPlan expectedSecond = RequirePlan(planner.CreatePlan([second], priority));
+            PanelCladdingCurveTemplatePanelSnapshot[][] selections =
+            [
+                [configured, first, second],
+                [first, configured, second],
+                [first, second, configured],
+                [configured, first, configured, second, first]
+            ];
+            foreach (PanelCladdingCurveTemplatePanelSnapshot[] selection in selections)
+            {
+                OperationResponse<PanelCladdingCurveTemplatePlan> mixed = planner.CreatePlan(selection, priority);
+                Require(mixed.Success && mixed.Data is not null,
+                    $"{priority} mixed configured/unconfigured batch failed: {mixed.Message}");
+                Require(mixed.Data!.Priority == priority &&
+                        mixed.Data.Panels.Select(panel => panel.ObjectId).SequenceEqual([first.ObjectId, second.ObjectId]),
+                    "Mixed batch included configured panels or lost/duplicated eligible panels.");
+                Require(mixed.Data.SkippedPanelIds.SequenceEqual([configured.ObjectId]),
+                    "Configured skips were lost or counted more than once.");
+                Require(mixed.Data.Panels[0].MergeMask == expectedFirst.MergeMask &&
+                        mixed.Data.Panels[1].MergeMask == expectedSecond.MergeMask,
+                    "Skipping a configured panel changed another panel's planned template.");
+            }
+
+            OperationResponse<PanelCladdingCurveTemplatePlan> allConfigured = planner.CreatePlan(
+                [configured, configured], priority);
+            Require(allConfigured.Success && allConfigured.Data is not null &&
+                    allConfigured.Data.Panels.Count == 0 &&
+                    allConfigured.Data.SkippedPanelIds.SequenceEqual([configured.ObjectId]),
+                "An all-configured selection must succeed without any mutation plans.");
+
+            OperationResponse<PanelCladdingCurveTemplatePlan> withNoRuns = planner.CreatePlan(
+                [configured, noRuns, first], priority);
+            Require(withNoRuns.Success && withNoRuns.Data is not null &&
+                    withNoRuns.Data.Panels.Count == 2 &&
+                    withNoRuns.Data.Panels[0].ObjectId == noRuns.ObjectId &&
+                    withNoRuns.Data.Panels[0].MergeMask.Length == 0 &&
+                    withNoRuns.Data.Panels[0].MergeRuns.Count == 0 &&
+                    withNoRuns.Data.Panels[0].UserTextDeletes.Count == 0 &&
+                    withNoRuns.Data.SkippedPanelIds.SequenceEqual([configured.ObjectId]),
+                "An eligible no-run panel must remain mask-free without signature invalidation.");
+        }
+        Require(configured.Topology.MergeRuns.SequenceEqual(originalRuns),
+            "Planning mutated an existing configured panel's topology.");
+
+        var invalid = new PanelCladdingCurveTemplatePanelSnapshot
+        {
+            ObjectId = Guid.Parse("A9160000-0000-0000-0000-000000000005"),
+            HorizontalTrackCount = -1,
+            VerticalTrackCount = 2
+        };
+        OperationResponse<PanelCladdingCurveTemplatePlan> invalidBatch = planner.CreatePlan(
+            [first, configured, invalid], PanelCladdingCurveTemplatePriority.Horizontal);
+        Require(!invalidBatch.Success && invalidBatch.Data is null &&
+                invalidBatch.Message.Contains("TRACK_COUNT_INVALID", StringComparison.Ordinal),
+            "An invalid unconfigured panel must fail the batch without exposing a partial plan.");
+        Require(!planner.CreatePlan([configured], (PanelCladdingCurveTemplatePriority)999).Success,
+            "An all-configured selection bypassed invalid-priority validation.");
+        Require(!planner.CreatePlan([new PanelCladdingCurveTemplatePanelSnapshot()],
+                PanelCladdingCurveTemplatePriority.Horizontal).Success,
+            "An empty-ID selection bypassed required-selection validation.");
     }
 
     private static PanelCladdingTopologyState DecodeWithReplacement(

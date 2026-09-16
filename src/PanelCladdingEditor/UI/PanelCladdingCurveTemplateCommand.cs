@@ -69,6 +69,11 @@ public sealed class PanelCladdingCurveTemplateCommand : RhinoCommand
             $"PCCrvTemplate applied {label} to {response.Data.UpdatedPanelIds.Count} of " +
             $"{response.Data.SelectedPanelIds.Count} selected panel(s), producing " +
             $"{response.Data.MergeRunCount} merge run(s).");
+        if (response.Data.SkippedPanelIds.Count > 0)
+        {
+            RhinoApp.WriteLine(
+                $"Skipped {response.Data.SkippedPanelIds.Count} already-configured panel(s).");
+        }
         return Result.Success;
     }
 

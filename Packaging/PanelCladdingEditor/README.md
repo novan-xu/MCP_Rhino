@@ -10,7 +10,9 @@ The Rhino command surface uses the `PC` prefix: `_PCEditor`, `_PCCreate`, `_PCCl
 authoritative and reconciles all CID-bearing managed surfaces and curves: matching objects are
 rebuilt, missing objects are created, and stale or duplicate objects are deleted. `PCCrvTemplate`
 assigns a full-run horizontal or vertical merge mask only to selected
-panel Breps that do not already have a merge code. A one-row/one-column case with no applicable
+panel Breps that do not already have a merge code. Configured panels in a mixed selection are
+skipped and reported while the remaining eligible panels are updated. Selecting only configured
+panels succeeds without changes. A one-row/one-column case with no applicable
 run remains mask-free. Surface commands operate only on cladding Breps; curve commands operate only
 on extrusion curves.
 

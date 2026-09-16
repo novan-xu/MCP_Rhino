@@ -34,8 +34,14 @@ public sealed class PanelCladdingCurveTemplatePlanningService
         }
 
         var panelPlans = new List<PanelCladdingCurveTemplatePanelPlan>(distinctPanels.Length);
+        var skippedPanelIds = new List<Guid>();
         foreach (PanelCladdingCurveTemplatePanelSnapshot panel in distinctPanels)
         {
+            if (panel.HasMergeMask)
+            {
+                skippedPanelIds.Add(panel.ObjectId);
+                continue;
+            }
             OperationResponse<PanelCladdingCurveTemplatePanelPlan> planned = CreatePanelPlan(panel, priority);
             if (!planned.Success || planned.Data is null)
             {
@@ -48,7 +54,8 @@ public sealed class PanelCladdingCurveTemplatePlanningService
         return OperationResponse<PanelCladdingCurveTemplatePlan>.Ok(new PanelCladdingCurveTemplatePlan
         {
             Priority = priority,
-            Panels = panelPlans
+            Panels = panelPlans,
+            SkippedPanelIds = skippedPanelIds
         });
     }
 
@@ -60,11 +67,6 @@ public sealed class PanelCladdingCurveTemplatePlanningService
         {
             return OperationResponse<PanelCladdingCurveTemplatePanelPlan>.Fail(
                 "PANEL_CLADDING_CURVE_TEMPLATE_TRACK_COUNT_INVALID");
-        }
-        if (panel.HasMergeMask)
-        {
-            return OperationResponse<PanelCladdingCurveTemplatePanelPlan>.Fail(
-                "PANEL_CLADDING_CURVE_TEMPLATE_MERGE_MASK_ALREADY_CONFIGURED");
         }
 
         PanelCladdingTopologyAxis axis = priority == PanelCladdingCurveTemplatePriority.Horizontal

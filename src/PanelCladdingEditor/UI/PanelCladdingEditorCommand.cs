@@ -6,6 +6,7 @@ using System.Windows.Interop;
 using PanelCladdingEditor.Application.Services.PanelCladding;
 using PanelCladdingEditor.Contracts.Responses;
 using PanelCladdingEditor.Infrastructure.PanelCladding;
+using PanelCladdingEditor.Infrastructure.Rhino;
 using PanelCladdingEditor.Infrastructure.Rhino.Live.PanelCladding;
 using Brep = rhinocommon::Rhino.Geometry.Brep;
 using GetObject = rhinocommon::Rhino.Input.Custom.GetObject;
@@ -57,7 +58,7 @@ public sealed class PanelCladdingEditorCommand : RhinoCommand
                 signature,
                 workbook,
                 new PdfFrameExtrusionScheduleImporter());
-            _window = new PanelCladdingEditorWindow(controller);
+            _window = new PanelCladdingEditorWindow(controller, new LivePanelViewportHighlight());
             _window.EditorClosed += (_, _) => _window = null;
             new WindowInteropHelper(_window) { Owner = RhinoApp.MainWindowHandle() };
         }
