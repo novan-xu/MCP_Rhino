@@ -17,7 +17,8 @@ internal static class Program
             ["CW_2.03_OFFSET_H0"] = "50",
             ["CW_2.04_OFFSET_V0"] = "50",
             ["CW_1.01_PID"] = " W3_06_42 ",
-            ["CW_1.05_RELEASE"] = " R7 ",
+            ["CW_1.05_LOT"] = " R7 ",
+            ["CW_1.05_RELEASE"] = "OLD-IGNORED",
             ["CW_1.07_WALL_TYPE"] = " WT-03 ",
             ["PID"] = "IGNORED_PID",
             ["Release"] = "IGNORED_RELEASE",
@@ -52,7 +53,8 @@ internal static class Program
         Require(!glass.UserTextWrites.ContainsKey("CID"),
             "The noncanonical CID alias must not be written.");
         Require(glass.UserTextWrites["CW_1.01_PID"] == "W3_06_42", "PID source key/value was not inherited.");
-        Require(glass.UserTextWrites["CW_1.05_RELEASE"] == "R7", "Canonical release key/value was not inherited.");
+        Require(glass.UserTextWrites["CW_1.05_LOT"] == "R7", "Canonical lot key/value was not inherited.");
+        Require(!glass.UserTextWrites.ContainsKey("CW_1.05_RELEASE"), "Former release key was propagated.");
         Require(glass.UserTextWrites["CW_1.07_WALL_TYPE"] == "WT-03", "Canonical wall type key/value was not inherited.");
         Require(!glass.UserTextWrites.ContainsKey("PID") &&
                 !glass.UserTextWrites.ContainsKey("Release") &&
@@ -101,12 +103,12 @@ internal static class Program
             "Missing PID must prevent spawning.");
 
         var missingRelease = new Dictionary<string, string>(panelText, StringComparer.OrdinalIgnoreCase);
-        missingRelease.Remove("CW_1.05_RELEASE");
+        missingRelease.Remove("CW_1.05_LOT");
         OperationResponse<PanelCladdingSpawnPlan> missingReleaseResult = planner.CreatePlan(missingRelease, keySet);
         Require(!missingReleaseResult.Success &&
-            missingReleaseResult.Message.Contains("RELEASE_NUMBER_REQUIRED", StringComparison.Ordinal) &&
-            missingReleaseResult.Message.Contains("CW_1.05_RELEASE", StringComparison.Ordinal),
-            "A Release alias must not replace the missing canonical Release key.");
+            missingReleaseResult.Message.Contains("LOT_NUMBER_REQUIRED", StringComparison.Ordinal) &&
+            missingReleaseResult.Message.Contains("CW_1.05_LOT", StringComparison.Ordinal),
+            "The former release key or alias must not replace the missing canonical lot key.");
 
         var missingWallType = new Dictionary<string, string>(panelText, StringComparer.OrdinalIgnoreCase);
         missingWallType.Remove("CW_1.07_WALL_TYPE");

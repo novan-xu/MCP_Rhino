@@ -5,6 +5,7 @@ using PanelCladdingEditor.Domain.Models.PanelCladding;
 const string pid = "PID_RELEASE_01";
 const string cid = "CID_RELEASE_01-P";
 const string releaseKey = PanelCladdingSpawnPlanningService.ReleaseUserTextKey;
+Check(releaseKey == "CW_1.05_LOT", "Curve metadata must use the canonical lot key");
 const string layer = "01_CW Panels::Surfaces-PNL::WT01";
 var keys = new PanelCladdingKeyService();
 var baseGrid = Required(keys.CreateKeySet([25d], [40d], new Dictionary<string, string>(), 100, 80, 0.001));
@@ -22,6 +23,7 @@ var extrusion = new PanelCladdingExtrusionPlanningService();
 var curves = Required(extrusion.CreatePlan(pid, cid, 100, 80, mergedGrid, layer, " 007 "));
 Check(curves.Select(curve => curve.Kind).Distinct().Count() == 3, "Fixture must include frame, atomic, and merged curves");
 Check(curves.All(curve => curve.UserTextWrites[releaseKey] == "007"), "Every curve kind inherits text release, retaining zeros");
+Check(curves.All(curve => !curve.UserTextWrites.ContainsKey("CW_1.05_RELEASE")), "Curves must not write the former release key");
 Check(curves.All(curve => curve.Cid.StartsWith(cid + "-", StringComparison.Ordinal)), "Role CID must remain unchanged");
 foreach (string? absent in new string?[] { null, "", "  " })
 {
@@ -36,6 +38,7 @@ var panelText = new Dictionary<string, string>(StringComparer.Ordinal)
     [PanelCladdingSpawnPlanningService.CidUserTextKey] = cid,
     [PanelCladdingSpawnPlanningService.WallTypeUserTextKey] = "WT01",
     [releaseKey.ToLowerInvariant()] = " 007 ",
+    ["CW_1.05_RELEASE"] = "OLD-IGNORED",
     ["parent"] = "1",
     ["CW_4.00_CLADDING_0A"] = "GL01"
 };

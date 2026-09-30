@@ -1,7 +1,9 @@
 # Panel Cladding Scoped Save Smoke
 
 Validates absent topology masks as the default `PCSpawnCrv` state, sparse default persistence, and
-the editor's three save scopes.
+the editor's three save scopes. Every scope removes all four exact retired cladding
+type aliases (including case variants), returns no type code, and preserves unrelated
+CAD type metadata. The UI exposes no cladding type preview and retains frame typology.
 
 Run:
 

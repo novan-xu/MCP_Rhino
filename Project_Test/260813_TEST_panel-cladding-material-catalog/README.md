@@ -10,7 +10,7 @@ The smoke verifies:
 
 - creation and round-trip reading of a seven-entry `Materials` worksheet;
 - table filtering, frozen header, exact BKT colors, and absence of generated type sheets;
-- panel save without a workbook, including the Rhino type-code write and legacy signature cleanup;
+- panel save without a workbook, with no cladding type-code write and legacy signature cleanup;
 - sidebar ordering, `CLADDING TYPE` naming, bright-red selection overwrite, and centered dash source contract.
 
 `extract_bkt_materials.py` is a read-only migration helper. It reads the BKT `.3dm` with `rhino3dm`,

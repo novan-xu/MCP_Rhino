@@ -26,7 +26,7 @@ internal static class Program
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 ["CW_1.01_PID"] = "TARGET-01",
-                ["CW_1.05_RELEASE"] = "R8",
+                ["CW_1.05_LOT"] = "R8",
                 ["CW_1.07_WALL_TYPE"] = "WT-01",
                 ["CW_1.02_CID"] = "TARGET-01-PANEL",
                 ["Plane"] = "target-frame",
@@ -74,7 +74,7 @@ internal static class Program
             "PCMatchSrf must retire the persisted Signature key on a touched target.");
         foreach (string preserved in new[]
         {
-            "CW_1.01_PID", "CW_1.05_RELEASE", "CW_1.07_WALL_TYPE", "CW_1.02_CID", "Plane", "CustomNote",
+            "CW_1.01_PID", "CW_1.05_LOT", "CW_1.07_WALL_TYPE", "CW_1.02_CID", "Plane", "CustomNote",
             "CW_2.03_OFFSET_H0", "CW_2.04_OFFSET_V0", "CW_2.04_OFFSET_V1",
             PanelCladdingKeyService.TypeCodeKey,
             PanelCladdingKeyService.SegmentMaskKey, PanelCladdingKeyService.MergeMaskKey

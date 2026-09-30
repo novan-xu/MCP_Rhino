@@ -1,6 +1,6 @@
 # Panel Cladding Logic Persistence Smoke
 
-Validates the material-free `CW_2.08_CLADDING_LOGIC` contract and its use by `PCSyncSrf`.
+Validates the material-free `CW_2.13_CLADDING_LOGIC` contract and its use by `PCSyncSrf`.
 
 Coverage includes:
 

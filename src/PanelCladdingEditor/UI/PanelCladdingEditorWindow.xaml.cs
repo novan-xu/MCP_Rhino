@@ -924,7 +924,7 @@ public partial class PanelCladdingEditorWindow : Window
             _hiddenExtrusions);
         PanelGridCanvas.SetExtrusionAssignments(VisibleAssignmentMap());
         DividerOffsetList.ItemsSource = BuildOffsetDisplay(PanelCladdingGridCanvas.UnitLabel(_layout.ModelUnitScaleToMillimeters));
-        UpdateTypePreview();
+        UpdateWorkbookStatus();
         UpdateFrameTypologyPreview();
     }
 
@@ -1385,7 +1385,7 @@ public partial class PanelCladdingEditorWindow : Window
         MarkCladdingDirty();
         PanelGridCanvas.SetValues(_values, MaterialMap());
         UpdateSelectionUi(syncAssignmentMode: true);
-        UpdateTypePreview();
+        UpdateWorkbookStatus();
         ShowToast(toast);
     }
 
@@ -1513,7 +1513,6 @@ public partial class PanelCladdingEditorWindow : Window
         ExtrusionLegendSection.Visibility = extrusion ? Visibility.Visible : Visibility.Collapsed;
         CladdingAssignmentSection.Visibility = extrusion ? Visibility.Collapsed : Visibility.Visible;
         ExtrusionAssignmentSection.Visibility = extrusion ? Visibility.Visible : Visibility.Collapsed;
-        CladdingTypeSection.Visibility = extrusion ? Visibility.Collapsed : Visibility.Visible;
         FrameTypologySection.Visibility = extrusion ? Visibility.Visible : Visibility.Collapsed;
         ExtrusionActions.Visibility = extrusion ? Visibility.Visible : Visibility.Collapsed;
         PanelGridCanvas.SetExtrusionState(
@@ -2320,29 +2319,6 @@ public partial class PanelCladdingEditorWindow : Window
         UpdateWorkbookStatus();
     }
 
-    private void UpdateTypePreview()
-    {
-        if (_layout is null)
-        {
-            TypeCodeText.Text = "TYPE-";
-            return;
-        }
-        PanelCladdingLayout previewLayout = BuildWorkingLayout();
-        IReadOnlyDictionary<string, string> expandedValues = _logicalCells.Expand(
-            previewLayout.Cells,
-            previewLayout.Topology,
-            _values);
-        OperationResponse<PanelCladdingTypeIdentity> response = _controller.PreviewType(
-            previewLayout,
-            expandedValues,
-            previewLayout.SystemCode);
-        TypeCodeText.Text = response.Success && response.Data is not null
-            ? response.Data.TypeCode
-            : $"{NormalizeSystemCode(_layout.SystemCode)}-{_layout.ColumnCount}X{_layout.RowCount}-PENDING";
-        TypeCodeText.ToolTip = response.Success ? null : response.Message;
-        UpdateWorkbookStatus();
-    }
-
     private void UpdateFrameTypologyPreview()
     {
         if (_layout is null)
@@ -2437,11 +2413,6 @@ public partial class PanelCladdingEditorWindow : Window
             }
 
             _workbookPath = response.Data.WorkbookPath;
-            if ((scope is PanelCladdingSaveScope.Cladding or PanelCladdingSaveScope.Both) &&
-                !string.IsNullOrWhiteSpace(response.Data.TypeCode))
-            {
-                TypeCodeText.Text = response.Data.TypeCode;
-            }
             if (scope is PanelCladdingSaveScope.Extrusions or PanelCladdingSaveScope.Both)
             {
                 FrameTypologyText.Text = string.IsNullOrWhiteSpace(response.Data.FrameTypology)

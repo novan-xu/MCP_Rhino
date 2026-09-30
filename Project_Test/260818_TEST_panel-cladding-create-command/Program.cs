@@ -49,7 +49,7 @@ internal static class Program
             [PanelCladdingKeyService.SignatureKey] = "v1:sha256:configured",
             [PanelCladdingKeyService.LegacySignatureKey] = "legacy-signature",
             ["CW_1.01_PID"] = "PANEL-01",
-            ["CW_1.05_RELEASE"] = "R2",
+            ["CW_1.05_LOT"] = "R2",
             ["CW_1.07_WALL_TYPE"] = "WT01",
             ["CW_1.02_CID"] = "PANEL-01-CID",
             ["Custom"] = "preserve"
@@ -107,7 +107,7 @@ internal static class Program
         }
         foreach (string preserved in new[]
         {
-            "CW_1.01_PID", "CW_1.05_RELEASE", "CW_1.07_WALL_TYPE", "CW_1.02_CID", "Custom"
+            "CW_1.01_PID", "CW_1.05_LOT", "CW_1.07_WALL_TYPE", "CW_1.02_CID", "Custom"
         })
         {
             Require(!panel.UserTextDeletes.Contains(preserved, StringComparer.OrdinalIgnoreCase),

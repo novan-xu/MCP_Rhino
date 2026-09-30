@@ -118,7 +118,7 @@ public sealed partial class LivePanelCladdingRepository : ILivePanelCladdingRepo
                     : OperationResponse<PanelAttributeCommitResult>.Fail(externalOnly.Message);
             }
 
-            uint undoRecord = document.BeginUndoRecord("Assign Panel Cladding Type");
+            uint undoRecord = document.BeginUndoRecord("Save Panel Cladding Attributes");
             bool objectModified = false;
             try
             {

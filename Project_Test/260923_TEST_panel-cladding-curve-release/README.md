@@ -1,5 +1,9 @@
 # Curve release inheritance regression
 
+As of 2026-09-30, the canonical stored key is `CW_1.05_LOT`. Internal release model
+names remain for compatibility. Current fixtures assert the literal lot key and
+include a conflicting former `CW_1.05_RELEASE` value to verify it is ignored.
+
 From the repository root:
 
 ```powershell

@@ -9,15 +9,16 @@ namespace PanelCladdingEditor.Application.Services.PanelCladding;
 public sealed partial class PanelCladdingKeyService
 {
     public const int OffsetDecimalPlaces = 5;
-    public const string TypeCodeKey = "CW_1.10_CLADDING_TYPE";
+    // Retained only to clean up suspended cladding type metadata.
+    public const string TypeCodeKey = "CW_2.14_CLADDING_TYPE";
     public const string FrameTypologyKey = "CW_1.5D_FRAME TYPOLOGY";
     public const string LegacyTypeCodeKey = "CW_4.00_CLADDING_TYPE";
     public const string SignatureKey = "Signature";
     public const string LegacySignatureKey = "CW_4.00_CLADDING_SIGNATURE";
-    public const string SegmentMaskKey = "CW_2.05_SEGMENT_MASK";
-    public const string MergeMaskKey = "CW_2.06_MERGE_MASK";
-    public const string HideMaskKey = "CW_2.07_HIDE_MASK";
-    public const string CladdingLogicKey = "CW_2.08_CLADDING_LOGIC";
+    public const string SegmentMaskKey = "CW_2.12_DELETE_MASK";
+    public const string MergeMaskKey = "CW_2.10_MERGE_MASK";
+    public const string HideMaskKey = "CW_2.11_HIDE_MASK";
+    public const string CladdingLogicKey = "CW_2.13_CLADDING_LOGIC";
     public const string FrameAssignmentsKey = "CW_2.09_FRAME_ASSIGNMENTS";
     public const string UnitDimensionKey = "CW_2.00_UNIT_DIMENSION";
     public const string UnitWidthKey = "CW_2.01_UNIT_WIDTH";
@@ -30,6 +31,12 @@ public sealed partial class PanelCladdingKeyService
     private const byte HidePayloadKind = 3;
     private const int TopologyHeaderLength = 10;
     private const int MaxTopologyBitCount = 16_000_000;
+
+    public static bool IsRetiredCladdingTypeKey(string key) =>
+        string.Equals(key, TypeCodeKey, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(key, "CW_2.13_CLADDING_TYPE", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(key, "CW_1.10_CLADDING_TYPE", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(key, LegacyTypeCodeKey, StringComparison.OrdinalIgnoreCase);
 
     public OperationResponse<PanelCladdingKeySet> Parse(
         IReadOnlyDictionary<string, string> userText,
@@ -179,8 +186,7 @@ public sealed partial class PanelCladdingKeyService
         }
 
         return CladdingCellRegex().IsMatch(key) ||
-            string.Equals(key, TypeCodeKey, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(key, LegacyTypeCodeKey, StringComparison.OrdinalIgnoreCase) ||
+            IsRetiredCladdingTypeKey(key) ||
             string.Equals(key, SignatureKey, StringComparison.OrdinalIgnoreCase) ||
             string.Equals(key, LegacySignatureKey, StringComparison.OrdinalIgnoreCase) ||
             string.Equals(key, CladdingLogicKey, StringComparison.OrdinalIgnoreCase) ||

@@ -7,7 +7,8 @@ namespace PanelCladdingEditor.Application.Services.PanelCladding;
 public sealed class PanelCladdingSurfaceSyncService : IPanelCladdingSurfaceSyncService
 {
     private readonly ILivePanelCladdingSurfaceSyncRepository _liveRepository;
-    private readonly PanelCladdingTypeSignatureService _signatureService;
+    private readonly PanelCladdingKeyService _keys = new();
+    private readonly PanelCladdingRegionService _regions;
     private readonly PanelCladdingSurfaceSyncPlanningService _planning;
 
     public PanelCladdingSurfaceSyncService(
@@ -16,7 +17,8 @@ public sealed class PanelCladdingSurfaceSyncService : IPanelCladdingSurfaceSyncS
         PanelCladdingSurfaceSyncPlanningService planning)
     {
         _liveRepository = liveRepository;
-        _signatureService = signatureService;
+        _ = signatureService; // Retain constructor compatibility while type generation is suspended.
+        _regions = new PanelCladdingRegionService(_keys);
         _planning = planning;
     }
 
@@ -68,20 +70,26 @@ public sealed class PanelCladdingSurfaceSyncService : IPanelCladdingSurfaceSyncS
             .Distinct()
             .ToArray();
 
-        var identities = new Dictionary<Guid, PanelCladdingTypeIdentity>();
         var persistedCellValues = new Dictionary<Guid, IReadOnlyDictionary<string, string>>();
         foreach (PanelCladdingSurfaceSyncPanelPlan panel in changedPanels)
         {
-            OperationResponse<PanelCladdingTypeIdentity> identity = _signatureService.Create(
-                panel.Layout,
-                panel.CellValues,
-                panel.Layout.SystemCode);
-            if (!identity.Success || identity.Data is null)
+            if (!panel.Layout.CanSave)
             {
                 return OperationResponse<PanelCladdingSurfaceSyncResult>.Fail(
-                    $"PANEL_CLADDING_SURFACE_SYNC_IDENTITY_FAILED: {panel.ObjectId:D}: {identity.Message}");
+                    $"PANEL_CLADDING_UNSUPPORTED_PROJECTION: {panel.Layout.GeometryDiagnostic}");
             }
-            identities[panel.ObjectId] = identity.Data;
+            OperationResponse<PanelCladdingTopologyPayloads> topology = _keys.EncodeTopology(
+                panel.Layout.Topology, panel.Layout.HorizontalOffsets.Count, panel.Layout.VerticalOffsets.Count);
+            if (!topology.Success)
+            {
+                return OperationResponse<PanelCladdingSurfaceSyncResult>.Fail(topology.Message);
+            }
+            OperationResponse<PanelCladdingRegionSet> regions = _regions.Resolve(panel.Layout.Cells, panel.CellValues);
+            if (!regions.Success)
+            {
+                return OperationResponse<PanelCladdingSurfaceSyncResult>.Fail(
+                    $"PANEL_CLADDING_SURFACE_SYNC_CELL_GRAPH_INVALID: {panel.ObjectId:D}: {regions.Message}");
+            }
 
             OperationResponse<IReadOnlyDictionary<string, string>> persisted =
                 BuildPersistedCellValues(panel.Layout, panel.CellValues);
@@ -94,10 +102,8 @@ public sealed class PanelCladdingSurfaceSyncService : IPanelCladdingSurfaceSyncS
         }
 
         var panelWrites = new List<PanelCladdingSurfaceSyncPanelWrite>(changedPanels.Length);
-        var types = new List<PanelCladdingSurfaceSyncTypeResult>(changedPanels.Length);
         foreach (PanelCladdingSurfaceSyncPanelPlan panel in changedPanels)
         {
-            PanelCladdingTypeIdentity identity = identities[panel.ObjectId];
             panelWrites.Add(new PanelCladdingSurfaceSyncPanelWrite
             {
                 ObjectId = panel.ObjectId,
@@ -105,23 +111,12 @@ public sealed class PanelCladdingSurfaceSyncService : IPanelCladdingSurfaceSyncS
                 HorizontalOffsets = panel.Layout.HorizontalOffsets,
                 VerticalOffsets = panel.Layout.VerticalOffsets,
                 Topology = panel.Layout.Topology,
-                // The signature uses a normalized graph, but Rhino persistence must retain the
-                // exact geometry-derived owner/parent graph produced by PCSyncSrf.
+                // Preserve the exact geometry-derived owner/parent graph produced by PCSyncSrf.
                 CellValues = persistedCellValues[panel.ObjectId],
                 CladdingLogic = panel.CladdingLogic,
-                TypeCode = identity.TypeCode,
-                StoredSignature = identity.StoredSignature,
                 UnitWidth = PanelCladdingKeyService.FormatUnitDimension(panel.Layout.Width),
                 UnitHeight = PanelCladdingKeyService.FormatUnitDimension(panel.Layout.Height),
                 UnitDimension = $"{PanelCladdingKeyService.FormatUnitDimension(panel.Layout.Width)}x{PanelCladdingKeyService.FormatUnitDimension(panel.Layout.Height)}"
-            });
-            types.Add(new PanelCladdingSurfaceSyncTypeResult
-            {
-                PanelObjectId = panel.ObjectId,
-                TypeCode = identity.TypeCode,
-                StoredSignature = identity.StoredSignature,
-                SheetName = string.Empty,
-                ReusedExistingType = false
             });
         }
 
@@ -143,7 +138,7 @@ public sealed class PanelCladdingSurfaceSyncService : IPanelCladdingSurfaceSyncS
                 PanelWrites = panelWrites
             },
             () => OperationResponse.Ok("No workbook type sheets are generated."),
-            types,
+            Array.Empty<PanelCladdingSurfaceSyncTypeResult>(),
             plan.Surfaces.Count,
             plan.Curves.Count);
     }
