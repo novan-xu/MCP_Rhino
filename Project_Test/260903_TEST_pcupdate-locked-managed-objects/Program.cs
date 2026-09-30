@@ -91,9 +91,10 @@ internal static class Program
             "Packaging",
             "PanelCladdingEditor",
             "package-manifest.json")));
-        Require(manifest.RootElement.GetProperty("version").GetString() == "1.0.73",
-            "The current protected-object PCUpdate fix must ship as package 1.0.73.");
-        Console.WriteLine("[OK] package version is 1.0.73");
+        Require(Version.TryParse(manifest.RootElement.GetProperty("version").GetString(), out Version? version) &&
+                version >= new Version(1, 0, 73),
+            "Protected-object PCUpdate support requires package 1.0.73 or later.");
+        Console.WriteLine("[OK] package supports protected-object PCUpdate");
     }
 
     private static string FindRepositoryRoot()

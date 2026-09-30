@@ -77,7 +77,7 @@ public sealed class LivePanelCladdingUpdateService : ILivePanelCladdingUpdateSer
         {
             IReadOnlyList<PanelCladdingExistingDependency> existing = ReadManagedDependencies(
                 document,
-                sources.Data.Select(source => source.PanelId).ToHashSet(StringComparer.OrdinalIgnoreCase));
+                sources.Data);
             OperationResponse<PanelCladdingDependencyReconciliationPlan> plan =
                 _reconciliation.CreatePlan(
                     prepared.Select(item => item.Expected).ToArray(),
@@ -125,7 +125,8 @@ public sealed class LivePanelCladdingUpdateService : ILivePanelCladdingUpdateSer
                 return OperationResponse<IReadOnlyList<PanelSource>>.Fail(
                     $"PANEL_CLADDING_UPDATE_DUPLICATE_SELECTED_PID: {panelId}");
             }
-            sources.Add(new PanelSource(objectId, panelId));
+            sources.Add(new PanelSource(objectId, panelId,
+                PanelCladdingCidService.ResolvePanelCid(panelId, LivePanelCladdingCidService.Read(rhinoObject.Attributes))));
         }
         return OperationResponse<IReadOnlyList<PanelSource>>.Ok(sources);
     }
@@ -180,8 +181,9 @@ public sealed class LivePanelCladdingUpdateService : ILivePanelCladdingUpdateSer
 
     private static IReadOnlyList<PanelCladdingExistingDependency> ReadManagedDependencies(
         RhinoDoc document,
-        IReadOnlySet<string> selectedPanelIds)
+        IReadOnlyList<PanelSource> sources)
     {
+        var selectedPanels = sources.ToDictionary(source => source.PanelId, StringComparer.OrdinalIgnoreCase);
         var result = new List<PanelCladdingExistingDependency>();
         foreach (RhinoObject rhinoObject in document.Objects.GetObjectList(
             new ObjectEnumeratorSettings
@@ -216,7 +218,8 @@ public sealed class LivePanelCladdingUpdateService : ILivePanelCladdingUpdateSer
             string cid = GetCanonicalUserText(
                 rhinoObject.Attributes,
                 PanelCladdingSpawnPlanningService.CidUserTextKey).Trim();
-            if (!selectedPanelIds.Contains(panelId) || cid.Length == 0)
+            if (!selectedPanels.TryGetValue(panelId, out PanelSource? source) || cid.Length == 0 ||
+                !PanelCladdingCidService.IncludesDependency(panelId, source.PanelCid, cid))
             {
                 continue;
             }
@@ -245,6 +248,11 @@ public sealed class LivePanelCladdingUpdateService : ILivePanelCladdingUpdateSer
         var updatedSurfaces = new List<Guid>();
         var updatedCurves = new List<Guid>();
         var deleted = new List<Guid>();
+        var panelCidChanges = LivePanelCladdingCidService.Prepare(document, sourcePanelIds);
+        if (!panelCidChanges.Success || panelCidChanges.Data is null)
+        {
+            return OperationResponse<PanelCladdingUpdateResult>.Fail(panelCidChanges.Message);
+        }
         uint undoRecord = document.CurrentUndoRecordSerialNumber;
         bool ownsUndoRecord = undoRecord == 0U;
         if (ownsUndoRecord)
@@ -316,6 +324,16 @@ public sealed class LivePanelCladdingUpdateService : ILivePanelCladdingUpdateSer
                     }
                     deleted.Add(objectId);
                     documentMutationOccurred = true;
+                }
+            }
+
+            if (outcome is null)
+            {
+                OperationResponse cidCommit = LivePanelCladdingCidService.Apply(document, panelCidChanges.Data);
+                documentMutationOccurred |= panelCidChanges.Data.Any(change => change.Applied);
+                if (!cidCommit.Success)
+                {
+                    outcome = OperationResponse<PanelCladdingUpdateResult>.Fail(cidCommit.Message);
                 }
             }
 
@@ -526,7 +544,7 @@ public sealed class LivePanelCladdingUpdateService : ILivePanelCladdingUpdateSer
         }
     }
 
-    private sealed record PanelSource(Guid ObjectId, string PanelId);
+    private sealed record PanelSource(Guid ObjectId, string PanelId, string PanelCid);
 
     private sealed class PreparedDependency : IDisposable
     {

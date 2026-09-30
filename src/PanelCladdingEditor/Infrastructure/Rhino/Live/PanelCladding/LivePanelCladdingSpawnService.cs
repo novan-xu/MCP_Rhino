@@ -96,6 +96,11 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
                 }
             }
 
+            var panelCidChanges = LivePanelCladdingCidService.Prepare(document, sourcePanelIds);
+            if (!panelCidChanges.Success || panelCidChanges.Data is null)
+            {
+                return OperationResponse<PanelCladdingSpawnResult>.Fail(panelCidChanges.Message);
+            }
             uint undoRecord = document.BeginUndoRecord(
                 scope == PanelCladdingObjectScope.Surfaces
                     ? "Spawn Panel Cladding Surfaces"
@@ -180,6 +185,14 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
                     }
                 }
 
+                OperationResponse cidCommit = LivePanelCladdingCidService.Apply(document, panelCidChanges.Data);
+                if (!cidCommit.Success)
+                {
+                    RollBackCreatedObjects(document, createdIds);
+                    bool restored = LivePanelCladdingCidService.Restore(document, panelCidChanges.Data);
+                    return OperationResponse<PanelCladdingSpawnResult>.Fail(cidCommit.Message +
+                        (restored ? string.Empty : "; PANEL_CLADDING_CID_ROLLBACK_FAILED"));
+                }
                 document.Views.Redraw();
                 return OperationResponse<PanelCladdingSpawnResult>.Ok(new PanelCladdingSpawnResult
                 {
@@ -195,8 +208,10 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
             catch (Exception ex)
             {
                 RollBackCreatedObjects(document, createdIds);
+                bool restored = LivePanelCladdingCidService.Restore(document, panelCidChanges.Data);
                 return OperationResponse<PanelCladdingSpawnResult>.Fail(
-                    $"PANEL_CLADDING_SPAWN_FAILED: {ex.Message}");
+                    $"PANEL_CLADDING_SPAWN_FAILED: {ex.Message}" +
+                    (restored ? string.Empty : "; PANEL_CLADDING_CID_ROLLBACK_FAILED"));
             }
             finally
             {
@@ -276,6 +291,10 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
             string cid = GetRequiredUserText(
                 userText,
                 PanelCladdingSpawnPlanningService.CidUserTextKey);
+            if (PanelCladdingCidService.PanelCidWrite(userText) is not null)
+            {
+                cid = PanelCladdingCidService.ResolvePanelCid(pid, userText);
+            }
             if (pid.Length == 0 || cid.Length == 0)
             {
                 return OperationResponse<PreparedPanel>.Fail(
@@ -288,7 +307,8 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
                     layout.Width,
                     layout.Height,
                     keySet,
-                    layout.LayerFullPath);
+                    layout.LayerFullPath,
+                    GetRequiredUserText(userText, PanelCladdingSpawnPlanningService.ReleaseUserTextKey));
             if (!curvePlan.Success || curvePlan.Data is null)
             {
                 return OperationResponse<PreparedPanel>.Fail(curvePlan.Message);

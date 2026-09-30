@@ -21,7 +21,8 @@ public sealed class PanelCladdingExtrusionPlanningService
         double panelWidth,
         double panelHeight,
         PanelCladdingKeySet keySet,
-        string sourcePanelLayerPath)
+        string sourcePanelLayerPath,
+        string? releaseNumber = null)
     {
         if (string.IsNullOrWhiteSpace(panelId) || string.IsNullOrWhiteSpace(panelCid))
         {
@@ -154,6 +155,10 @@ public sealed class PanelCladdingExtrusionPlanningService
                 [PanelCladdingSpawnPlanningService.CidUserTextKey] = curveCid,
                 [CurveUserTextKey] = curve.Code
             };
+            if (!string.IsNullOrWhiteSpace(releaseNumber))
+            {
+                userText[PanelCladdingSpawnPlanningService.ReleaseUserTextKey] = releaseNumber.Trim();
+            }
             if (assignedCodes.Count > 0)
             {
                 userText[AssignedExtrusionsUserTextKey] = string.Join(';', assignedCodes);

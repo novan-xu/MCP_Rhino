@@ -96,6 +96,7 @@ public sealed class LivePanelCladdingMatchService : ILivePanelCladdingMatchServi
             ObjectAttributes original = rhinoObject.Attributes.Duplicate();
             ObjectAttributes proposed = rhinoObject.Attributes.Duplicate();
             ApplyPlannedUserText(proposed, targetPlan);
+            LivePanelCladdingCidService.Normalize(proposed);
             prepared.Add(new PreparedTarget(rhinoObject, original, proposed, targetPlan));
         }
 
