@@ -28,7 +28,8 @@ intermediate curves are DarkGreen (`RGB 0,100,0`). `PCSpawnCrv` applies the colo
 while `PCUpdate` and `PCSyncCrv` correct existing curves within the selected-panel scope.
 
 Panel cladding saves persist material-independent cell ownership under
-`CW_2.08_CLADDING_LOGIC`. `PCSyncSrf` combines that saved owner graph with current Rhino surface
+`CW_2.13_CLADDING_LOGIC`. This key stores ownership JSON, separate from the binary
+hidden-segment mask in `CW_2.11_HIDE_MASK`. `PCSyncSrf` combines that saved owner graph with current Rhino surface
 coverage and material layers, while edited splits and merges remain geometry-authoritative.
 
 Panels with user text `parent=1` or `child=1` use a PID-derived CID ending in `-P`
@@ -37,9 +38,12 @@ their cell/curve code, for example `CID_BKT_W1_03_01-P-0A` and
 `CID_BKT_W1_03_01-P-INT_B1`. Existing PC save/create/match/spawn/sync/update paths
 apply the rule. Parent takes precedence if both flags are `1`.
 
-Baked extrusion curves also inherit the panel's `CW_1.05_RELEASE` value, including
-leading zeros. `PCUpdate` and `PCSyncCrv` refresh existing curve release metadata
-from the panel; an absent panel release leaves the curve without that key.
+Baked cladding surfaces and extrusion curves inherit the panel's `CW_1.05_LOT`
+value, including leading zeros. `PCUpdate`, `PCSyncSrf`, and `PCSyncCrv` use this
+canonical lot key for inherited metadata. An absent panel lot leaves synced
+dependencies without that key; surface spawning requires a populated lot.
+Version 1.0.79 replaces `CW_1.05_RELEASE` with `CW_1.05_LOT` without an old-key
+fallback. Existing Rhino data must already use the new name.
 
 Every baked cladding Brep persists its complete logical coverage under
 `Merge_Mark`, including the owner: a single-cell surface stores `0A`, while a merged
@@ -53,16 +57,25 @@ written. Mixed or invalid coverage fails before mutation rather than guessing. T
 
 The plug-in no longer writes the panel user-text keys `Signature` or
 `CW_4.00_CLADDING_SIGNATURE`. Touched panels remove either legacy value; layout compatibility and
-reconciliation use the authoritative `CW_2.05`-`CW_2.08` topology/logic plus `CW_4.xx` material and
-parent assignments directly. `CW_1.10_CLADDING_TYPE` remains supported.
+reconciliation use the authoritative `CW_2.10`-`CW_2.13` topology/logic plus `CW_4.xx` material and
+parent assignments directly.
 
-Topology masks are sparse and independent: `CW_2.05` is stored only for missing segments,
-`CW_2.06` only for merges, and `CW_2.07` only for hidden segments. Missing mask attributes decode
+Combined cladding types are suspended. Editor saves and surface/curve sync no longer
+calculate or persist `CW_2.14_CLADDING_TYPE`, and the editor no longer shows a cladding
+type preview. Every save scope and changed-panel sync removes that attribute and its
+previous names (`CW_2.13_CLADDING_TYPE`, `CW_1.10_CLADDING_TYPE`, `CW_4.00_CLADDING_TYPE`).
+PCClear also recognizes these retired keys. Material, owner-graph, and topology
+validation remain active. Frame typology is independent and remains enabled.
+The old identity/workbook utilities remain dormant for a future design decision.
+
+Topology masks are sparse and independent: `CW_2.12_DELETE_MASK` is stored only for missing segments,
+`CW_2.10` only for merges, and `CW_2.11` only for hidden segments. Missing mask attributes decode
 as the all-present, all-segmented, all-visible defaults.
+The delete mask retains the former segment mask's binary encoding and polarity.
 
-Generated cladding type codes use `<system>-<columns>X<rows>-<digest>`, for example
-`WT01-4X3-A1B2C3D4`. The cladding marker is implicit in `CW_1.10_CLADDING_TYPE` and is not repeated
-inside the code.
+Version 1.0.78 renames the former `CW_2.05_SEGMENT_MASK`, `CW_2.06_MERGE_MASK`, `CW_2.07_HIDE_MASK`,
+and `CW_2.08_CLADDING_LOGIC` keys to the canonical names above and suspends cladding type metadata.
+Existing documents need value-preserving mask/logic migration before using this version.
 
 The extrusion view maintains an image-backed project catalogue of framing profiles in the workbook
 `Extrusions` sheet. PDF schedule die numbers such as `ALU-H0651` import as `1D-ALU-H0651`; profile

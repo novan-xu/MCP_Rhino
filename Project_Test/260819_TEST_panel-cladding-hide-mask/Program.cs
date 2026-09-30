@@ -20,7 +20,7 @@ internal static class Program
         CurveMatchCopiesAllTopologyMasks();
         EditorExposesAReversibleHiddenState();
         EditorHideDoesNotCollapseTheGrid();
-        Console.WriteLine("[OK] CW_2.07_HIDE_MASK round-trips with legacy two-mask compatibility.");
+        Console.WriteLine("[OK] CW_2.11_HIDE_MASK round-trips with legacy two-mask compatibility.");
         Console.WriteLine("[OK] hidden atoms retain the logical grid and are omitted from PCSpawnCrv plans.");
         Console.WriteLine("[OK] full hidden tracks do not collapse or renumber cladding cells.");
         Console.WriteLine("[OK] PCMatchCrv and PCEditor include the hide state.");
@@ -49,7 +49,7 @@ internal static class Program
         Require(legacy.HiddenSegments.Count == 0,
             "A legacy segment/merge pair did not default to an empty hide mask.");
         Require(PanelCladdingKeyService.IsTopologyKey(PanelCladdingKeyService.HideMaskKey),
-            "CW_2.07_HIDE_MASK is not owned by topology cleanup/persistence.");
+            "CW_2.11_HIDE_MASK is not owned by topology cleanup/persistence.");
 
         PanelCladdingTopologyState invalid = new()
         {

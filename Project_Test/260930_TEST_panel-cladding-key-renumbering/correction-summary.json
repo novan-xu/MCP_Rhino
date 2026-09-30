@@ -1,0 +1,11 @@
+{
+  "success": true,
+  "oldKey": "CW_2.12_HIDE_MASK",
+  "newKey": "CW_2.12_CLADDING_LOGIC",
+  "renamedValuesVerified": 901,
+  "unrelatedAttributesVerified": 32943,
+  "totalObjectsBefore": 1321,
+  "totalObjectsAfter": 1321,
+  "oldKeysRemaining": 0,
+  "differences": []
+}

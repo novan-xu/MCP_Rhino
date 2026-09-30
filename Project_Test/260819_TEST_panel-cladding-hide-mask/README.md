@@ -1,6 +1,6 @@
 # Panel Cladding Hide Mask Smoke
 
-Validates the `CW_2.07_HIDE_MASK` contract:
+Validates the `CW_2.11_HIDE_MASK` contract:
 
 - dimensioned binary hide-mask round-trip and legacy two-mask compatibility;
 - hidden atomic segments remain logical cladding dividers;

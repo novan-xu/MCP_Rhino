@@ -44,8 +44,8 @@ internal static class Program
             var workbook = new OpenXmlPanelCladdingWorkbookRepository();
 
             RequirePanelCladding(
-                PanelCladdingKeyService.TypeCodeKey == "CW_1.10_CLADDING_TYPE",
-                "The cladding type key must use the canonical CW_1.10 schema location.");
+                PanelCladdingKeyService.TypeCodeKey == "CW_2.14_CLADDING_TYPE",
+                "The cladding type key must use the canonical CW_2.14 schema location.");
             RequirePanelCladding(
                 PanelCladdingKeyService.LegacyTypeCodeKey == "CW_4.00_CLADDING_TYPE",
                 "The legacy type key must remain explicit for save-time migration.");

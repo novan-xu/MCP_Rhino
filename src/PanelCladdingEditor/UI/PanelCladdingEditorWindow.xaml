@@ -741,23 +741,6 @@
                                 </StackPanel>
                             </Border>
 
-                            <Border x:Name="CladdingTypeSection" Style="{StaticResource SideSection}">
-                                <StackPanel>
-                                    <TextBlock Text="CLADDING TYPE" Style="{StaticResource EyebrowText}" />
-                                    <Border Margin="0,11,0,0" Padding="12,11" CornerRadius="6"
-                                            Background="{StaticResource RaisedBrush}" BorderBrush="{StaticResource BorderBrush}"
-                                            BorderThickness="1">
-                                        <StackPanel>
-                                            <TextBlock Text="CALCULATED KEY" Style="{StaticResource EyebrowText}" />
-                                            <TextBlock x:Name="TypeCodeText" Text="TYPE—" FontFamily="Consolas" FontSize="16"
-                                                       FontWeight="SemiBold" Margin="0,2,0,3" />
-                                            <TextBlock Text="Stored with the panel’s cladding key/value set."
-                                                       Foreground="{StaticResource MutedBrush}" FontSize="11" />
-                                        </StackPanel>
-                                    </Border>
-                                </StackPanel>
-                            </Border>
-
                             <Border x:Name="FrameTypologySection" Style="{StaticResource SideSection}" Visibility="Collapsed">
                                 <StackPanel>
                                     <TextBlock Text="FRAME TYPOLOGY" Style="{StaticResource EyebrowText}" />

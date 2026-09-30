@@ -11,7 +11,7 @@ public sealed class PanelCladdingSaveService
     private readonly PanelCladdingLogicService _claddingLogic;
     private readonly PanelCladdingLogicalCellService _logicalCells;
     private readonly PanelCladdingTopologyNormalizationService _topologyNormalizer;
-    private readonly PanelCladdingTypeSignatureService _signatureService;
+    private readonly PanelCladdingRegionService _regions;
     private readonly PanelFrameAssignmentService _frameAssignments;
     private readonly PanelFrameTypologyService _frameTypology;
 
@@ -24,7 +24,8 @@ public sealed class PanelCladdingSaveService
         _claddingLogic = new PanelCladdingLogicService();
         _logicalCells = new PanelCladdingLogicalCellService();
         _topologyNormalizer = new PanelCladdingTopologyNormalizationService(_keys);
-        _signatureService = signatureService;
+        _ = signatureService; // Retain constructor compatibility while type generation is suspended.
+        _regions = new PanelCladdingRegionService(_keys);
         _frameAssignments = new PanelFrameAssignmentService();
         _frameTypology = new PanelFrameTypologyService(_keys, _frameAssignments);
     }
@@ -144,41 +145,47 @@ public sealed class PanelCladdingSaveService
 
         var writes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         PanelCladdingCidService.AddPanelCidWrite(writes, layout.SourceUserText);
-        PanelCladdingTypeIdentity? finalIdentity = null;
         PanelFrameTypologyIdentity? finalFrameTypology = null;
         if (saveCladding)
         {
+            if (!requestedLayout.CanSave)
+            {
+                return OperationResponse<PanelCladdingSaveResult>.Fail(
+                    $"PANEL_CLADDING_UNSUPPORTED_PROJECTION: {requestedLayout.GeometryDiagnostic}");
+            }
+            OperationResponse<PanelCladdingTopologyPayloads> validatedTopology = _keys.EncodeTopology(
+                topology, requestedLayout.HorizontalOffsets.Count, requestedLayout.VerticalOffsets.Count);
+            if (!validatedTopology.Success)
+            {
+                return OperationResponse<PanelCladdingSaveResult>.Fail(validatedTopology.Message);
+            }
             IReadOnlyDictionary<string, string> expandedCellValues = _logicalCells.Expand(
                 requestedLayout.Cells,
                 topology,
                 normalizedEdit.CellValues);
-            OperationResponse<PanelCladdingTypeIdentity> identityResponse = _signatureService.Create(
-                requestedLayout,
-                expandedCellValues,
-                request.SystemCode);
-            if (!identityResponse.Success || identityResponse.Data is null)
+            OperationResponse<PanelCladdingRegionSet> regions = _regions.Resolve(
+                requestedLayout.Cells, expandedCellValues, requirePopulatedCells: false);
+            if (!regions.Success || regions.Data is null)
             {
-                return OperationResponse<PanelCladdingSaveResult>.Fail(identityResponse.Message);
+                return OperationResponse<PanelCladdingSaveResult>.Fail(regions.Message);
             }
 
-            finalIdentity = identityResponse.Data;
             IReadOnlyDictionary<string, string> logicalCellValues = _logicalCells.Collapse(
                 requestedLayout.Cells,
                 topology,
-                finalIdentity.NormalizedCellValues);
+                regions.Data.NormalizedCellValues);
             foreach ((string key, string value) in logicalCellValues)
             {
                 writes[key] = PanelCladdingKeyService.EncodeCellValueForStorage(value);
             }
             OperationResponse<string> claddingLogic = _claddingLogic.Encode(
                 requestedLayout.Cells,
-                finalIdentity.NormalizedCellValues);
+                regions.Data.NormalizedCellValues);
             if (!claddingLogic.Success || claddingLogic.Data is null)
             {
                 return OperationResponse<PanelCladdingSaveResult>.Fail(claddingLogic.Message);
             }
             writes[PanelCladdingKeyService.CladdingLogicKey] = claddingLogic.Data;
-            writes[PanelCladdingKeyService.TypeCodeKey] = finalIdentity.TypeCode;
         }
 
         if (saveExtrusions)
@@ -250,9 +257,7 @@ public sealed class PanelCladdingSaveService
                 !writes.ContainsKey(key))
             .ToArray();
         string[] userTextDeletes = obsoleteGridKeys
-            .Concat(saveCladding
-                ? [PanelCladdingKeyService.LegacyTypeCodeKey]
-                : Array.Empty<string>())
+            .Concat(layout.SourceUserText.Keys.Where(PanelCladdingKeyService.IsRetiredCladdingTypeKey))
             .Concat([
                 PanelCladdingKeyService.SignatureKey,
                 PanelCladdingKeyService.LegacySignatureKey
@@ -279,8 +284,6 @@ public sealed class PanelCladdingSaveService
         return OperationResponse<PanelCladdingSaveResult>.Ok(new PanelCladdingSaveResult
         {
             ObjectId = request.ObjectId,
-            TypeCode = finalIdentity?.TypeCode ??
-                GetUserText(layout.SourceUserText, PanelCladdingKeyService.TypeCodeKey),
             FrameTypology = finalFrameTypology?.TypologyCode ??
                 (saveExtrusions
                     ? string.Empty

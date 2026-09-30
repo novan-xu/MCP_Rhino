@@ -100,28 +100,9 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
 
         var discoveredSurfaces = new List<SurfaceReadCandidate>();
         var discoveredCurves = new List<CurveReadCandidate>();
-        var modelTypeAssignments = new List<PanelCladdingWorkbookTypeReference>();
         foreach (RhinoObject rhinoObject in document.Objects.GetObjectList(
             CreateSyncObjectEnumeratorSettings()))
         {
-            if (rhinoObject.Geometry is Brep)
-            {
-                string typeCode = GetCanonicalUserText(
-                    rhinoObject.Attributes,
-                    PanelCladdingKeyService.TypeCodeKey).Trim();
-                string storedSignature = GetCanonicalUserText(
-                    rhinoObject.Attributes,
-                    PanelCladdingKeyService.SignatureKey).Trim();
-                if (typeCode.Length > 0 || storedSignature.Length > 0)
-                {
-                    modelTypeAssignments.Add(new PanelCladdingWorkbookTypeReference
-                    {
-                        ObjectId = rhinoObject.Id,
-                        TypeCode = typeCode,
-                        StoredSignature = storedSignature
-                    });
-                }
-            }
             if (selectedIds.Contains(rhinoObject.Id))
             {
                 continue;
@@ -671,7 +652,7 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
                 Surfaces = surfaces,
                 Curves = curves,
                 Issues = issues,
-                ModelTypeAssignments = modelTypeAssignments
+                ModelTypeAssignments = Array.Empty<PanelCladdingWorkbookTypeReference>()
             });
 
         void AddPanelIssue(PanelReadCandidate panel, string message)
@@ -928,12 +909,12 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
             foreach (string? key in existingKeys)
             {
                 if (key is not null && (_keys.IsOffsetKey(key) || _keys.IsCladdingCellKey(key) ||
-                    PanelCladdingKeyService.IsTopologyKey(key)))
+                    PanelCladdingKeyService.IsTopologyKey(key) ||
+                    PanelCladdingKeyService.IsRetiredCladdingTypeKey(key)))
                 {
                     proposed.DeleteUserString(key);
                 }
             }
-            DeleteUserTextCaseInsensitive(proposed, PanelCladdingKeyService.LegacyTypeCodeKey);
             DeleteUserTextCaseInsensitive(proposed, PanelCladdingKeyService.SignatureKey);
             DeleteUserTextCaseInsensitive(proposed, PanelCladdingKeyService.LegacySignatureKey);
             DeleteUserTextCaseInsensitive(proposed, PanelCladdingKeyService.UnitWidthKey);
@@ -959,7 +940,6 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
             proposed.SetUserString(
                 PanelCladdingKeyService.CladdingLogicKey,
                 panelWrite.CladdingLogic);
-            proposed.SetUserString(PanelCladdingKeyService.TypeCodeKey, panelWrite.TypeCode);
             foreach ((string key, string value) in topology.Data)
             {
                 proposed.SetUserString(key, value);

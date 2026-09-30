@@ -1,0 +1,11 @@
+{
+  "version": "1.0.78",
+  "installationValidated": true,
+  "independentHostValidation": true,
+  "registeredCommands": 11,
+  "registeredRhpHash": "d5094c99f48eb45a4982950aa6b3e7497c2a5a14b978fe2a0ac79782fdb17f08",
+  "allThreeRegistryTimestampsAdvanced": true,
+  "rollbackRhpCount": 1,
+  "loadedInRhino": false,
+  "rhinoRestartRequired": true
+}

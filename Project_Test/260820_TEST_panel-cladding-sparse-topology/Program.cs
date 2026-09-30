@@ -16,9 +16,9 @@ internal static class Program
         VerifyCurveTemplateEligibility(keys);
         VerifySurfaceSyncAndSignatureContracts();
 
-        Console.WriteLine("[OK] default topology persists no 2.05-2.07 attributes.");
+        Console.WriteLine("[OK] default topology persists no 2.10-2.12 mask attributes.");
         Console.WriteLine("[OK] missing, merge, and hide states persist independently.");
-        Console.WriteLine("[OK] hide-only save removes stale default masks and writes only 2.07.");
+        Console.WriteLine("[OK] hide-only save removes stale default masks and writes only 2.11.");
         Console.WriteLine("[OK] absent topology masks parse, match, and spawn as defaults.");
         Console.WriteLine("[OK] PCCrvTemplate skips configured merge codes and no-ops when no merge is possible.");
         Console.WriteLine("[OK] surface sync uses sparse persistence while signatures retain full canonical masks.");

@@ -14,8 +14,15 @@ panel-change separation, per-panel mapping/layer error isolation, hidden-object 
 valid/invalid batch continuation, one prepared batch workbook with in-batch signature reuse, later
 workbook reuse, model-wide used-type retention, unused managed-sheet/index pruning, unrelated-sheet
 preservation, standalone dependencies, service contracts, and unique Rhino command GUID registration.
+Active sync orchestration returns cells and ownership logic with no type codes or
+signatures. The direct workbook checks cover retained compatibility utilities only.
 
-## Live Rhino fixture
+## Historical live Rhino fixture
+
+The workflow below predates the Rhino-only save/sync changes and the 2026-09-30
+cladding type suspension; it is retained as historical context, not current acceptance.
+Current acceptance and live cleanup evidence are in
+`../260930_TEST_panel-cladding-type-suspension/README.md`.
 
 1. Open and save a Rhino document with at least two configured panel Breps and their spawned
    cladding surfaces.
@@ -35,7 +42,7 @@ preservation, standalone dependencies, service contracts, and unique Rhino comma
 7. Confirm each matched surface's `Cladding` value equals its current layer leaf and that no surface
    geometry, layer assignment, color, PID, or CID changes.
 8. Confirm changed panel cell keys reflect the surface layers and receive new canonical
-   `CW_1.10_CLADDING_TYPE` and `Signature` values; unchanged panel configurations retain their type.
+   `CW_2.14_CLADDING_TYPE` and `Signature` values; unchanged panel configurations retain their type.
 9. Open the workbook and confirm every changed type has a typology sheet, while equal signatures
    reuse one type/sheet.
 10. Run Rhino Undo once and confirm the Rhino surface/panel/document metadata batch returns to its

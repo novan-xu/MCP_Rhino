@@ -391,16 +391,12 @@ internal static class Program
                     write.CellValues.Values.SequenceEqual(FinalMaterials) &&
                     write.HorizontalOffsets.SequenceEqual(snapshot.Panels[0].Layout.HorizontalOffsets) &&
                     write.VerticalOffsets.SequenceEqual(snapshot.Panels[0].Layout.VerticalOffsets) &&
-                    !string.IsNullOrWhiteSpace(write.TypeCode) &&
-                    write.StoredSignature.StartsWith("v4:sha256:", StringComparison.Ordinal)),
-                "Final panel writes must carry normalized cells, type codes, and signatures.");
+                    string.IsNullOrEmpty(write.TypeCode) && string.IsNullOrEmpty(write.StoredSignature) &&
+                    !string.IsNullOrWhiteSpace(write.CladdingLogic)),
+                "Final panel writes must carry cells and logic without suspended types/signatures.");
             Require(result.MatchedSurfaceCount == 8 && result.ChangedPanelIds.Count == 2 &&
-                    result.RefreshedSurfaceIds.Count == 2 && result.Types.Count == 2,
+                    result.RefreshedSurfaceIds.Count == 2 && result.Types.Count == 0,
                 "Workflow result counts are incorrect.");
-            Require(result.Types.Select(type => type.TypeCode).Distinct().Count() == 1,
-                "Equal final configurations must calculate one shared cladding type key.");
-            Require(result.Types.All(type => string.IsNullOrEmpty(type.SheetName) && !type.ReusedExistingType),
-                "Surface sync must return Rhino-only cladding keys without worksheet assignments.");
             Require(!File.Exists(workbookPath), "Surface sync must not create a typology workbook.");
 
             PanelCladdingSurfaceSyncPanelSnapshot[] unchangedPanels =
@@ -408,7 +404,6 @@ internal static class Program
                 Panel(PanelOneId, "PID_PANEL_01", BuildLayout(PanelOneId, FinalMaterials)),
                 Panel(PanelTwoId, "PID_PANEL_02", BuildLayout(PanelTwoId, FinalMaterials))
             };
-            PanelCladdingSurfaceSyncTypeResult usedType = result.Types[0];
             PanelCladdingSurfaceSyncSnapshot unchangedSnapshot = Snapshot(
                 unchangedPanels,
                 BuildSurfaces("PID_PANEL_01", FinalMaterials)
@@ -417,8 +412,8 @@ internal static class Program
                 unchangedPanels.Select(panel => new PanelCladdingWorkbookTypeReference
                 {
                     ObjectId = panel.ObjectId,
-                    TypeCode = usedType.TypeCode,
-                    StoredSignature = usedType.StoredSignature
+                    TypeCode = "LEGACY-TYPE-IGNORED",
+                    StoredSignature = "legacy-signature-ignored"
                 }).ToArray());
             var unchangedLive = new CapturingLiveRepository(unchangedSnapshot);
             IPanelCladdingSurfaceSyncService unchangedService = new PanelCladdingSurfaceSyncService(

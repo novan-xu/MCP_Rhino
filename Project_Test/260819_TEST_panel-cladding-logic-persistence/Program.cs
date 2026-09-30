@@ -20,7 +20,7 @@ internal static class Program
         SyncBackfillsAndVerifiesLogic();
         OtherCladdingMutationsMaintainLogic();
 
-        Console.WriteLine("[OK] CW_2.08_CLADDING_LOGIC stores deterministic material-free cell logic.");
+        Console.WriteLine("[OK] CW_2.13_CLADDING_LOGIC stores deterministic material-free cell logic.");
         Console.WriteLine("[OK] PCSyncSrf preserves valid saved owners and uses geometry for edited splits/merges.");
         Console.WriteLine("[OK] missing logic is backward-compatible and malformed logic fails before mutation.");
         Console.WriteLine("[OK] Save, PCCreate, PCMatchSrf, PCSyncSrf, and PCClear maintain the logic attribute.");

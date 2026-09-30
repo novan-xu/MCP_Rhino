@@ -21,7 +21,7 @@ internal static class Program
         EditorFooterExposesThreeScopedSaveActions();
 
         Console.WriteLine("[OK] absent topology masks permit default extrusion planning.");
-        Console.WriteLine("[OK] scoped saves preserve sparse default topology without 2.05-2.07 attributes.");
+        Console.WriteLine("[OK] scoped saves preserve sparse default topology without redundant mask attributes.");
         Console.WriteLine("[OK] editor footer exposes Save Extrusions, Save Cladding, and Save Both with no Exit action.");
         return 0;
     }
@@ -48,7 +48,8 @@ internal static class Program
                 Topology = source.Topology
             },
             source.Width,
-            source.Height);
+            source.Height,
+            source.LayerFullPath);
         Require(planned.Success && planned.Data is not null && planned.Data.Curves.Count > 0,
             $"Absent masks did not plan default extrusion curves: {planned.Message}");
     }
@@ -66,12 +67,12 @@ internal static class Program
                 !cladding.UserTextDeletes.Any(keys.IsOffsetKey),
             "Cladding-only save changed extrusion offsets.");
         Require(source.Cells.All(cell => cladding.UserTextWrites.ContainsKey(cell.UserTextKey)) &&
-                cladding.UserTextWrites.ContainsKey(PanelCladdingKeyService.TypeCodeKey) &&
+                cladding.UserTextWrites.ContainsKey(PanelCladdingKeyService.CladdingLogicKey) &&
                 !cladding.UserTextWrites.ContainsKey(PanelCladdingKeyService.SignatureKey) &&
                 cladding.UserTextDeletes.Contains(
                     PanelCladdingKeyService.SignatureKey,
                     StringComparer.OrdinalIgnoreCase),
-            "Cladding-only save omitted logical cells/type or did not retire Signature.");
+            "Cladding-only save omitted logical cells/logic or did not retire Signature.");
 
         PanelAttributeCommitRequest extrusions = Save(source, PanelCladdingSaveScope.Extrusions);
         Require(!extrusions.UserTextWrites.Keys.Any(PanelCladdingKeyService.IsTopologyKey),
@@ -92,6 +93,20 @@ internal static class Program
                 both.UserTextWrites.Keys.Any(keys.IsCladdingCellKey) &&
                 both.UserTextWrites.Keys.Any(keys.IsOffsetKey),
             "Save Both did not include both scopes with sparse default topology.");
+
+        foreach (PanelAttributeCommitRequest commit in new[] { cladding, extrusions, both })
+        {
+            Require(!commit.UserTextWrites.Keys.Any(PanelCladdingKeyService.IsRetiredCladdingTypeKey),
+                "A save scope recreated suspended cladding type metadata.");
+            foreach (string key in source.SourceUserText.Keys.Where(PanelCladdingKeyService.IsRetiredCladdingTypeKey))
+            {
+                Require(commit.UserTextDeletes.Contains(key, StringComparer.OrdinalIgnoreCase),
+                    $"A save scope retained retired type key {key}.");
+            }
+            Require(!commit.UserTextDeletes.Contains("CW_1.10_CAD_TYPE", StringComparer.OrdinalIgnoreCase),
+                "Retired type cleanup removed unrelated CAD type metadata.");
+        }
+        Console.WriteLine("[OK] every save scope removes all retired cladding type aliases without regenerating a type.");
     }
 
     private static void EditorFooterExposesThreeScopedSaveActions()
@@ -111,6 +126,10 @@ internal static class Program
             WindowStyle = WindowStyle.None
         };
         Required(window.LoadPanel(source.DocumentPath, source.ObjectId), "Load editor");
+        Require(window.FindName("CladdingTypeSection") is null && window.FindName("TypeCodeText") is null,
+            "Editor still displays the suspended cladding type preview.");
+        Require(window.FindName("FrameTypologyText") is not null,
+            "Independent frame typology preview was removed.");
 
         Button extrusion = Named<Button>(window, "SaveExtrusionsButton");
         Button cladding = Named<Button>(window, "SaveCladdingButton");
@@ -143,7 +162,7 @@ internal static class Program
         var keys = new PanelCladdingKeyService();
         var repository = new CapturingRepository(source);
         var save = new PanelCladdingSaveService(repository, new PanelCladdingTypeSignatureService(keys));
-        Required(save.Save(new PanelCladdingSaveRequest
+        PanelCladdingSaveResult result = Required(save.Save(new PanelCladdingSaveRequest
         {
             FilePath = source.DocumentPath,
             ObjectId = source.ObjectId,
@@ -158,6 +177,7 @@ internal static class Program
                 StringComparer.OrdinalIgnoreCase),
             Scope = scope
         }), $"Save {scope}");
+        Require(string.IsNullOrEmpty(result.TypeCode), "Save returned a suspended or stale type code.");
         return repository.LastCommit ?? throw new InvalidOperationException("Save did not prepare a commit.");
     }
 
@@ -182,6 +202,10 @@ internal static class Program
             [PanelCladdingKeyService.GetHorizontalOffsetKey(0)] = "20.00000",
             [PanelCladdingKeyService.GetVerticalOffsetKey(0)] = "15.00000",
             [PanelCladdingKeyService.TypeCodeKey] = "WT01-2X2-EXISTING",
+            ["cw_2.13_cladding_type"] = "INTERIM",
+            ["CW_1.10_CLADDING_TYPE"] = "PREVIOUS",
+            [PanelCladdingKeyService.LegacyTypeCodeKey] = "LEGACY",
+            ["CW_1.10_CAD_TYPE"] = "PRESERVE",
             [PanelCladdingKeyService.SignatureKey] = "v4:sha256:existing"
         };
         return new PanelCladdingLayout

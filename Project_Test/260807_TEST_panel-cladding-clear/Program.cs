@@ -32,7 +32,7 @@ internal static class Program
                 ["CW_2.04_OFFSET_V0"] = "30",
                 ["CW_9.99_OFFSET_CUSTOM"] = "preserve",
                 ["CW_1.01_PID"] = "PANEL-01",
-                ["CW_1.05_RELEASE"] = "R2",
+                ["CW_1.05_LOT"] = "R2",
                 ["CW_1.07_WALL_TYPE"] = "WT01",
                 ["CW_1.02_CID"] = "PANEL-01-CID",
                 ["CW_4.00_CLADDING_NOTE"] = "not a cell",
@@ -72,7 +72,7 @@ internal static class Program
         foreach (string preserved in new[]
         {
             "CW_2.03_OFFSET_H0", "CW_2.04_OFFSET_V0", "CW_9.99_OFFSET_CUSTOM",
-            "CW_1.01_PID", "CW_1.05_RELEASE", "CW_1.07_WALL_TYPE", "CW_1.02_CID",
+            "CW_1.01_PID", "CW_1.05_LOT", "CW_1.07_WALL_TYPE", "CW_1.02_CID",
             "CW_4.00_CLADDING_NOTE", "Custom"
         })
         {
@@ -97,6 +97,7 @@ internal static class Program
         {
             "CW_4.00_CLADDING_0A", "cw_12.34_cladding_27zz",
             PanelCladdingKeyService.TypeCodeKey, PanelCladdingKeyService.SignatureKey,
+            "cw_2.13_cladding_type", "CW_1.10_CLADDING_TYPE",
             PanelCladdingKeyService.LegacyTypeCodeKey, PanelCladdingKeyService.LegacySignatureKey
         })
         {
@@ -107,7 +108,8 @@ internal static class Program
         {
             "", "CW_2.03_OFFSET_H0", "CW_4.0_CLADDING_0A", "CW_4.000_CLADDING_0A",
             "CW_4.00_CLADDING_A0", "CW_4.00_CLADDING_0", "CW_4.00_CLADDING_NOTE",
-            "CW_1.01_PID", "CW_1.05_RELEASE", "CW_1.07_WALL_TYPE", "CW_1.02_CID"
+            "CW_1.01_PID", "CW_1.05_LOT", "CW_1.07_WALL_TYPE", "CW_1.02_CID",
+            "CW_1.10_CAD_TYPE", "CW_2.14_CLADDING_TYPE_NOTE"
         })
         {
             Require(!keys.IsClearableCladdingAssignmentKey(preserved),

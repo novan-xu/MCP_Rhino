@@ -4,6 +4,7 @@ using PanelCladdingEditor.Contracts.Responses;
 using PanelCladdingEditor.Domain.Models.PanelCladding;
 
 const string releaseKey = PanelCladdingSpawnPlanningService.ReleaseUserTextKey;
+Check(releaseKey == "CW_1.05_LOT", "Surface metadata must use the canonical lot key");
 var keys = new PanelCladdingKeyService();
 var planner = new PanelCladdingSurfaceSyncPlanningService(keys);
 var spawnPlanner = new PanelCladdingSpawnPlanningService(keys);
@@ -22,6 +23,8 @@ foreach (string release in new[] { " 007 ", "R-03A" })
             "Fixture must contain both merged and single-cell material surfaces");
         Check(spawn.Regions.All(region => region.UserTextWrites[releaseKey.ToLowerInvariant()] == release.Trim()),
             "Every spawned/updated surface must inherit the panel release as text");
+        Check(spawn.Regions.All(region => !region.UserTextWrites.ContainsKey("CW_1.05_RELEASE")),
+            "Surfaces must not inherit the former release key");
     }
 }
 Console.WriteLine("[OK] spawn/update plans inherit panel release on merged and single-cell surfaces");
@@ -95,6 +98,7 @@ Dictionary<string, string> PanelText(string pid, string? release)
         [PanelCladdingSpawnPlanningService.PanelIdUserTextKey] = pid,
         [PanelCladdingSpawnPlanningService.CidUserTextKey] = pid.Replace("PID_", "CID_") + "-P",
         [PanelCladdingSpawnPlanningService.WallTypeUserTextKey] = "WT01",
+        ["CW_1.05_RELEASE"] = "OLD-IGNORED",
         ["parent"] = "1",
         [PanelCladdingKeyService.GetCellKey(0, "A")] = "GL01",
         [PanelCladdingKeyService.GetCellKey(1, "A")] = "0A",

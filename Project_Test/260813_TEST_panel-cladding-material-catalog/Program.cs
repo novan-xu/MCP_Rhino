@@ -95,8 +95,9 @@ try
     });
     Assert(saved.Success && saved.Data is not null, saved.Message);
     Assert(saved.Data!.SheetName == string.Empty, "Panel save must not produce a workbook type sheet.");
-    Assert(live.LastCommit?.UserTextWrites.ContainsKey(PanelCladdingKeyService.TypeCodeKey) == true,
-        "Panel save did not write the calculated cladding type key.");
+    Assert(live.LastCommit?.UserTextWrites.ContainsKey(PanelCladdingKeyService.TypeCodeKey) == false &&
+           saved.Data.TypeCode == string.Empty,
+        "Panel save recreated the suspended cladding type key.");
     Assert(live.LastCommit?.UserTextWrites.ContainsKey(PanelCladdingKeyService.SignatureKey) == false &&
            live.LastCommit.UserTextDeletes.Contains(
                PanelCladdingKeyService.SignatureKey,
@@ -108,9 +109,8 @@ try
     Assert(xaml.IndexOf("x:Name=\"CladdingAssignmentSection\"", StringComparison.Ordinal) <
            xaml.IndexOf("x:Name=\"MaterialLegendSection\"", StringComparison.Ordinal),
         "Drag Materials must follow Cell Assignment.");
-    Assert(xaml.IndexOf("x:Name=\"MaterialLegendSection\"", StringComparison.Ordinal) <
-           xaml.IndexOf("Text=\"CLADDING TYPE\"", StringComparison.Ordinal),
-        "Drag Materials must precede Cladding Type.");
+    Assert(!xaml.Contains("Text=\"CLADDING TYPE\"", StringComparison.Ordinal),
+        "Suspended Cladding Type section remains in the editor.");
     Assert(!xaml.Contains("EXCEL TYPOLOGY RECORD", StringComparison.Ordinal),
         "Legacy Excel Typology Record section remains in the editor.");
     string canvas = File.ReadAllText(Path.Combine(root, "src", "PanelCladdingEditor", "UI", "PanelCladdingGridCanvas.cs"));

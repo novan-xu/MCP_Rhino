@@ -1,6 +1,6 @@
 # Panel Cladding Sparse Topology Smoke
 
-Focused executable regression for sparse, independent `2.05`-`2.07` persistence and the
+Focused executable regression for sparse, independent `2.10`-`2.12` mask persistence and the
 merge-mask-absence precondition of `PCCrvTemplate`.
 
 Run with:

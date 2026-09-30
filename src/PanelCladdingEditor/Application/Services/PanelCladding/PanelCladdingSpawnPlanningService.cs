@@ -10,7 +10,8 @@ public sealed class PanelCladdingSpawnPlanningService
     public const string ExtrusionRootLayer = "02_CW Extrusions";
     public const string PanelIdUserTextKey = "CW_1.01_PID";
     public const string CidUserTextKey = "CW_1.02_CID";
-    public const string ReleaseUserTextKey = "CW_1.05_RELEASE";
+    // Internal release models are retained; lot is the canonical stored metadata.
+    public const string ReleaseUserTextKey = "CW_1.05_LOT";
     public const string WallTypeUserTextKey = "CW_1.07_WALL_TYPE";
 
     private readonly PanelCladdingRegionService _regions;
@@ -86,7 +87,7 @@ public sealed class PanelCladdingSpawnPlanningService
         OperationResponse<KeyValuePair<string, string>> release = FindRequiredMetadata(
             panelUserText,
             ReleaseUserTextKey,
-            "RELEASE_NUMBER");
+            "LOT_NUMBER");
         if (!release.Success)
         {
             return OperationResponse<PanelCladdingSpawnPlan>.Fail(release.Message);

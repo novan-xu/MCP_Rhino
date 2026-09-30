@@ -10,7 +10,6 @@ public sealed class PanelCladdingEditorController
     private readonly ILivePanelCladdingRepository _liveRepository;
     private readonly PanelCladdingSaveService _saveService;
     private readonly IPanelPreviewRenderer _previewRenderer;
-    private readonly PanelCladdingTypeSignatureService _signatureService;
     private readonly IPanelCladdingWorkbookRepository? _workbookRepository;
     private readonly IPanelFrameExtrusionScheduleImporter? _frameExtrusionImporter;
     private readonly PanelFrameTypologyService _frameTypologyService;
@@ -26,7 +25,7 @@ public sealed class PanelCladdingEditorController
         _liveRepository = liveRepository;
         _saveService = saveService;
         _previewRenderer = previewRenderer;
-        _signatureService = signatureService;
+        _ = signatureService; // Retain constructor compatibility while type generation is suspended.
         _workbookRepository = workbookRepository;
         _frameExtrusionImporter = frameExtrusionImporter;
         _frameTypologyService = new PanelFrameTypologyService(new PanelCladdingKeyService());
@@ -39,12 +38,6 @@ public sealed class PanelCladdingEditorController
 
     public OperationResponse<PanelCladdingSaveResult> Save(PanelCladdingSaveRequest request) =>
         _saveService.Save(request);
-
-    public OperationResponse<PanelCladdingTypeIdentity> PreviewType(
-        PanelCladdingLayout layout,
-        IReadOnlyDictionary<string, string> values,
-        string systemCode) =>
-        _signatureService.Create(layout, values, systemCode);
 
     public OperationResponse<PanelFrameTypologyIdentity> PreviewFrameTypology(
         PanelCladdingLayout layout,
