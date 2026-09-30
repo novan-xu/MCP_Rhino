@@ -202,6 +202,7 @@ public sealed partial class PanelCladdingCreatePlanningService
             .OrderBy(key => key, StringComparer.OrdinalIgnoreCase)
             .ToArray();
         var writes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        PanelCladdingCidService.AddPanelCidWrite(writes, panel.UserText);
         for (int index = 0; index < horizontal.Length; index++)
         {
             writes[PanelCladdingKeyService.GetHorizontalOffsetKey(index)] =

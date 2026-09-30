@@ -31,6 +31,16 @@ Panel cladding saves persist material-independent cell ownership under
 `CW_2.08_CLADDING_LOGIC`. `PCSyncSrf` combines that saved owner graph with current Rhino surface
 coverage and material layers, while edited splits and merges remain geometry-authoritative.
 
+Panels with user text `parent=1` or `child=1` use a PID-derived CID ending in `-P`
+or `-C`. Material surfaces and extrusion curves inherit that role suffix before
+their cell/curve code, for example `CID_BKT_W1_03_01-P-0A` and
+`CID_BKT_W1_03_01-P-INT_B1`. Existing PC save/create/match/spawn/sync/update paths
+apply the rule. Parent takes precedence if both flags are `1`.
+
+Baked extrusion curves also inherit the panel's `CW_1.05_RELEASE` value, including
+leading zeros. `PCUpdate` and `PCSyncCrv` refresh existing curve release metadata
+from the panel; an absent panel release leaves the curve without that key.
+
 Every baked cladding Brep persists its complete logical coverage under
 `Merge_Mark`, including the owner: a single-cell surface stores `0A`, while a merged
 surface stores values such as `0A;1A`. A complete baked coverage partition lets `PCSyncSrf`

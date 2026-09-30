@@ -101,6 +101,7 @@ public sealed partial class LivePanelCladdingRepository : ILivePanelCladdingRepo
                 }
             }
 
+            changed |= LivePanelCladdingCidService.Normalize(proposedAttributes);
             string? oldWorkbookPath = document.Strings.GetValue(PanelCladdingKeyService.WorkbookPathDocumentKey);
             bool workbookPathChanged = !string.IsNullOrWhiteSpace(request.WorkbookPath) &&
                 !string.Equals(oldWorkbookPath, request.WorkbookPath, StringComparison.OrdinalIgnoreCase);

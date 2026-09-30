@@ -603,6 +603,7 @@ public sealed class PanelCladdingSurfaceSyncSurfaceSnapshot
     public Guid PanelObjectId { get; init; }
     public string PanelId { get; init; } = string.Empty;
     public string Cid { get; init; } = string.Empty;
+    public string ReleaseNumber { get; init; } = string.Empty;
     public string LayerPath { get; init; } = string.Empty;
     public string CladdingValue { get; init; } = string.Empty;
     public string CoverageValue { get; init; } = string.Empty;
@@ -616,6 +617,7 @@ public sealed class PanelCladdingSurfaceSyncCurveSnapshot
     public Guid PanelObjectId { get; init; }
     public string PanelId { get; init; } = string.Empty;
     public string Cid { get; init; } = string.Empty;
+    public string ReleaseNumber { get; init; } = string.Empty;
     public string CurveCode { get; init; } = string.Empty;
     public string DesiredCode { get; init; } = string.Empty;
     public string LayerPath { get; init; } = string.Empty;
@@ -670,6 +672,7 @@ public sealed class PanelCladdingSurfaceSyncSurfacePlan
     public string PanelId { get; init; } = string.Empty;
     public string ExpectedCid { get; init; } = string.Empty;
     public string DesiredCid { get; init; } = string.Empty;
+    public string DesiredReleaseNumber { get; init; } = string.Empty;
     public string CellKey { get; init; } = string.Empty;
     public IReadOnlyList<string> CoveredCellLabels { get; init; } = Array.Empty<string>();
     public string ExpectedLayerPath { get; init; } = string.Empty;
@@ -679,7 +682,8 @@ public sealed class PanelCladdingSurfaceSyncSurfacePlan
     public bool CoverageChanged { get; init; }
     public bool CidChanged { get; init; }
     public bool PidChanged { get; init; }
-    public bool MetadataChanged => CladdingKeyChanged || CoverageChanged || CidChanged || PidChanged;
+    public bool ReleaseChanged { get; init; }
+    public bool MetadataChanged => CladdingKeyChanged || CoverageChanged || CidChanged || PidChanged || ReleaseChanged;
 }
 
 public sealed class PanelCladdingSurfaceSyncPanelPlan
@@ -701,6 +705,7 @@ public sealed class PanelCladdingSurfaceSyncCurvePlan
     public string ExpectedLayerPath { get; init; } = string.Empty;
     public string DesiredCode { get; init; } = string.Empty;
     public string DesiredCid { get; init; } = string.Empty;
+    public string DesiredReleaseNumber { get; init; } = string.Empty;
     public string DesiredAssignedExtrusions { get; init; } = string.Empty;
     public IReadOnlyDictionary<string, string> DesiredAssignedExtrusionValues { get; init; } =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

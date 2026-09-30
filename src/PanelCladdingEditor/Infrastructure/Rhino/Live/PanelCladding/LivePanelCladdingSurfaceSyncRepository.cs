@@ -179,7 +179,9 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
             string panelCid = GetCanonicalUserText(
                 panel.Object.Attributes,
                 PanelCladdingSpawnPlanningService.CidUserTextKey).Trim();
-            if (pid.Length == 0 || panelCid.Length == 0)
+            IReadOnlyDictionary<string, string> panelText = LivePanelCladdingCidService.Read(panel.Object.Attributes);
+            string desiredPanelCid = PanelCladdingCidService.ResolvePanelCid(pid, panelText, panelCid);
+            if (pid.Length == 0 || (panelCid.Length == 0 && PanelCladdingCidService.PanelCidWrite(panelText) is null))
             {
                 issues.Add(new PanelCladdingSurfaceSyncIssue
                 {
@@ -510,6 +512,8 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
                     PanelObjectId = panel.Object.Id,
                     PanelId = surface.PanelId,
                     Cid = surface.Cid,
+                    ReleaseNumber = GetCanonicalUserText(surface.Object.Attributes,
+                        PanelCladdingSpawnPlanningService.ReleaseUserTextKey),
                     LayerPath = surface.LayerPath,
                     CladdingValue = surface.CladdingValue,
                     CoverageValue = coverageBySurfaceId.GetValueOrDefault(
@@ -552,11 +556,12 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
                 OperationResponse<IReadOnlyList<PanelCladdingExtrusionCurvePlan>> expectedCurves =
                     extrusionPlanner.CreatePlan(
                     pid,
-                    panelCid,
+                    desiredPanelCid,
                     inferredLayout.Data.Width,
                     inferredLayout.Data.Height,
                     keySet,
-                    panel.Layout.LayerFullPath);
+                    panel.Layout.LayerFullPath,
+                    GetCanonicalUserText(panel.Object.Attributes, PanelCladdingSpawnPlanningService.ReleaseUserTextKey));
                 if (!expectedCurves.Success || expectedCurves.Data is null)
                 {
                     AddPanelIssue(panel, expectedCurves.Message);
@@ -582,6 +587,8 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
                         PanelObjectId = panel.Object.Id,
                         PanelId = sourceCurve.PanelId,
                         Cid = sourceCurve.Cid,
+                        ReleaseNumber = GetCanonicalUserText(sourceCurve.Object.Attributes,
+                            PanelCladdingSpawnPlanningService.ReleaseUserTextKey),
                         CurveCode = sourceCurve.CurveCode,
                         DesiredCode = expected.Code,
                         LayerPath = sourceCurve.LayerPath,
@@ -690,6 +697,9 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
             foreach (SurfaceReadCandidate surface in discoveredSurfaces)
             {
                 PanelReadCandidate[] matches = candidates.Where(panel =>
+                    PanelCladdingCidService.IncludesDependency(panel.PanelId,
+                        PanelCladdingCidService.ResolvePanelCid(panel.PanelId,
+                            panel.Layout.SourceUserText), surface.Cid) &&
                     LivePanelCladdingGeometryPartitionService.IsAssociated(
                         panel.Geometry,
                         surface.Geometry,
@@ -720,6 +730,9 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
             foreach (CurveReadCandidate curve in discoveredCurves)
             {
                 PanelReadCandidate[] matches = candidates.Where(panel =>
+                    PanelCladdingCidService.IncludesDependency(panel.PanelId,
+                        PanelCladdingCidService.ResolvePanelCid(panel.PanelId,
+                            panel.Layout.SourceUserText), curve.Cid) &&
                     LivePanelCladdingGeometryPartitionService.IsAssociated(
                         panel.Geometry,
                         curve.Geometry,
@@ -809,6 +822,12 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
             proposed.SetUserString(
                 PanelCladdingSpawnPlanningService.CidUserTextKey,
                 surfaceWrite.DesiredCid);
+            DeleteUserTextCaseInsensitive(proposed, PanelCladdingSpawnPlanningService.ReleaseUserTextKey);
+            if (surfaceWrite.DesiredReleaseNumber.Length > 0)
+            {
+                proposed.SetUserString(PanelCladdingSpawnPlanningService.ReleaseUserTextKey,
+                    surfaceWrite.DesiredReleaseNumber);
+            }
             proposed.SetUserString(
                 PanelCladdingSurfaceCoverageService.UserTextKey,
                 surfaceWrite.DesiredCoverageValue);
@@ -847,6 +866,12 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
             }
             proposed.SetUserString(PanelCladdingSpawnPlanningService.PanelIdUserTextKey, curveWrite.PanelId);
             proposed.SetUserString(PanelCladdingSpawnPlanningService.CidUserTextKey, curveWrite.DesiredCid);
+            DeleteUserTextCaseInsensitive(proposed, PanelCladdingSpawnPlanningService.ReleaseUserTextKey);
+            if (curveWrite.DesiredReleaseNumber.Length > 0)
+            {
+                proposed.SetUserString(PanelCladdingSpawnPlanningService.ReleaseUserTextKey,
+                    curveWrite.DesiredReleaseNumber);
+            }
             proposed.SetUserString(PanelCladdingExtrusionPlanningService.CurveUserTextKey, curveWrite.DesiredCode);
             if (!string.IsNullOrWhiteSpace(curveWrite.DesiredAssignedExtrusions))
             {
@@ -942,6 +967,7 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
             proposed.SetUserString(PanelCladdingKeyService.UnitWidthKey, panelWrite.UnitWidth);
             proposed.SetUserString(PanelCladdingKeyService.UnitHeightKey, panelWrite.UnitHeight);
             proposed.SetUserString(PanelCladdingKeyService.UnitDimensionKey, panelWrite.UnitDimension);
+            LivePanelCladdingCidService.Normalize(proposed);
             prepared.Add(new PreparedObject(rhinoObject, original, proposed, panelWrite));
         }
 

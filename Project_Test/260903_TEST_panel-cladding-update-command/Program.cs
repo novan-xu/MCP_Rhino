@@ -146,7 +146,8 @@ internal static class Program
         {
             "IsManagedSurfaceLayerPath(layerPath)",
             "IsManagedExtrusionLayerPath(layerPath)",
-            "selectedPanelIds.Contains(panelId)",
+            "selectedPanels.TryGetValue(panelId, out PanelSource? source)",
+            "PanelCladdingCidService.IncludesDependency(panelId, source.PanelCid, cid)",
             "cid.Length == 0",
             "BeginUndoRecord(\"Update Panel Cladding Dependencies\")",
             "dependency.Geometry,",
@@ -171,8 +172,9 @@ internal static class Program
             "Packaging",
             "PanelCladdingEditor",
             "package-manifest.json")));
-        Require(manifest.RootElement.GetProperty("version").GetString() == "1.0.73",
-            "PCUpdate package version must be 1.0.73.");
+        Require(Version.TryParse(manifest.RootElement.GetProperty("version").GetString(), out Version? version) &&
+                version >= new Version(1, 0, 73),
+            "PCUpdate requires package version 1.0.73 or later.");
         string installer = File.ReadAllText(Path.Combine(
             repositoryRoot,
             "Packaging",
@@ -180,7 +182,7 @@ internal static class Program
             "Install-PanelCladdingEditor.ps1"));
         Require(installer.Contains("'PCUpdate'", StringComparison.Ordinal),
             "The exact installed Rhino CommandList omits PCUpdate.");
-        Console.WriteLine("[OK] package 1.0.73 registers PCUpdate");
+        Console.WriteLine("[OK] supported package registers PCUpdate");
     }
 
     private static PanelCladdingExpectedDependency Expected(

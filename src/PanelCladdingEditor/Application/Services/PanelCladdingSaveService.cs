@@ -143,6 +143,7 @@ public sealed class PanelCladdingSaveService
         };
 
         var writes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        PanelCladdingCidService.AddPanelCidWrite(writes, layout.SourceUserText);
         PanelCladdingTypeIdentity? finalIdentity = null;
         PanelFrameTypologyIdentity? finalFrameTypology = null;
         if (saveCladding)

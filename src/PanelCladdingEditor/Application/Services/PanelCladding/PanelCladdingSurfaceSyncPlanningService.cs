@@ -420,6 +420,12 @@ public sealed class PanelCladdingSurfaceSyncPlanningService
                 continue;
             }
             string pid = panel.PanelId.Trim();
+            string resolvedPanelCid = PanelCladdingCidService.ResolvePanelCid(pid, panel.Layout.SourceUserText, panel.PanelCid);
+            string releaseNumber = GetUserText(panel.Layout.SourceUserText,
+                PanelCladdingSpawnPlanningService.ReleaseUserTextKey).Trim();
+            string? panelCidWrite = PanelCladdingCidService.PanelCidWrite(panel.Layout.SourceUserText);
+            bool panelCidChanged = panelCidWrite is not null &&
+                !string.Equals(panel.PanelCid, panelCidWrite, StringComparison.Ordinal);
             PanelCladdingCell[] orderedCells = panel.Layout.Cells
                 .OrderBy(cell => cell.Column)
                 .ThenBy(cell => cell.Row)
@@ -450,9 +456,7 @@ public sealed class PanelCladdingSurfaceSyncPlanningService
                     AddIssue(panel.ObjectId, pid, $"PANEL_CLADDING_SYNC_CURVES_MISSING: {pid}");
                     continue;
                 }
-                string curvePanelCid = string.IsNullOrWhiteSpace(panel.PanelCid)
-                    ? (pid.StartsWith("PID_", StringComparison.OrdinalIgnoreCase) ? "CID_" + pid[4..] : pid)
-                    : panel.PanelCid.Trim();
+                string curvePanelCid = resolvedPanelCid;
                 foreach (PanelCladdingSurfaceSyncCurveSnapshot curve in scopedCurves)
                 {
                     string desiredCid = $"{curvePanelCid}-{curve.DesiredCode}";
@@ -464,10 +468,12 @@ public sealed class PanelCladdingSurfaceSyncPlanningService
                         ExpectedLayerPath = curve.LayerPath,
                         DesiredCode = curve.DesiredCode,
                         DesiredCid = desiredCid,
+                        DesiredReleaseNumber = releaseNumber,
                         DesiredAssignedExtrusions = curve.DesiredAssignedExtrusions,
                         DesiredAssignedExtrusionValues = curve.DesiredAssignedExtrusionValues,
                         DesiredObjectColor = curve.DesiredObjectColor,
                         MetadataChanged = !string.Equals(curve.PanelId.Trim(), pid, StringComparison.Ordinal) ||
+                            !string.Equals(curve.ReleaseNumber, releaseNumber, StringComparison.Ordinal) ||
                             !string.Equals(curve.Cid.Trim(), desiredCid, StringComparison.Ordinal) ||
                             !string.Equals(curve.CurveCode.Trim(), curve.DesiredCode, StringComparison.Ordinal) ||
                             !string.Equals(
@@ -500,7 +506,7 @@ public sealed class PanelCladdingSurfaceSyncPlanningService
                     Layout = panel.Layout,
                     CellValues = curveCellValues,
                     CladdingLogic = curveCladdingLogic.Data,
-                    CladdingChanged = panel.GridChanged
+                    CladdingChanged = panel.GridChanged || panelCidChanged
                 });
                 continue;
             }
@@ -512,7 +518,7 @@ public sealed class PanelCladdingSurfaceSyncPlanningService
             if (panelSurfaces.Length == 0)
             {
                 AddIssue(panel.ObjectId, pid,
-                    $"PANEL_CLADDING_SURFACE_SYNC_SURFACE_MISSING: {PanelCladdingSpawnPlanningService.BuildSurfaceCid(pid, orderedCells[0].ShortLabel)}");
+                    $"PANEL_CLADDING_SURFACE_SYNC_SURFACE_MISSING: {PanelCladdingCidService.SurfaceCid(pid, orderedCells[0].ShortLabel, panel.Layout.SourceUserText)}");
                 continue;
             }
             var cellValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -524,6 +530,7 @@ public sealed class PanelCladdingSurfaceSyncPlanningService
                 OperationResponse<IReadOnlyList<string>> coverage = ResolveCoverageLabels(
                     surface,
                     pid,
+                    panel.Layout.SourceUserText,
                     cellsByLabel);
                 if (!coverage.Success || coverage.Data is null)
                 {
@@ -584,9 +591,10 @@ public sealed class PanelCladdingSurfaceSyncPlanningService
                         ? materialCode
                         : owner.ShortLabel;
                 }
-                string desiredCid = PanelCladdingSpawnPlanningService.BuildSurfaceCid(
+                string desiredCid = PanelCladdingCidService.SurfaceCid(
                     pid,
-                    owner.ShortLabel);
+                    owner.ShortLabel,
+                    panel.Layout.SourceUserText);
                 OperationResponse<string> desiredCoverage = _surfaceCoverage.Encode(
                     owner.ShortLabel,
                     coveredLabels.Select(label => cellsByLabel[label]));
@@ -602,6 +610,7 @@ public sealed class PanelCladdingSurfaceSyncPlanningService
                     PanelId = pid,
                     ExpectedCid = surface.Cid.Trim(),
                     DesiredCid = desiredCid,
+                    DesiredReleaseNumber = releaseNumber,
                     CellKey = owner.UserTextKey,
                     CoveredCellLabels = coveredLabels,
                     ExpectedLayerPath = surface.LayerPath,
@@ -623,6 +632,10 @@ public sealed class PanelCladdingSurfaceSyncPlanningService
                     PidChanged = !string.Equals(
                         surface.PanelId.Trim(),
                         pid,
+                        StringComparison.Ordinal),
+                    ReleaseChanged = !string.Equals(
+                        surface.ReleaseNumber,
+                        releaseNumber,
                         StringComparison.Ordinal)
                 });
             }
@@ -631,7 +644,7 @@ public sealed class PanelCladdingSurfaceSyncPlanningService
                 !claimedCells.ContainsKey(cell.ShortLabel));
             if (panelIssue is null && uncovered is not null)
             {
-                panelIssue = $"PANEL_CLADDING_SURFACE_SYNC_SURFACE_MISSING: {PanelCladdingSpawnPlanningService.BuildSurfaceCid(pid, uncovered.ShortLabel)}";
+                panelIssue = $"PANEL_CLADDING_SURFACE_SYNC_SURFACE_MISSING: {PanelCladdingCidService.SurfaceCid(pid, uncovered.ShortLabel, panel.Layout.SourceUserText)}";
             }
             if (panelIssue is not null)
             {
@@ -648,7 +661,7 @@ public sealed class PanelCladdingSurfaceSyncPlanningService
                     $"PANEL_CLADDING_SURFACE_SYNC_LOGIC_INVALID: {panel.ObjectId:D}: {desiredCladdingLogic.Message}");
                 continue;
             }
-            bool panelChanged = panel.GridChanged ||
+            bool panelChanged = panel.GridChanged || panelCidChanged ||
                 !string.Equals(
                     storedCladdingLogic,
                     desiredCladdingLogic.Data,
@@ -662,9 +675,7 @@ public sealed class PanelCladdingSurfaceSyncPlanningService
                 .Where(curve => curve.PanelObjectId == panel.ObjectId)
                 .ToArray();
             surfacePlans.AddRange(panelSurfacePlans);
-            string panelCid = string.IsNullOrWhiteSpace(panel.PanelCid)
-                ? (pid.StartsWith("PID_", StringComparison.OrdinalIgnoreCase) ? "CID_" + pid[4..] : pid)
-                : panel.PanelCid.Trim();
+            string panelCid = resolvedPanelCid;
             foreach (PanelCladdingSurfaceSyncCurveSnapshot curve in panelCurves)
             {
                 string desiredCid = $"{panelCid}-{curve.DesiredCode}";
@@ -676,10 +687,12 @@ public sealed class PanelCladdingSurfaceSyncPlanningService
                     ExpectedLayerPath = curve.LayerPath,
                     DesiredCode = curve.DesiredCode,
                     DesiredCid = desiredCid,
+                    DesiredReleaseNumber = releaseNumber,
                     DesiredAssignedExtrusions = curve.DesiredAssignedExtrusions,
                     DesiredAssignedExtrusionValues = curve.DesiredAssignedExtrusionValues,
                     DesiredObjectColor = curve.DesiredObjectColor,
                     MetadataChanged = !string.Equals(curve.PanelId.Trim(), pid, StringComparison.Ordinal) ||
+                        !string.Equals(curve.ReleaseNumber, releaseNumber, StringComparison.Ordinal) ||
                         !string.Equals(curve.Cid.Trim(), desiredCid, StringComparison.Ordinal) ||
                         !string.Equals(curve.CurveCode.Trim(), curve.DesiredCode, StringComparison.Ordinal) ||
                         !string.Equals(
@@ -737,6 +750,7 @@ public sealed class PanelCladdingSurfaceSyncPlanningService
     private static OperationResponse<IReadOnlyList<string>> ResolveCoverageLabels(
         PanelCladdingSurfaceSyncSurfaceSnapshot surface,
         string panelId,
+        IReadOnlyDictionary<string, string> panelUserText,
         IReadOnlyDictionary<string, PanelCladdingCell> cellsByLabel)
     {
         string[] supplied = (surface.CoveredCellLabels ?? Array.Empty<string>())
@@ -753,6 +767,9 @@ public sealed class PanelCladdingSurfaceSyncPlanningService
         }
 
         PanelCladdingCell? legacyCell = cellsByLabel.Values.FirstOrDefault(cell => string.Equals(
+            PanelCladdingCidService.SurfaceCid(panelId, cell.ShortLabel, panelUserText),
+            surface.Cid.Trim(),
+            StringComparison.OrdinalIgnoreCase) || string.Equals(
             PanelCladdingSpawnPlanningService.BuildSurfaceCid(panelId, cell.ShortLabel),
             surface.Cid.Trim(),
             StringComparison.OrdinalIgnoreCase));

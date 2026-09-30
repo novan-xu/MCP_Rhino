@@ -133,7 +133,7 @@ public sealed class PanelCladdingSpawnPlanningService
                     $"PANEL_CLADDING_MATERIAL_LAYER_NAME_INVALID: {region.OwnerCellLabel} material '{material}' cannot be used as a Rhino layer name.");
             }
 
-            string cid = BuildSurfaceCid(pid, region.OwnerCellLabel);
+            string cid = PanelCladdingCidService.SurfaceCid(pid, region.OwnerCellLabel, panelUserText);
             OperationResponse<string> coverage = _surfaceCoverage.Encode(
                 region.OwnerCellLabel,
                 region.Cells);
@@ -179,18 +179,19 @@ public sealed class PanelCladdingSpawnPlanningService
                 panelUserText,
                 CidUserTextKey,
                 "CID");
-            if (!panelCid.Success)
+            if (!panelCid.Success && PanelCladdingCidService.PanelCidWrite(panelUserText) is null)
             {
                 return OperationResponse<PanelCladdingSpawnPlan>.Fail(panelCid.Message);
             }
             OperationResponse<IReadOnlyList<PanelCladdingExtrusionCurvePlan>> extrusionPlan =
                 _extrusions.CreatePlan(
                     pid,
-                    panelCid.Data.Value,
+                    PanelCladdingCidService.ResolvePanelCid(pid, panelUserText),
                     panelWidth.Value,
                     panelHeight.Value,
                     keySet,
-                    sourcePanelLayerPath ?? string.Empty);
+                    sourcePanelLayerPath ?? string.Empty,
+                    release.Data.Value);
             if (!extrusionPlan.Success || extrusionPlan.Data is null)
             {
                 return OperationResponse<PanelCladdingSpawnPlan>.Fail(extrusionPlan.Message);
@@ -262,10 +263,7 @@ public sealed class PanelCladdingSpawnPlanningService
 
     public static string BuildSurfaceCid(string panelId, string cellLabel)
     {
-        string pid = (panelId ?? string.Empty).Trim();
-        string cidBase = pid.StartsWith("PID_", StringComparison.OrdinalIgnoreCase)
-            ? "CID_" + pid[4..]
-            : pid;
+        string cidBase = PanelCladdingCidService.FromPanelId(panelId);
         return $"{cidBase}-{(cellLabel ?? string.Empty).Trim()}";
     }
 
