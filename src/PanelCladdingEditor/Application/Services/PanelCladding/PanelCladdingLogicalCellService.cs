@@ -9,10 +9,18 @@ public sealed class PanelCladdingLogicalCellService
         PanelCladdingTopologyState topology,
         IReadOnlyDictionary<string, string> logicalValues)
     {
-        PanelCladdingCell[][] groups = BuildGroups(cells, topology);
+        return ExpandGroups(BuildGroups(cells, topology), logicalValues);
+    }
+
+    // UI topology already has these groups, including unsaved deleted boundaries.
+    // Each group starts with its canonical representative (lowest row, then column).
+    public IReadOnlyDictionary<string, string> ExpandGroups(
+        IReadOnlyList<IReadOnlyList<PanelCladdingCell>> groups,
+        IReadOnlyDictionary<string, string> logicalValues)
+    {
         var representativeByLabel = BuildRepresentativeMap(groups);
         var expanded = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (PanelCladdingCell[] group in groups)
+        foreach (IReadOnlyList<PanelCladdingCell> group in groups)
         {
             PanelCladdingCell representative = group[0];
             string value = logicalValues.GetValueOrDefault(
@@ -104,10 +112,10 @@ public sealed class PanelCladdingLogicalCellService
     }
 
     private static Dictionary<string, PanelCladdingCell> BuildRepresentativeMap(
-        IEnumerable<PanelCladdingCell[]> groups)
+        IEnumerable<IReadOnlyList<PanelCladdingCell>> groups)
     {
         var representativeByLabel = new Dictionary<string, PanelCladdingCell>(StringComparer.OrdinalIgnoreCase);
-        foreach (PanelCladdingCell[] group in groups)
+        foreach (IReadOnlyList<PanelCladdingCell> group in groups)
         {
             PanelCladdingCell representative = group[0];
             foreach (PanelCladdingCell member in group)

@@ -22,9 +22,102 @@ internal static class Program
         VerifyReconciliation();
         VerifyDuplicateExpectedRejection();
         VerifyEmptySurfaceReconciliation();
+        VerifyCidSelection();
+        VerifySharedPidDependencyOwnership();
         VerifyCommandContract();
         VerifyLiveOwnershipAndMutationContract();
         VerifyPackageContract();
+    }
+
+    private static PanelCladdingUpdateSource Source(string pid, string role = "", string storedCid = "")
+    {
+        var text = new Dictionary<string, string>
+        {
+            [PanelCladdingSpawnPlanningService.PanelIdUserTextKey] = pid,
+            [PanelCladdingSpawnPlanningService.CidUserTextKey] = storedCid
+        };
+        if (role.Length > 0) text["CW_1.06_UNIT_TYPE"] = role;
+        text["parent"] = "1";
+        text["child"] = "1";
+        return new PanelCladdingUpdateSource(Guid.NewGuid(), pid,
+            PanelCladdingCidService.ResolvePanelCid(pid, text));
+    }
+
+    private static void VerifyCidSelection()
+    {
+        var parent = Source("PID_A", "corner_parent", "CID_STALE");
+        var child = Source("PID_A", "corner_child", "CID_STALE");
+        var pair = PanelCladdingUpdateSelectionService.CreatePlan([parent, child, parent]);
+        Require(parent.PanelCid == "CID_A-P" && child.PanelCid == "CID_A-C" &&
+                pair.ProcessableSources.Count == 2 && pair.DuplicateCidGroups.Count == 0,
+            "Role correction must split stale equal CIDs before collision detection; repeated object IDs are not duplicates.");
+
+        var duplicateParent = Source("PID_A", "CORNER_PARENT");
+        var independent = Source("PID_B");
+        var mixed = PanelCladdingUpdateSelectionService.CreatePlan([parent, child, duplicateParent, independent]);
+        Require(mixed.ProcessableSources.Select(source => source.ObjectId).ToHashSet()
+                .SetEquals([child.ObjectId, independent.ObjectId]) &&
+                mixed.DuplicateCidGroups.Single().PanelObjectIds.ToHashSet()
+                .SetEquals([parent.ObjectId, duplicateParent.ObjectId]),
+            "All duplicated parents must be skipped while the same-PID child and unrelated panel proceed.");
+
+        var crossPid = PanelCladdingUpdateSelectionService.CreatePlan([
+            Source("PID_A", storedCid: " CID_CUSTOM "), Source("PID_B", storedCid: "cid_custom")]);
+        Require(crossPid.ProcessableSources.Count == 0 && crossPid.DuplicateCidGroups.Single().PanelObjectIds.Count == 2,
+            "CID duplicates must compare case-insensitively across PIDs, ignoring surrounding whitespace.");
+        var allDuplicate = PanelCladdingUpdateSelectionService.CreatePlan([parent, duplicateParent]);
+        var emptyPlan = Required(new PanelCladdingDependencyReconciliationService().CreatePlan([], []), "empty update");
+        Require(allDuplicate.ProcessableSources.Count == 0 && allDuplicate.DuplicateCidGroups.Count == 1 &&
+                emptyPlan.Creates.Count + emptyPlan.Updates.Count + emptyPlan.Deletes.Count == 0,
+            "An all-duplicate selection must permit an empty geometry plan.");
+        Require(PanelCladdingUpdateSelectionService.CreatePlan([Source("PID_NO_CID")])
+                .ProcessableSources.Single().PanelCid == "CID_NO_CID",
+            "Missing unit types must retain the existing PID-derived identity fallback despite old flags.");
+        var flat = Source("PID_A", " flat ", "CID_A-P");
+        var typed = PanelCladdingUpdateSelectionService.CreatePlan([parent, child, flat]);
+        Require(flat.PanelCid == "CID_A" && typed.ProcessableSources.Count == 3 && typed.DuplicateCidGroups.Count == 0,
+            "Explicit flat must clear a stale role CID before duplicate detection.");
+        Console.WriteLine("[OK] normalized parent/child CIDs, mixed/all duplicates, cross-PID collisions, case/whitespace, missing CID");
+    }
+
+    private static void VerifySharedPidDependencyOwnership()
+    {
+        var parent = Source("PID_A", "corner_parent");
+        var child = Source("PID_A", "corner_child");
+        foreach (string code in new[] { "0A", "INT_B1", "FRM_0", "OBSOLETE" })
+        {
+            Require(PanelCladdingUpdateSelectionService.FindDependencyOwners([parent, child], "pid_a", "cid_a-p-" + code)
+                    .Single().ObjectId == parent.ObjectId,
+                "Parent dependency must have only the parent owner.");
+            Require(PanelCladdingUpdateSelectionService.FindDependencyOwners([parent, child], "PID_A", "CID_A-C-" + code)
+                    .Single().ObjectId == child.ObjectId,
+                "Child dependency must have only the child owner.");
+        }
+        var duplicateParent = Source("PID_A", "corner_parent");
+        var sources = new[] { parent, child, duplicateParent };
+        Require(PanelCladdingUpdateSelectionService.FindDependencyOwners(sources, "PID_A", "CID_A-P-0A").Count == 2,
+            "Dependencies of skipped duplicate parents must remain ambiguous, never assigned to the unique child.");
+        Require(PanelCladdingUpdateSelectionService.FindDependencyOwners(sources, "PID_A", "CID_A-0A").Count == 3,
+            "Legacy unsuffixed dependencies must be preserved when selected ownership is ambiguous.");
+        Require(PanelCladdingUpdateSelectionService.FindDependencyOwners([parent], "PID_A", "CID_A-0A").Count == 1,
+            "Single-source legacy migration must remain supported.");
+        Require(PanelCladdingUpdateSelectionService.FindDependencyOwners([parent], "PID_A", "CID_A-C-0A").Count == 0 &&
+                PanelCladdingUpdateSelectionService.FindDependencyOwners(sources, "PID_OTHER", "CID_OTHER-0A").Count == 0,
+            "Unselected opposite-role and unrelated PID dependencies must be excluded.");
+
+        var parentDependency = Expected("PID_A", "CID_A-P-0A", PanelCladdingDependencyKind.Surface);
+        var childDependency = new PanelCladdingExpectedDependency
+        {
+            SourcePanelObjectId = child.ObjectId, PanelId = "PID_A", Cid = "CID_A-C-0A",
+            Kind = PanelCladdingDependencyKind.Surface
+        };
+        var plan = Required(new PanelCladdingDependencyReconciliationService().CreatePlan(
+            [parentDependency, childDependency],
+            [Existing(SurfaceKeep, "PID_A", "CID_A-P-0A", PanelCladdingDependencyKind.Surface),
+             Existing(SurfaceDuplicate, "PID_A", "CID_A-C-0A", PanelCladdingDependencyKind.Surface)]), "shared PID roles");
+        Require(plan.Updates.Count == 2 && plan.Creates.Count == 0 && plan.Deletes.Count == 0,
+            "Parent and child dependencies with the same PID must both be retained.");
+        Console.WriteLine("[OK] same-PID role ownership, skipped-panel isolation, legacy ambiguity, and shared-PID reconciliation");
     }
 
     private static void VerifyReconciliation()
@@ -146,8 +239,13 @@ internal static class Program
         {
             "IsManagedSurfaceLayerPath(layerPath)",
             "IsManagedExtrusionLayerPath(layerPath)",
-            "selectedPanels.TryGetValue(panelId, out PanelSource? source)",
-            "PanelCladdingCidService.IncludesDependency(panelId, source.PanelCid, cid)",
+            "PanelCladdingUpdateSelectionService.CreatePlan(sources.Data)",
+            "PanelCladdingUpdateSelectionService.FindDependencyOwners(candidates, panelId, cid)",
+            "owners.Count != 1 || !processableIds.Contains(owners[0].ObjectId)",
+            "sourceIds.Contains(rhinoObject.Id)",
+            "selection.ProcessableSources,",
+            "document.Objects.UnselectAll()",
+            "document.Objects.FindId(id)?.Select(true)",
             "cid.Length == 0",
             "BeginUndoRecord(\"Update Panel Cladding Dependencies\")",
             "dependency.Geometry,",
@@ -161,6 +259,12 @@ internal static class Program
             Require(source.Contains(token, StringComparison.Ordinal),
                 $"Live PCUpdate implementation is missing contract token: {token}");
         }
+        Require(!source.Contains("DUPLICATE_SELECTED_PID", StringComparison.Ordinal),
+            "PCUpdate must not reject duplicate PIDs.");
+        int normalization = source.IndexOf("LivePanelCladdingCidService.Apply(document, panelCidChanges.Data)", StringComparison.Ordinal);
+        int dependencyUpdate = source.IndexOf("? UpdateDependencies(document, filePath, sourcePanelIds", StringComparison.Ordinal);
+        Require(normalization >= 0 && dependencyUpdate > normalization,
+            "CID writes must precede duplicate classification and dependency planning in the live update flow.");
         Console.WriteLine("[OK] live mutation is PID/CID/root constrained and uses mode-aware replace/create/delete in one Undo record");
     }
 

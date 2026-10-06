@@ -1,0 +1,37 @@
+{
+  "version": "1.0.84",
+  "beforeFix": "Screenshot reconstruction expected five dashed segments; old renderer produced two.",
+  "regressions": [
+    "cell-topology Debug",
+    "cell-topology Release",
+    "visual-polish Debug",
+    "logical-cell-cleanup Debug",
+    "regions Debug",
+    "topology-persistence Debug"
+  ],
+  "regressionResult": "all passed; optional native Rhino region geometry probe skipped",
+  "renderingChecks": [
+    "screenshot owner boundaries",
+    "solid 0A/0B",
+    "indirect parent chains",
+    "nonrepresentative member references",
+    "alternate owner labels",
+    "same-material separate owners",
+    "nonrectangular notch edges",
+    "deleted interiors",
+    "cycles and blank assignments",
+    "material-backed dash pixels"
+  ],
+  "renderedFixtures": 7,
+  "visuallyInspected": [
+    "irregular-parent-boundaries.png",
+    "nonrectangular-boundaries.png"
+  ],
+  "standaloneBuilds": "Debug and Release passed: 0 warnings, 0 errors",
+  "assemblyIdentity": "passed before packaging and on staged RHP; matches product manifest and differs from MCP_Rhino",
+  "bundleFilesVerified": 27,
+  "rhpSha256": "cd2dc3c7ad9fd355dac46841cafff4d8686a54580467d1209de11f534e78a19b",
+  "stagedBundle": "%LOCALAPPDATA%\\PanelCladdingEditor\\staged\\1.0.84-owner-boundaries-261006",
+  "installation": "1.0.84 installed and independently validated on 2026-10-06; see activation-summary.json",
+  "liveRhinoValidation": "not performed; rendering verified with unshown in-process WPF objects"
+}

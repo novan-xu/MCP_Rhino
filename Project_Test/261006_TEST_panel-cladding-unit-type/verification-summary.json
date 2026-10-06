@@ -1,0 +1,32 @@
+{
+  "version": "1.0.85",
+  "unitTypeKey": "CW_1.06_UNIT_TYPE",
+  "unitTypes": {
+    "flat": "",
+    "corner_parent": "-P",
+    "corner_child": "-C"
+  },
+  "legacyFlagsIgnored": true,
+  "regressionRunsPassed": [
+    "role-cid-debug",
+    "role-cid-release",
+    "update-debug",
+    "update-release",
+    "spawn-debug",
+    "surface-sync-debug",
+    "curve-sync-debug",
+    "managed-cid-debug"
+  ],
+  "standaloneBuilds": [
+    "Debug",
+    "Release"
+  ],
+  "buildWarnings": 0,
+  "buildErrors": 0,
+  "identity": "passed before packaging and on staged RHP; distinct assembly GUIDs",
+  "bundleFileHashesVerified": 27,
+  "stagedRhp": "%LOCALAPPDATA%\\PanelCladdingEditor\\staged\\1.0.85-unit-type-261006\\Plugin\\PanelCladdingEditor.rhp",
+  "rhpSha256": "c41e081a7278c5651bfebd0cfaa30ad10c3ec9fec0e882c6fd38b0bb5f55b450",
+  "installation": "staged only; Rhino currently uses 1.0.84",
+  "liveGeometryAcceptance": "not run"
+}

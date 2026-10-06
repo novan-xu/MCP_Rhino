@@ -14,14 +14,48 @@ internal static class Program
 
     private static void Main()
     {
+        VerifyContinuousGridSpawnsSegments();
         VerifyScreenshotTopology();
         VerifyDanglingAndCascadingGuidesReject();
         VerifySeparateCurvesDoNotInventMerge();
         VerifyCurveMaskMatch();
         VerifyCommandContract();
         Console.WriteLine("[OK] PCCreate infers closed atomic segments and logical cells from on-panel guides.");
+        Console.WriteLine("[OK] Continuous and split guides default to segmented curves; a 2H/2V grid emits twelve intermediate segments.");
         Console.WriteLine("[OK] PCCreate rejects endpoint-only and cascading dangling guides.");
         Console.WriteLine("[OK] PCMatchCrv transfers only masks across equal H/V counts.");
+    }
+
+    private static void VerifyContinuousGridSpawnsSegments()
+    {
+        var keys = new PanelCladdingKeyService();
+        PanelCladdingCreatePanelPlan plan = Required(
+            new PanelCladdingCreatePlanningService(keys).CreatePlan(
+                [Snapshot(new[]
+                {
+                    Guide("40000000-0000-0000-0000-000000000001", (0d, 50d), (100d, 50d)),
+                    Guide("40000000-0000-0000-0000-000000000002", (0d, 150d), (100d, 150d)),
+                    Guide("40000000-0000-0000-0000-000000000003", (25d, 0d), (25d, 200d)),
+                    Guide("40000000-0000-0000-0000-000000000004", (75d, 0d), (75d, 200d))
+                })])).Panels.Single();
+        Require(!plan.UserTextWrites.ContainsKey(PanelCladdingKeyService.MergeMaskKey),
+            "Continuous PCCreate guides must default to segmented tracks without a merge mask.");
+        PanelCladdingKeySet parsed = Required(keys.Parse(plan.UserTextWrites, 100d, 200d, 0.001d));
+        Require(parsed.Topology.MergeRuns.Count == 0 && parsed.Topology.MissingSegments.Count == 0 &&
+                parsed.Topology.HiddenSegments.Count == 0 && parsed.Cells.Count == 9,
+            "A full 2H/2V grid must round-trip as nine cells with all intermediate atoms present, segmented, and visible.");
+        IReadOnlyList<PanelCladdingExtrusionCurvePlan> curves = Required(
+            new PanelCladdingExtrusionPlanningService().CreatePlan(
+                "PANEL-01", "CID-01", 100d, 200d, parsed,
+                PanelCladdingExtrusionPlanningService.PanelSurfaceLayerRootPath + "::TEST", "01"));
+        PanelCladdingExtrusionCurvePlan[] segments = curves
+            .Where(curve => curve.Kind == PanelCladdingExtrusionCurveKind.Segment).ToArray();
+        Require(curves.Count == 16 && segments.Length == 12 &&
+                curves.Count(curve => curve.Kind == PanelCladdingExtrusionCurveKind.Frame) == 4 &&
+                curves.All(curve => curve.Kind != PanelCladdingExtrusionCurveKind.Merged) &&
+                segments.All(curve => curve.AtomicSegments.Count == 1) &&
+                segments.SelectMany(curve => curve.AtomicSegments).Distinct().Count() == 12,
+            "PCCreate attributes must produce twelve separate intermediate curves and four unchanged perimeter frames.");
     }
 
     private static void VerifyScreenshotTopology()
@@ -61,10 +95,9 @@ internal static class Program
         };
         Require(topology.MissingSegments.ToHashSet().SetEquals(expectedMissing),
             "Screenshot guide spans did not produce the expected three absent horizontal atoms.");
-        Require(topology.MergeRuns.SequenceEqual(new[]
-        {
-            new PanelCladdingMergeRun(PanelCladdingTopologyAxis.Vertical, 0, 0, 3)
-        }), "The continuous full-height vertical guide did not produce one merged run.");
+        Require(topology.MergeRuns.Count == 0 &&
+                !plan.UserTextWrites.ContainsKey(PanelCladdingKeyService.MergeMaskKey),
+            "The continuous full-height vertical guide must remain segmented around partial horizontal tracks.");
         Require(plan.UserTextWrites.Keys.Count(keys.IsCladdingCellKey) == 5,
             "The screenshot topology must persist five surviving logical blank cells.");
         Require(plan.UserTextDeletes.Contains(PanelCladdingKeyService.SegmentMaskKey, StringComparer.OrdinalIgnoreCase) &&
@@ -105,11 +138,9 @@ internal static class Program
                     Guide("30000000-0000-0000-0000-000000000003", (50d, 100d), (100d, 100d))
                 })])).Panels.Single();
         PanelCladdingTopologyState topology = Required(keys.DecodeTopology(plan.UserTextWrites, 1, 1));
-        Require(!topology.MergeRuns.Any(run => run.Axis == PanelCladdingTopologyAxis.Horizontal),
-            "Separate collinear horizontal guides invented a merge run.");
-        Require(topology.MergeRuns.Contains(
-                new PanelCladdingMergeRun(PanelCladdingTopologyAxis.Vertical, 0, 0, 1)),
-            "The continuous vertical guide lost its merge run.");
+        Require(topology.MergeRuns.Count == 0 &&
+                !plan.UserTextWrites.ContainsKey(PanelCladdingKeyService.MergeMaskKey),
+            "Separate horizontal guides and a continuous vertical guide must all start segmented.");
     }
 
     private static void VerifyCurveMaskMatch()

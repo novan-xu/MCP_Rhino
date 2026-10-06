@@ -490,6 +490,7 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
                 surfaces.Add(new PanelCladdingSurfaceSyncSurfaceSnapshot
                 {
                     ObjectId = surface.Object.Id,
+                    ObjectName = surface.Object.Attributes.Name ?? string.Empty,
                     PanelObjectId = panel.Object.Id,
                     PanelId = surface.PanelId,
                     Cid = surface.Cid,
@@ -565,6 +566,7 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
                     curves.Add(new PanelCladdingSurfaceSyncCurveSnapshot
                     {
                         ObjectId = sourceCurve.Object.Id,
+                        ObjectName = sourceCurve.Object.Attributes.Name ?? string.Empty,
                         PanelObjectId = panel.Object.Id,
                         PanelId = sourceCurve.PanelId,
                         Cid = sourceCurve.Cid,
@@ -812,7 +814,7 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
             proposed.SetUserString(
                 PanelCladdingSurfaceCoverageService.UserTextKey,
                 surfaceWrite.DesiredCoverageValue);
-            proposed.Name = surfaceWrite.DesiredCid;
+            proposed.Name = PanelCladdingCidService.ShortName(surfaceWrite.DesiredCid);
             prepared.Add(new PreparedObject(rhinoObject, original, proposed, null));
         }
 
@@ -864,7 +866,7 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
             {
                 proposed.SetUserString(code, value);
             }
-            proposed.Name = curveWrite.DesiredCode;
+            proposed.Name = PanelCladdingCidService.ShortName(curveWrite.DesiredCid);
             proposed.ObjectColor = System.Drawing.Color.FromArgb(
                 curveWrite.DesiredObjectColor.Red,
                 curveWrite.DesiredObjectColor.Green,

@@ -121,7 +121,7 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
 
                     var attributes = new ObjectAttributes
                     {
-                        Name = item.Region.Cid,
+                        Name = PanelCladdingCidService.ShortName(item.Region.Cid),
                         LayerIndex = layer.Data,
                         ColorSource = ObjectColorSource.ColorFromLayer
                     };
@@ -161,7 +161,7 @@ public sealed partial class LivePanelCladdingSpawnService : ILivePanelCladdingSp
                         }
                         var attributes = new ObjectAttributes
                         {
-                            Name = item.CurvePlan.Code,
+                            Name = PanelCladdingCidService.ShortName(item.CurvePlan.Cid),
                             LayerIndex = curveLayerIndex,
                             ObjectColor = System.Drawing.Color.FromArgb(
                                 item.CurvePlan.ObjectColor.Red,

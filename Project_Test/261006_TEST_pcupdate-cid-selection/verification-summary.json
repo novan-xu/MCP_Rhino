@@ -1,0 +1,31 @@
+{
+  "version": "1.0.83",
+  "regressions": [
+    "update-command Debug",
+    "update-command Release",
+    "role-cid Debug",
+    "command-undo contract Debug",
+    "locked-managed-objects contract Debug"
+  ],
+  "regressionResult": "all passed",
+  "selectionChecks": [
+    "role normalization before collision detection",
+    "same-PID parent/child",
+    "mixed and all-duplicate batches",
+    "cross-PID CID collisions",
+    "case and whitespace",
+    "missing CID fallback",
+    "duplicate source IDs",
+    "skipped-panel ownership",
+    "ambiguous legacy preservation",
+    "single-source legacy migration",
+    "unselected opposite-role exclusion"
+  ],
+  "standaloneBuilds": "Debug and Release passed: 0 warnings, 0 errors",
+  "assemblyIdentity": "passed before packaging and on staged RHP; matches product manifest and differs from MCP_Rhino",
+  "bundleFilesVerified": 27,
+  "rhpSha256": "afc101986bff3c889b7717eb2644b0bfc92d70d9d873d6d7a180070f0150d1d9",
+  "stagedBundle": "%LOCALAPPDATA%\\PanelCladdingEditor\\staged\\1.0.83-pcupdate-cid-261006",
+  "installation": "not performed",
+  "liveRhinoValidation": "not performed; native Undo, geometry mutation, and selection remain unverified in Rhino"
+}

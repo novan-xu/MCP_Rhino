@@ -726,13 +726,10 @@ public partial class PanelCladdingEditorWindow : Window
         {
             return true;
         }
+        PanelCladdingTopologyState topology = CaptureTopologyState();
         PushUndoState();
         offsets[index] = rounded;
-        _mergedGroups.Clear();
-        _deletedExtrusions.Clear();
-        _hiddenExtrusions.Clear();
-        _selectedExtrusions.Clear();
-        _layout = BuildWorkingLayout();
+        RebuildOffsetLayout(topology);
         MarkStructuralDirty();
         RefreshCanvas();
         if (_activeView == PanelEditorView.Extrusion)
@@ -741,6 +738,17 @@ public partial class PanelCladdingEditorWindow : Window
         }
         ShowToast($"{(axis == PanelDimensionAxis.Column ? "Vertical" : "Horizontal")} divider offset updated");
         return true;
+    }
+
+    private void RebuildOffsetLayout(PanelCladdingTopologyState topology)
+    {
+        // Display IDs contain offsets; rebuild them from the unchanged indexed masks after a move.
+        _mergedGroups.Clear();
+        _deletedExtrusions.Clear();
+        _hiddenExtrusions.Clear();
+        _selectedExtrusions.Clear();
+        ApplyTopologyState(topology);
+        _layout = BuildWorkingLayout();
     }
 
     private static string FormatWallType(string? systemCode)
@@ -2266,6 +2274,7 @@ public partial class PanelCladdingEditorWindow : Window
         }
         double difference = Math.Round(total - dimensions.Sum(), 5, MidpointRounding.AwayFromZero);
         dimensions[recipients[^1]] = Math.Round(dimensions[recipients[^1]] + difference, 5, MidpointRounding.AwayFromZero);
+        PanelCladdingTopologyState topology = CaptureTopologyState();
         offsets.Clear();
         double cursor = 0d;
         for (int dimension = 0; dimension < dimensions.Count - 1; dimension++)
@@ -2273,11 +2282,7 @@ public partial class PanelCladdingEditorWindow : Window
             cursor += dimensions[dimension];
             offsets.Add(Math.Round(cursor, 5, MidpointRounding.AwayFromZero));
         }
-        _mergedGroups.Clear();
-        _deletedExtrusions.Clear();
-        _hiddenExtrusions.Clear();
-        _selectedExtrusions.Clear();
-        _layout = BuildWorkingLayout();
+        RebuildOffsetLayout(topology);
         MarkStructuralDirty();
         PopulatePanelMetadata();
         RefreshCanvas();

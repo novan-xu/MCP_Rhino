@@ -18,10 +18,12 @@ internal static class Program
         CompactMasksRoundTripAndValidate();
         SaveWritesOnlyNonDefaultMasksAndUsesV4Identity();
         StructuralEditorSaveReloadsDeletedAndMergedCurves();
+        OffsetEditsPreserveMasksAndAssignments();
 
         Console.WriteLine("[OK] One panel-level segment mask and one panel-level merge mask round-trip.");
         Console.WriteLine("[OK] Structural Save writes only nondefault topology masks and a topology-sensitive v4 identity.");
         Console.WriteLine("[OK] Deleted boundaries and merged curve runs survive editor Save/reload.");
+        Console.WriteLine("[OK] H/V and row/column edits preserve all masks, cladding, profiles, undo, and scoped save/reload.");
     }
 
     private static void CompactMasksRoundTripAndValidate()
@@ -211,6 +213,128 @@ internal static class Program
             "Editor Save did not persist only the nondefault segment and merge masks.");
     }
 
+    private static void OffsetEditsPreserveMasksAndAssignments()
+    {
+        foreach (string edit in new[] { "H", "V", "Row", "Column" })
+        foreach (PanelCladdingSaveScope scope in new[] { PanelCladdingSaveScope.Both, PanelCladdingSaveScope.Extrusions })
+        {
+            var keys = new PanelCladdingKeyService();
+            PanelCladdingLayout source = BuildLayout(keys, rows: 4, columns: 4);
+            var repository = new StatefulRepository(keys, source);
+            var signatures = new PanelCladdingTypeSignatureService(keys);
+            var save = new PanelCladdingSaveService(repository, signatures);
+            Dictionary<string, string> values = Values(4, 4, "MAT-001");
+            values[PanelCladdingKeyService.GetCellKey(2, "A")] = "1A";
+            values[PanelCladdingKeyService.GetCellKey(3, "D")] = "MAT-002";
+            var topology = new PanelCladdingTopologyState
+            {
+                MissingSegments = [new(PanelCladdingTopologyAxis.Horizontal, 0, 0), new(PanelCladdingTopologyAxis.Vertical, 0, 2)],
+                HiddenSegments = [new(PanelCladdingTopologyAxis.Horizontal, 2, 3), new(PanelCladdingTopologyAxis.Vertical, 2, 0)],
+                MergeRuns = [new(PanelCladdingTopologyAxis.Horizontal, 1, 1, 3), new(PanelCladdingTopologyAxis.Vertical, 1, 0, 2)]
+            };
+            var assignedSegment = new PanelCladdingSegmentCoordinate(PanelCladdingTopologyAxis.Horizontal, 0, 1);
+            var assignments = new PanelFrameAssignmentState
+            {
+                FrameAssignments = new Dictionary<string, IReadOnlyList<string>> { ["FRM_0"] = new[] { "1D-ALU-001" } },
+                SegmentAssignments = [new(assignedSegment, new[] { "1D-ALU-001" })],
+                CurveModifiers = new Dictionary<string, double> { [PanelFrameAssignmentService.SegmentKey(assignedSegment)] = 2d }
+            };
+            Required(save.Save(new PanelCladdingSaveRequest
+            {
+                FilePath = source.DocumentPath,
+                ObjectId = source.ObjectId,
+                ExpectedGeometryFingerprint = source.GeometryFingerprint,
+                SystemCode = source.SystemCode,
+                Topology = topology,
+                CellValues = values,
+                FrameAssignments = assignments,
+                Scope = PanelCladdingSaveScope.Both
+            }), "Seed saved masks and assignments");
+            var baseline = new Dictionary<string, string>(repository.Current.SourceUserText);
+            var expectedMasks = Required(keys.EncodeTopology(topology, 3, 3), "Encode expected masks");
+            var controller = new PanelCladdingEditorController(repository, save, new PanelPreviewRenderer(), signatures);
+            var window = new PanelCladdingEditorWindow(controller) { ShowInTaskbar = false };
+            Required(window.LoadPanel(source.DocumentPath, source.ObjectId), "Load saved offset fixture");
+            var baselineValues = new Dictionary<string, string>(Field<Dictionary<string, string>>(window, "_values"));
+            AssertRetained("load");
+
+            Invoke(window, "UpdateDividerOffset", PanelDimensionAxis.Row, 0, -1d);
+            Invoke(window, "UpdateDividerOffset", PanelDimensionAxis.Row, 0, 10d);
+            AssertRetained("invalid/no-op edit");
+            Require(Field<System.Collections.ICollection>(window, "_undoStack").Count == 0,
+                "Rejected/no-op offsets must not add an undo entry.");
+
+            ApplyEdit();
+            AssertRetained("edit");
+            PanelCladdingLayout edited = Field<PanelCladdingLayout>(window, "_layout");
+            Require((edit is "H" or "Row" ? edited.HorizontalOffsets : edited.VerticalOffsets)[0] == 12d,
+                $"{edit} did not move the requested divider.");
+            Invoke(window, "UndoLastChange");
+            AssertRetained("undo");
+            Require(Field<PanelCladdingLayout>(window, "_layout").HorizontalOffsets.SequenceEqual(source.HorizontalOffsets) &&
+                    Field<PanelCladdingLayout>(window, "_layout").VerticalOffsets.SequenceEqual(source.VerticalOffsets),
+                "Undo did not restore original coordinates.");
+            ApplyEdit();
+            AssertRetained("repeat edit");
+            Invoke(window, "SavePanel", scope);
+            AssertStored();
+            AssertRetained("save/reload");
+            if (scope == PanelCladdingSaveScope.Extrusions)
+            {
+                Invoke(window, "SavePanel", PanelCladdingSaveScope.Cladding);
+                Required(window.LoadPanel(source.DocumentPath, source.ObjectId), "Reload scoped saves");
+                AssertStored();
+                AssertRetained("scoped reload");
+            }
+            Require(!FieldValue<bool>(window, "_dirty"), "Successful saves must finish without pending changes.");
+            window.Close();
+
+            void ApplyEdit()
+            {
+                PanelDimensionAxis axis = edit is "H" or "Row" ? PanelDimensionAxis.Row : PanelDimensionAxis.Column;
+                if (edit is "H" or "V") Invoke(window, "UpdateDividerOffset", axis, 0, 12d);
+                else Invoke(window, "UpdateDimension", axis, 0, 12d, 4d);
+            }
+
+            void AssertRetained(string phase)
+            {
+                PanelCladdingLayout layout = Field<PanelCladdingLayout>(window, "_layout");
+                PanelCladdingTopologyPayloads masks = Required(keys.EncodeTopology(layout.Topology, 3, 3), "Encode edited masks");
+                Require(masks.SegmentMask == expectedMasks.SegmentMask && masks.MergeMask == expectedMasks.MergeMask &&
+                        masks.HideMask == expectedMasks.HideMask, $"{edit}/{scope}/{phase} changed an indexed topology mask.");
+                Dictionary<string, string> currentValues = Field<Dictionary<string, string>>(window, "_values");
+                Require(currentValues.Count == baselineValues.Count && baselineValues.All(pair =>
+                        currentValues.TryGetValue(pair.Key, out string? value) && value == pair.Value),
+                    $"{edit}/{scope}/{phase} changed cladding material/parent values.");
+                string profilePayload = Required(new PanelFrameAssignmentService().Encode(
+                    layout.FrameAssignments, 3, 3, layout.Topology), "Encode edited profiles");
+                Require(profilePayload == baseline[PanelCladdingKeyService.FrameAssignmentsKey],
+                    $"{edit}/{scope}/{phase} changed extrusion profiles or length modifiers.");
+                IReadOnlySet<string> deleted = Field<HashSet<string>>(window, "_deletedExtrusions");
+                IReadOnlySet<string> hidden = Field<HashSet<string>>(window, "_hiddenExtrusions");
+                Require(deleted.Contains(PanelExtrusionTopology.AtomicId(PanelExtrusionAxis.Horizontal, layout.HorizontalOffsets[0], 0)) &&
+                        deleted.Contains(PanelExtrusionTopology.AtomicId(PanelExtrusionAxis.Vertical, layout.VerticalOffsets[0], 2)) &&
+                        hidden.Contains(PanelExtrusionTopology.AtomicId(PanelExtrusionAxis.Horizontal, layout.HorizontalOffsets[2], 3)) &&
+                        hidden.Contains(PanelExtrusionTopology.AtomicId(PanelExtrusionAxis.Vertical, layout.VerticalOffsets[2], 0)),
+                    $"{edit}/{scope}/{phase} left mask display IDs at old coordinates.");
+            }
+
+            void AssertStored()
+            {
+                foreach ((string key, string value) in baseline.Where(pair => PanelCladdingKeyService.IsTopologyKey(pair.Key) ||
+                    keys.IsCladdingCellKey(pair.Key) || pair.Key == PanelCladdingKeyService.CladdingLogicKey ||
+                    pair.Key == PanelCladdingKeyService.FrameAssignmentsKey))
+                {
+                    Require(repository.Current.SourceUserText.TryGetValue(key, out string? current) && current == value,
+                        $"{edit}/{scope} changed saved layout attribute {key}.");
+                }
+                IReadOnlyList<double> savedOffsets = edit is "H" or "Row"
+                    ? repository.Current.HorizontalOffsets : repository.Current.VerticalOffsets;
+                Require(savedOffsets[0] == 12d, "The coordinate change was not saved.");
+            }
+        }
+    }
+
     private static PanelCladdingLayout BuildLayout(PanelCladdingKeyService keys, int rows, int columns)
     {
         double[] horizontal = Enumerable.Range(1, rows - 1).Select(index => index * 10d).ToArray();
@@ -384,6 +508,7 @@ internal static class Program
                 VerticalOffsets = parsed.VerticalOffsets,
                 Cells = parsed.Cells,
                 Topology = parsed.Topology,
+                FrameAssignments = parsed.FrameAssignments,
                 SourceUserText = userText,
                 Preview = Current.Preview,
                 WorkbookPath = Current.WorkbookPath

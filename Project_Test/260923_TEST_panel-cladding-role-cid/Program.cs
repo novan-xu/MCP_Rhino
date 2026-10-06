@@ -6,9 +6,13 @@ using PanelCladdingEditor.Domain.Models.PanelCladding;
 const string pid = "PID_BKT_W1_03_01";
 const string cid = "CID_BKT_W1_03_01";
 var keys = new PanelCladdingKeyService();
-foreach ((string role, string suffix) in new[] { ("parent", "-P"), ("child", "-C"), ("", "") })
+foreach ((string role, string suffix) in new[] { ("corner_parent", "-P"), ("corner_child", "-C"), ("flat", ""), ("", "") })
 {
     var text = Text(role);
+    if (role.Length > 0) text[PanelCladdingSpawnPlanningService.CidUserTextKey] = "CID_STALE-P";
+    // Conflicting legacy flags must not affect any command path, even when type is absent.
+    text["parent"] = "1";
+    text["child"] = "1";
     var keySet = Required(keys.CreateKeySet([20d, 40d], [50d], text, 100d, 80d, 0.001d));
     var planner = new PanelCladdingSpawnPlanningService(keys);
     var spawn = Required(planner.CreatePlan(text, keySet, 100d, 80d,
@@ -84,7 +88,8 @@ foreach ((string role, string suffix) in new[] { ("parent", "-P"), ("child", "-C
                     Scope = scope, SelectedPanelIds = [layout.ObjectId],
                     Panels = [new PanelCladdingSurfaceSyncPanelSnapshot
                     {
-                        ObjectId = layout.ObjectId, PanelId = pid, PanelCid = cid, Layout = layout
+                        ObjectId = layout.ObjectId, PanelId = pid,
+                        PanelCid = text[PanelCladdingSpawnPlanningService.CidUserTextKey], Layout = layout
                     }],
                     Surfaces = surfaces, Curves = [curve]
                 }));
@@ -104,7 +109,7 @@ foreach ((string role, string suffix) in new[] { ("parent", "-P"), ("child", "-C
         text.Remove(PanelCladdingSpawnPlanningService.CidUserTextKey);
         var missingCid = Required(planner.CreatePlan(text, keySet, 100d, 80d,
             PanelCladdingExtrusionPlanningService.PanelSurfaceLayerRootPath + "::WT01"));
-        Check(missingCid.Curves.All(curve => curve.Cid.StartsWith(cid + suffix + "-")), "Flagged panel missing CID");
+        Check(missingCid.Curves.All(curve => curve.Cid.StartsWith(cid + suffix + "-")), "Typed panel missing CID");
     }
     Console.WriteLine($"[OK] {(role.Length > 0 ? role : "ordinary")}: spawn, update planning, all save scopes, create, and both sync scopes");
 }
@@ -112,26 +117,42 @@ foreach ((string role, string suffix) in new[] { ("parent", "-P"), ("child", "-C
 var mixed = Text("");
 mixed["PaReNt"] = " 1 ";
 mixed["CHILD"] = "1";
-Check(PanelCladdingCidService.ResolvePanelCid(pid, mixed) == cid + "-P", "Case, whitespace, and parent precedence");
-mixed["PaReNt"] = "0";
+Check(PanelCladdingCidService.RoleSuffix(mixed) == "" && PanelCladdingCidService.PanelCidWrite(mixed) is null &&
+    PanelCladdingCidService.ResolvePanelCid(pid, mixed) == cid, "Legacy flags alone cannot activate a role");
+mixed["cw_1.06_unit_type"] = "  CORNER_PARENT  ";
+Check(PanelCladdingCidService.ResolvePanelCid(pid, mixed) == cid + "-P", "Case-insensitive key/value and whitespace");
 mixed[PanelCladdingSpawnPlanningService.CidUserTextKey] = cid + "-P";
+mixed["cw_1.06_unit_type"] = "corner_child";
 Check(PanelCladdingCidService.ResolvePanelCid(pid, mixed) == cid + "-C", "Role change replaces suffix");
-mixed["CHILD"] = "true";
-Check(PanelCladdingCidService.PanelCidWrite(mixed) is null &&
-    PanelCladdingCidService.ResolvePanelCid(pid, mixed) == cid + "-P", "Unflagged stored CID remains unchanged");
-mixed[PanelCladdingSpawnPlanningService.CidUserTextKey] = "CUSTOM-CID";
-Check(PanelCladdingCidService.PanelCidWrite(mixed) is null &&
-    PanelCladdingCidService.ResolvePanelCid(pid, mixed) == "CUSTOM-CID", "Ordinary custom CID preserved");
-foreach (string inactive in new[] { "0", "true", "01", "1.0", "" })
+mixed[PanelCladdingSpawnPlanningService.CidUserTextKey] = cid + "-C";
+mixed["cw_1.06_unit_type"] = " flat ";
+Check(PanelCladdingCidService.PanelCidWrite(mixed) == cid &&
+    PanelCladdingCidService.ResolvePanelCid(pid, mixed) == cid, "Flat removes a previous corner suffix despite old flags");
+foreach (string unsupported in new[] { "parent", "child", "1", "corner", "corner-parent", "", "   " })
 {
-    mixed["PaReNt"] = inactive;
-    Check(PanelCladdingCidService.RoleSuffix(mixed) == "", "Only the value 1 activates the role");
+    mixed["cw_1.06_unit_type"] = unsupported;
+    foreach (string stored in new[] { "CUSTOM-CID", cid + "-P", cid + "-C" })
+    {
+        mixed[PanelCladdingSpawnPlanningService.CidUserTextKey] = stored;
+        Check(PanelCladdingCidService.RoleSuffix(mixed) == "" &&
+            PanelCladdingCidService.PanelCidWrite(mixed) is null &&
+            PanelCladdingCidService.ResolvePanelCid(pid, mixed) == stored,
+            "Unsupported types preserve stored CIDs and never fall back to old flags");
+    }
+    mixed.Remove(PanelCladdingSpawnPlanningService.CidUserTextKey);
+    Check(PanelCladdingCidService.ResolvePanelCid(pid, mixed) == cid, "Missing CID retains base identity fallback");
+}
+foreach (string role in new[] { "flat", "corner_parent", "corner_child" })
+{
+    var noPid = Text(role);
+    noPid.Remove(PanelCladdingSpawnPlanningService.PanelIdUserTextKey);
+    Check(PanelCladdingCidService.PanelCidWrite(noPid) is null, "No panel CID write without PID");
 }
 Check(PanelCladdingCidService.IncludesDependency(pid, cid + "-P", cid + "-P-0A"), "Own role is in update scope");
 Check(!PanelCladdingCidService.IncludesDependency(pid, cid + "-P", cid + "-C-0A"), "Sibling role excluded from update");
 Check(!PanelCladdingCidService.IncludesDependency(pid, cid + "-C", cid + "-P-INT_B1"), "Parent curves excluded from child update");
 Check(PanelCladdingCidService.IncludesDependency(pid, cid + "-P", cid + "-0A"), "Legacy output can migrate");
-Console.WriteLine("[OK] flag values, casing, precedence, repeat/role changes, custom IDs, and sibling update isolation");
+Console.WriteLine("[OK] unit types, ignored legacy flags, casing, role transitions, missing/unknown types, custom IDs, and sibling update isolation");
 
 Dictionary<string, string> Text(string role)
 {
@@ -145,7 +166,7 @@ Dictionary<string, string> Text(string role)
         ["CW_4.02_CLADDING_0C"] = "GL01", ["CW_4.03_CLADDING_1A"] = "GL01",
         ["CW_4.04_CLADDING_1B"] = "GL01", ["CW_4.05_CLADDING_1C"] = "GL01"
     };
-    if (role.Length > 0) text[role] = "1";
+    if (role.Length > 0) text["CW_1.06_UNIT_TYPE"] = role;
     return text;
 }
 

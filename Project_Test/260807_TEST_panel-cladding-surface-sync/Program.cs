@@ -769,6 +769,7 @@ internal static class Program
             ObjectId = objectId,
             PanelId = pid,
             Cid = cid,
+            ObjectName = PanelCladdingCidService.ShortName(cid),
             LayerPath = layerPath,
             CladdingValue = claddingValue,
             CoverageValue = cellLabel

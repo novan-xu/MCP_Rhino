@@ -56,7 +56,7 @@ public sealed class PanelCladdingSurfaceSyncService : IPanelCladdingSurfaceSyncS
         }
         PanelCladdingSurfaceSyncPlan plan = planned.Data;
         PanelCladdingSurfaceSyncPanelPlan[] changedPanels = plan.Panels
-            .Where(panel => panel.CladdingChanged)
+            .Where(panel => panel.CladdingChanged || panel.NameChanged)
             .ToArray();
         PanelCladdingSurfaceSyncSurfacePlan[] changedSurfaces = plan.Surfaces
             .Where(surface => surface.MetadataChanged)

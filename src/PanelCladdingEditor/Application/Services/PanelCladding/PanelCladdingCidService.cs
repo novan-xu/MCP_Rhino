@@ -2,6 +2,23 @@ namespace PanelCladdingEditor.Application.Services.PanelCladding;
 
 public static class PanelCladdingCidService
 {
+    public const string UnitTypeUserTextKey = "CW_1.06_UNIT_TYPE";
+
+    public static string ShortName(string cid)
+    {
+        string value = (cid ?? string.Empty).Trim();
+        int prefixLength = value.StartsWith("CID_BKT_", StringComparison.OrdinalIgnoreCase) ? 8 :
+            value.StartsWith("CID_", StringComparison.OrdinalIgnoreCase) ? 4 : 0;
+        return value.Length > prefixLength ? value[prefixLength..] : value;
+    }
+
+    public static string? PanelNameWrite(IReadOnlyDictionary<string, string> userText)
+    {
+        string cid = PanelCidWrite(userText) ??
+            Get(userText, PanelCladdingSpawnPlanningService.CidUserTextKey).Trim();
+        return cid.Length > 0 ? ShortName(cid) : null;
+    }
+
     public static string FromPanelId(string panelId)
     {
         string pid = (panelId ?? string.Empty).Trim();
@@ -9,8 +26,17 @@ public static class PanelCladdingCidService
     }
 
     public static string RoleSuffix(IReadOnlyDictionary<string, string> userText) =>
-        Get(userText, "parent").Trim() == "1" ? "-P" :
-        Get(userText, "child").Trim() == "1" ? "-C" : string.Empty;
+        UnitTypeSuffix(userText) ?? string.Empty;
+
+    // Null means unspecified/unsupported; an empty suffix is an explicit flat panel.
+    private static string? UnitTypeSuffix(IReadOnlyDictionary<string, string> userText) =>
+        Get(userText, UnitTypeUserTextKey).Trim().ToLowerInvariant() switch
+        {
+            "flat" => string.Empty,
+            "corner_parent" => "-P",
+            "corner_child" => "-C",
+            _ => null
+        };
 
     public static string ResolvePanelCid(
         string panelId,
@@ -18,9 +44,9 @@ public static class PanelCladdingCidService
         string? existingCid = null)
     {
         string canonical = FromPanelId(panelId);
-        string suffix = RoleSuffix(userText);
+        string? suffix = UnitTypeSuffix(userText);
         string stored = (existingCid ?? Get(userText, PanelCladdingSpawnPlanningService.CidUserTextKey)).Trim();
-        if (suffix.Length > 0)
+        if (suffix is not null)
         {
             return canonical + suffix;
         }
@@ -33,12 +59,12 @@ public static class PanelCladdingCidService
         IReadOnlyDictionary<string, string> userText) =>
         $"{FromPanelId(panelId)}{RoleSuffix(userText)}-{cellLabel.Trim()}";
 
-    // Only role-related panel metadata belongs to this behavior change. Ordinary custom
-    // CIDs and panels without PID metadata retain their existing save behavior.
+    // Explicit unit types own the canonical CID, including removing stale corner suffixes
+    // for flat panels. Missing/unsupported unit types and missing PIDs are not rewritten.
     public static string? PanelCidWrite(IReadOnlyDictionary<string, string> userText)
     {
         string pid = Get(userText, PanelCladdingSpawnPlanningService.PanelIdUserTextKey).Trim();
-        if (pid.Length == 0 || RoleSuffix(userText).Length == 0)
+        if (pid.Length == 0 || UnitTypeSuffix(userText) is null)
         {
             return null;
         }

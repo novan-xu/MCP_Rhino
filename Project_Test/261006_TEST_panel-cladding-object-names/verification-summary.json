@@ -1,0 +1,28 @@
+{
+  "version": "1.0.86",
+  "naming": "Remove leading CID_BKT_; otherwise remove CID_; preserve remaining identifier and full CID metadata",
+  "regressionRunsPassed": [
+    "names-debug",
+    "names-release",
+    "surface-sync-debug",
+    "curve-sync-debug",
+    "create-debug",
+    "role-cid-debug",
+    "update-debug",
+    "undo-debug"
+  ],
+  "nativeUndo": "optional native branch skipped",
+  "standaloneBuilds": [
+    "Debug",
+    "Release"
+  ],
+  "buildWarnings": 0,
+  "buildErrors": 0,
+  "package": "Release publish and direct RHP rebuild passed",
+  "identity": "passed before packaging and on staged RHP; distinct assembly GUIDs",
+  "bundleFileHashesVerified": 27,
+  "stagedRhp": "%LOCALAPPDATA%\\PanelCladdingEditor\\staged\\1.0.86-object-names-261006\\Plugin\\PanelCladdingEditor.rhp",
+  "rhpSha256": "124598be6c9684664fe5726cfbe07b271c951aa09e0e215f765621ddd18837c0",
+  "installation": "installed 1.0.86; Install/Validate, independent host registration validation, and post-start loaded-module/timestamp checks passed",
+  "liveGeometryAcceptance": "not run"
+}

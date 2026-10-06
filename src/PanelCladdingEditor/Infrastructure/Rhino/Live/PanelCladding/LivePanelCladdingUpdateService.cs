@@ -55,17 +55,35 @@ public sealed class LivePanelCladdingUpdateService : ILivePanelCladdingUpdateSer
                 "PANEL_CLADDING_UPDATE_PANEL_SELECTION_REQUIRED");
         }
 
-        OperationResponse<IReadOnlyList<PanelSource>> sources = ReadPanelSources(document, sourcePanelIds);
+        // Validate the source geometry and PID before entering the mutation scope.
+        var sources = ReadPanelSources(document, sourcePanelIds);
         if (!sources.Success || sources.Data is null)
         {
             return OperationResponse<PanelCladdingUpdateResult>.Fail(sources.Message);
         }
 
+        return Apply(document, filePath, sourcePanelIds);
+    }
+
+    private OperationResponse<PanelCladdingUpdateResult> UpdateDependencies(
+        RhinoDoc document,
+        string filePath,
+        IReadOnlyList<Guid> sourcePanelIds,
+        ref bool documentMutationOccurred)
+    {
+        // Read again after the CID writes, so selection and generation use the same document state.
+        var sources = ReadPanelSources(document, sourcePanelIds);
+        if (!sources.Success || sources.Data is null)
+        {
+            return OperationResponse<PanelCladdingUpdateResult>.Fail(sources.Message);
+        }
+        PanelCladdingUpdateSelection selection = PanelCladdingUpdateSelectionService.CreatePlan(sources.Data);
+
         var generator = new LivePanelCladdingSpawnService(_layouts, _keys, _spawnPlanning);
         OperationResponse<IReadOnlyList<PreparedDependency>> preparedResponse = PrepareDependencies(
             document,
             filePath,
-            sources.Data,
+            selection.ProcessableSources,
             generator);
         if (!preparedResponse.Success || preparedResponse.Data is null)
         {
@@ -75,9 +93,12 @@ public sealed class LivePanelCladdingUpdateService : ILivePanelCladdingUpdateSer
         IReadOnlyList<PreparedDependency> prepared = preparedResponse.Data;
         try
         {
+            var ambiguousDependencies = new List<Guid>();
             IReadOnlyList<PanelCladdingExistingDependency> existing = ReadManagedDependencies(
                 document,
-                sources.Data);
+                sources.Data,
+                selection.ProcessableSources.Select(source => source.ObjectId).ToHashSet(),
+                ambiguousDependencies);
             OperationResponse<PanelCladdingDependencyReconciliationPlan> plan =
                 _reconciliation.CreatePlan(
                     prepared.Select(item => item.Expected).ToArray(),
@@ -87,7 +108,8 @@ public sealed class LivePanelCladdingUpdateService : ILivePanelCladdingUpdateSer
                 return OperationResponse<PanelCladdingUpdateResult>.Fail(plan.Message);
             }
 
-            return Apply(document, sourcePanelIds, prepared, plan.Data);
+            return ApplyDependencies(document, selection, prepared, plan.Data,
+                ambiguousDependencies, ref documentMutationOccurred);
         }
         finally
         {
@@ -98,18 +120,17 @@ public sealed class LivePanelCladdingUpdateService : ILivePanelCladdingUpdateSer
         }
     }
 
-    private static OperationResponse<IReadOnlyList<PanelSource>> ReadPanelSources(
+    private static OperationResponse<IReadOnlyList<PanelCladdingUpdateSource>> ReadPanelSources(
         RhinoDoc document,
         IReadOnlyList<Guid> panelObjectIds)
     {
-        var sources = new List<PanelSource>(panelObjectIds.Count);
-        var panelIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var sources = new List<PanelCladdingUpdateSource>(panelObjectIds.Count);
         foreach (Guid objectId in panelObjectIds)
         {
             RhinoObject? rhinoObject = document.Objects.FindId(objectId);
             if (rhinoObject?.Geometry is not Brep)
             {
-                return OperationResponse<IReadOnlyList<PanelSource>>.Fail(
+                return OperationResponse<IReadOnlyList<PanelCladdingUpdateSource>>.Fail(
                     $"PANEL_CLADDING_UPDATE_PANEL_BREP_NOT_FOUND: {objectId:D}");
             }
             string panelId = GetCanonicalUserText(
@@ -117,28 +138,23 @@ public sealed class LivePanelCladdingUpdateService : ILivePanelCladdingUpdateSer
                 PanelCladdingSpawnPlanningService.PanelIdUserTextKey).Trim();
             if (panelId.Length == 0)
             {
-                return OperationResponse<IReadOnlyList<PanelSource>>.Fail(
+                return OperationResponse<IReadOnlyList<PanelCladdingUpdateSource>>.Fail(
                     $"PANEL_CLADDING_UPDATE_PID_REQUIRED: {objectId:D}");
             }
-            if (!panelIds.Add(panelId))
-            {
-                return OperationResponse<IReadOnlyList<PanelSource>>.Fail(
-                    $"PANEL_CLADDING_UPDATE_DUPLICATE_SELECTED_PID: {panelId}");
-            }
-            sources.Add(new PanelSource(objectId, panelId,
+            sources.Add(new PanelCladdingUpdateSource(objectId, panelId,
                 PanelCladdingCidService.ResolvePanelCid(panelId, LivePanelCladdingCidService.Read(rhinoObject.Attributes))));
         }
-        return OperationResponse<IReadOnlyList<PanelSource>>.Ok(sources);
+        return OperationResponse<IReadOnlyList<PanelCladdingUpdateSource>>.Ok(sources);
     }
 
     private static OperationResponse<IReadOnlyList<PreparedDependency>> PrepareDependencies(
         RhinoDoc document,
         string filePath,
-        IReadOnlyList<PanelSource> sources,
+        IReadOnlyList<PanelCladdingUpdateSource> sources,
         LivePanelCladdingSpawnService generator)
     {
         var prepared = new List<PreparedDependency>();
-        foreach (PanelSource source in sources)
+        foreach (PanelCladdingUpdateSource source in sources)
         {
             OperationResponse<LivePanelCladdingSpawnService.PreparedPanel> surfaces =
                 generator.PreparePanel(
@@ -181,9 +197,13 @@ public sealed class LivePanelCladdingUpdateService : ILivePanelCladdingUpdateSer
 
     private static IReadOnlyList<PanelCladdingExistingDependency> ReadManagedDependencies(
         RhinoDoc document,
-        IReadOnlyList<PanelSource> sources)
+        IReadOnlyList<PanelCladdingUpdateSource> sources,
+        IReadOnlySet<Guid> processableIds,
+        List<Guid> ambiguousDependencies)
     {
-        var selectedPanels = sources.ToDictionary(source => source.PanelId, StringComparer.OrdinalIgnoreCase);
+        var selectedPanels = sources.GroupBy(source => source.PanelId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.OrdinalIgnoreCase);
+        var sourceIds = sources.Select(source => source.ObjectId).ToHashSet();
         var result = new List<PanelCladdingExistingDependency>();
         foreach (RhinoObject rhinoObject in document.Objects.GetObjectList(
             new ObjectEnumeratorSettings
@@ -196,6 +216,10 @@ public sealed class LivePanelCladdingUpdateService : ILivePanelCladdingUpdateSer
                 ObjectTypeFilter = ObjectType.Brep | ObjectType.Curve
             }))
         {
+            if (sourceIds.Contains(rhinoObject.Id))
+            {
+                continue;
+            }
             string layerPath = rhinoObject.Attributes.LayerIndex >= 0
                 ? document.Layers[rhinoObject.Attributes.LayerIndex]?.FullPath ?? string.Empty
                 : string.Empty;
@@ -218,9 +242,19 @@ public sealed class LivePanelCladdingUpdateService : ILivePanelCladdingUpdateSer
             string cid = GetCanonicalUserText(
                 rhinoObject.Attributes,
                 PanelCladdingSpawnPlanningService.CidUserTextKey).Trim();
-            if (!selectedPanels.TryGetValue(panelId, out PanelSource? source) || cid.Length == 0 ||
-                !PanelCladdingCidService.IncludesDependency(panelId, source.PanelCid, cid))
+            if (!selectedPanels.TryGetValue(panelId, out var candidates) || cid.Length == 0)
             {
+                continue;
+            }
+            var owners = PanelCladdingUpdateSelectionService.FindDependencyOwners(candidates, panelId, cid);
+            if (owners.Count != 1 || !processableIds.Contains(owners[0].ObjectId))
+            {
+                // Legacy unsuffixed dependencies cannot be assigned to one of several selected roles.
+                // Including skipped sources here also protects their geometry from another panel's update.
+                if (owners.Count > 1 && owners.Any(owner => processableIds.Contains(owner.ObjectId)))
+                {
+                    ambiguousDependencies.Add(rhinoObject.Id);
+                }
                 continue;
             }
             result.Add(new PanelCladdingExistingDependency
@@ -234,20 +268,11 @@ public sealed class LivePanelCladdingUpdateService : ILivePanelCladdingUpdateSer
         return result;
     }
 
-    private static OperationResponse<PanelCladdingUpdateResult> Apply(
+    private OperationResponse<PanelCladdingUpdateResult> Apply(
         RhinoDoc document,
-        IReadOnlyList<Guid> sourcePanelIds,
-        IReadOnlyList<PreparedDependency> prepared,
-        PanelCladdingDependencyReconciliationPlan plan)
+        string filePath,
+        IReadOnlyList<Guid> sourcePanelIds)
     {
-        var preparedByIdentity = prepared.ToDictionary(
-            item => IdentityKey(item.Expected),
-            StringComparer.OrdinalIgnoreCase);
-        var createdSurfaces = new List<Guid>();
-        var createdCurves = new List<Guid>();
-        var updatedSurfaces = new List<Guid>();
-        var updatedCurves = new List<Guid>();
-        var deleted = new List<Guid>();
         var panelCidChanges = LivePanelCladdingCidService.Prepare(document, sourcePanelIds);
         if (!panelCidChanges.Success || panelCidChanges.Data is null)
         {
@@ -269,87 +294,22 @@ public sealed class LivePanelCladdingUpdateService : ILivePanelCladdingUpdateSer
         OperationResponse<PanelCladdingUpdateResult>? outcome = null;
         try
         {
-            foreach (PanelCladdingDependencyUpdateAction action in plan.Updates)
+            OperationResponse cidCommit = LivePanelCladdingCidService.Apply(document, panelCidChanges.Data);
+            documentMutationOccurred |= panelCidChanges.Data.Any(change => change.Applied);
+            outcome = cidCommit.Success
+                ? UpdateDependencies(document, filePath, sourcePanelIds, ref documentMutationOccurred)
+                : OperationResponse<PanelCladdingUpdateResult>.Fail(cidCommit.Message);
+            if (outcome.Success && outcome.Data is not null)
             {
-                PreparedDependency dependency = preparedByIdentity[IdentityKey(action.Expected)];
-                OperationResponse updated = UpdateExisting(
-                    document,
-                    action.ObjectId,
-                    dependency,
-                    ref documentMutationOccurred);
-                if (!updated.Success)
+                if (outcome.Data.DuplicateCidGroups.Count > 0)
                 {
-                    outcome = OperationResponse<PanelCladdingUpdateResult>.Fail(updated.Message);
-                    break;
-                }
-                (dependency.Expected.Kind == PanelCladdingDependencyKind.Surface
-                    ? updatedSurfaces
-                    : updatedCurves).Add(action.ObjectId);
-            }
-
-            if (outcome is null)
-            {
-                foreach (PanelCladdingExpectedDependency expected in plan.Creates)
-                {
-                    PreparedDependency dependency = preparedByIdentity[IdentityKey(expected)];
-                    OperationResponse<Guid> created = CreateMissing(
-                        document,
-                        dependency,
-                        ref documentMutationOccurred);
-                    if (!created.Success || created.Data == Guid.Empty)
+                    document.Objects.UnselectAll();
+                    foreach (Guid id in outcome.Data.DuplicateCidGroups.SelectMany(group => group.PanelObjectIds))
                     {
-                        outcome = OperationResponse<PanelCladdingUpdateResult>.Fail(created.Message);
-                        break;
+                        document.Objects.FindId(id)?.Select(true);
                     }
-                    (expected.Kind == PanelCladdingDependencyKind.Surface
-                        ? createdSurfaces
-                        : createdCurves).Add(created.Data);
-                    documentMutationOccurred = true;
                 }
-            }
-
-            if (outcome is null)
-            {
-                foreach (Guid objectId in plan.Deletes)
-                {
-                    RhinoObject? existingObject = document.Objects.FindId(objectId);
-                    if (existingObject is null || !document.Objects.Delete(
-                            existingObject,
-                            quiet: true,
-                            ignoreModes: true))
-                    {
-                        outcome = OperationResponse<PanelCladdingUpdateResult>.Fail(
-                            $"PANEL_CLADDING_UPDATE_DELETE_FAILED: {objectId:D}");
-                        break;
-                    }
-                    deleted.Add(objectId);
-                    documentMutationOccurred = true;
-                }
-            }
-
-            if (outcome is null)
-            {
-                OperationResponse cidCommit = LivePanelCladdingCidService.Apply(document, panelCidChanges.Data);
-                documentMutationOccurred |= panelCidChanges.Data.Any(change => change.Applied);
-                if (!cidCommit.Success)
-                {
-                    outcome = OperationResponse<PanelCladdingUpdateResult>.Fail(cidCommit.Message);
-                }
-            }
-
-            if (outcome is null)
-            {
                 document.Views.Redraw();
-                outcome = OperationResponse<PanelCladdingUpdateResult>.Ok(
-                    new PanelCladdingUpdateResult
-                    {
-                        SourcePanelIds = sourcePanelIds.ToArray(),
-                        CreatedSurfaceIds = createdSurfaces,
-                        CreatedCurveIds = createdCurves,
-                        UpdatedSurfaceIds = updatedSurfaces,
-                        UpdatedCurveIds = updatedCurves,
-                        DeletedObjectIds = deleted
-                    });
             }
         }
         catch (Exception ex)
@@ -371,6 +331,72 @@ public sealed class LivePanelCladdingUpdateService : ILivePanelCladdingUpdateSer
         }
         return outcome ?? OperationResponse<PanelCladdingUpdateResult>.Fail(
             "PANEL_CLADDING_UPDATE_NO_RESULT");
+    }
+
+    private static OperationResponse<PanelCladdingUpdateResult> ApplyDependencies(
+        RhinoDoc document,
+        PanelCladdingUpdateSelection selection,
+        IReadOnlyList<PreparedDependency> prepared,
+        PanelCladdingDependencyReconciliationPlan plan,
+        IReadOnlyList<Guid> ambiguousDependencies,
+        ref bool documentMutationOccurred)
+    {
+        var preparedByIdentity = prepared.ToDictionary(
+            item => IdentityKey(item.Expected), StringComparer.OrdinalIgnoreCase);
+        var createdSurfaces = new List<Guid>();
+        var createdCurves = new List<Guid>();
+        var updatedSurfaces = new List<Guid>();
+        var updatedCurves = new List<Guid>();
+        var deleted = new List<Guid>();
+        foreach (PanelCladdingDependencyUpdateAction action in plan.Updates)
+        {
+            PreparedDependency dependency = preparedByIdentity[IdentityKey(action.Expected)];
+            OperationResponse updated = UpdateExisting(
+                document, action.ObjectId, dependency, ref documentMutationOccurred);
+            if (!updated.Success)
+            {
+                return OperationResponse<PanelCladdingUpdateResult>.Fail(updated.Message);
+            }
+            (dependency.Expected.Kind == PanelCladdingDependencyKind.Surface
+                ? updatedSurfaces : updatedCurves).Add(action.ObjectId);
+        }
+        foreach (PanelCladdingExpectedDependency expected in plan.Creates)
+        {
+            PreparedDependency dependency = preparedByIdentity[IdentityKey(expected)];
+            OperationResponse<Guid> created = CreateMissing(document, dependency, ref documentMutationOccurred);
+            if (!created.Success || created.Data == Guid.Empty)
+            {
+                return OperationResponse<PanelCladdingUpdateResult>.Fail(created.Message);
+            }
+            (expected.Kind == PanelCladdingDependencyKind.Surface
+                ? createdSurfaces : createdCurves).Add(created.Data);
+            documentMutationOccurred = true;
+        }
+        foreach (Guid objectId in plan.Deletes)
+        {
+            RhinoObject? existingObject = document.Objects.FindId(objectId);
+            if (existingObject is null || !document.Objects.Delete(
+                    existingObject,
+                    quiet: true,
+                    ignoreModes: true))
+            {
+                return OperationResponse<PanelCladdingUpdateResult>.Fail(
+                    $"PANEL_CLADDING_UPDATE_DELETE_FAILED: {objectId:D}");
+            }
+            deleted.Add(objectId);
+            documentMutationOccurred = true;
+        }
+        return OperationResponse<PanelCladdingUpdateResult>.Ok(new PanelCladdingUpdateResult
+        {
+            SourcePanelIds = selection.ProcessableSources.Select(source => source.ObjectId).ToArray(),
+            DuplicateCidGroups = selection.DuplicateCidGroups,
+            PreservedAmbiguousDependencyIds = ambiguousDependencies,
+            CreatedSurfaceIds = createdSurfaces,
+            CreatedCurveIds = createdCurves,
+            UpdatedSurfaceIds = updatedSurfaces,
+            UpdatedCurveIds = updatedCurves,
+            DeletedObjectIds = deleted
+        });
     }
 
     private static OperationResponse UpdateExisting(
@@ -469,7 +495,7 @@ public sealed class LivePanelCladdingUpdateService : ILivePanelCladdingUpdateSer
 
         var attributes = new ObjectAttributes
         {
-            Name = dependency.SurfacePlan?.Cid ?? dependency.CurvePlan?.Code ?? string.Empty,
+            Name = PanelCladdingCidService.ShortName(dependency.Expected.Cid),
             LayerIndex = layer.Data,
             ColorSource = dependency.CurvePlan is null
                 ? ObjectColorSource.ColorFromLayer
@@ -544,8 +570,6 @@ public sealed class LivePanelCladdingUpdateService : ILivePanelCladdingUpdateSer
         }
     }
 
-    private sealed record PanelSource(Guid ObjectId, string PanelId, string PanelCid);
-
     private sealed class PreparedDependency : IDisposable
     {
         private PreparedDependency(
@@ -566,7 +590,7 @@ public sealed class LivePanelCladdingUpdateService : ILivePanelCladdingUpdateSer
         public PanelCladdingExtrusionCurvePlan? CurvePlan { get; }
 
         public static PreparedDependency FromSurface(
-            PanelSource source,
+            PanelCladdingUpdateSource source,
             LivePanelCladdingSpawnService.PreparedRegion region) =>
             new(
                 new PanelCladdingExpectedDependency
@@ -581,7 +605,7 @@ public sealed class LivePanelCladdingUpdateService : ILivePanelCladdingUpdateSer
                 null);
 
         public static PreparedDependency FromCurve(
-            PanelSource source,
+            PanelCladdingUpdateSource source,
             LivePanelCladdingSpawnService.PreparedCurve curve) =>
             new(
                 new PanelCladdingExpectedDependency

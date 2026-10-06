@@ -1,0 +1,31 @@
+{
+  "version": "1.0.82",
+  "regressions": [
+    "topology-persistence Debug",
+    "topology-persistence Release",
+    "scoped-save Debug",
+    "hide-mask Debug",
+    "create Debug",
+    "curve-topology Debug"
+  ],
+  "regressionResult": "all passed",
+  "offsetEditCasesPerConfiguration": 8,
+  "offsetEditChecks": [
+    "H and V direct edits",
+    "row and column dimensions",
+    "byte-identical masks",
+    "cladding material and parent values",
+    "profile assignments and length modifiers",
+    "Undo",
+    "Save Both",
+    "Save Extrusions then Save Cladding and reload",
+    "invalid/no-op input"
+  ],
+  "standaloneBuilds": "Debug and Release passed: 0 warnings, 0 errors",
+  "assemblyIdentity": "passed before packaging and on staged RHP; matches product manifest and differs from MCP_Rhino",
+  "bundleFilesVerified": 27,
+  "rhpSha256": "ca08cd3fda9a98095f5140ab271575e30effb687b20121b4f638de35996afcb5",
+  "stagedBundle": "%LOCALAPPDATA%\\PanelCladdingEditor\\staged\\1.0.82-offset-layout-261006",
+  "installation": "not performed",
+  "liveRhinoValidation": "not performed; editor checks use unshown in-process WPF objects and a fake repository"
+}
