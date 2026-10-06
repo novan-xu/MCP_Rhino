@@ -16,9 +16,45 @@ panels succeeds without changes. A one-row/one-column case with no applicable
 run remains mask-free. Surface commands operate only on cladding Breps; curve commands operate only
 on extrusion curves.
 
+`PCCreate` initializes the selected panels' grid from selected guide curves. Since
+version 1.0.80 it also writes `CW_2.00_UNIT_DIMENSION`, `CW_2.01_UNIT_WIDTH`, and
+`CW_2.02_UNIT_HEIGHT` from each panel's local extents, using invariant five-decimal
+values (`widthxheight` for the combined dimension). Existing dimension values are
+refreshed. Rerunning PCCreate still resets generated grid and cell assignments.
+Since version 1.0.81, its intermediate tracks start segmented even when a guide
+spans multiple cells. Guide coverage still determines missing segments; guide
+continuity does not create a merge mask. Merge explicitly in PCEditor or apply
+PCCrvTemplate when desired. Perimeter frame behavior is unchanged.
+
+Since version 1.0.82, changing H/V values or row/column dimensions in PCEditor
+preserves the current delete, hide, and merge masks by track/segment index.
+Cladding materials, parent-cell links, and extrusion profile assignments retain
+their layout while coordinates move. Save/reload persists the same masks; adding
+or removing tracks remains an explicit topology edit.
+
+Since version 1.0.84, cladding-view dashed boundaries follow the resolved cladding
+region across actual shared edges, including indirect parent references and
+spanning/nonrectangular logical cells. Cell label numbering and material code
+equality do not determine line style: separate owners stay solid even with the
+same material, and deleted logical-cell interiors remain absent.
+
+Use `PCSyncSrf` after editing associated cladding surfaces or their material layers
+to reconstruct the selected panels' cladding layout, material assignments, and
+cell ownership. Use `PCSyncCrv` after editing associated extrusion curves to
+reconstruct the selected panels' H/V grid and curve topology. Both read existing
+geometry back into panel attributes and refresh dependency metadata and panel
+dimensions; select the source panel Breps in a saved document.
+
 `PCUpdate` participates in Rhino's command-owned Undo record when invoked from the command line and
 opens its own record only when called without an active command record. A successful batch therefore
 appears as one normal Rhino Undo entry without attempting an unsupported nested record.
+Since version 1.0.83, PCUpdate normalizes parent/child CIDs before checking selected
+panel identities. Parent and child panels sharing a PID can update together.
+Every panel in a duplicate-CID group is skipped; unique-CID panels still update,
+and skipped panels remain selected with their duplicate CIDs reported. An
+all-duplicate selection succeeds without dependency changes. Legacy unsuffixed
+dependencies whose ownership is ambiguous between selected panels are preserved
+and reported; dependencies belonging to skipped panels are excluded from updates.
 Existing managed dependencies can remain object-locked, object-hidden, or on locked/hidden managed
 layers: update and stale/duplicate deletion bypass those mutation modes without unlocking/showing
 the objects or changing layer state, and retained object-level mode is preserved.
@@ -32,11 +68,25 @@ Panel cladding saves persist material-independent cell ownership under
 hidden-segment mask in `CW_2.11_HIDE_MASK`. `PCSyncSrf` combines that saved owner graph with current Rhino surface
 coverage and material layers, while edited splits and merges remain geometry-authoritative.
 
-Panels with user text `parent=1` or `child=1` use a PID-derived CID ending in `-P`
-or `-C`. Material surfaces and extrusion curves inherit that role suffix before
-their cell/curve code, for example `CID_BKT_W1_03_01-P-0A` and
-`CID_BKT_W1_03_01-P-INT_B1`. Existing PC save/create/match/spawn/sync/update paths
-apply the rule. Parent takes precedence if both flags are `1`.
+Since version 1.0.85, panel roles come exclusively from `CW_1.06_UNIT_TYPE`:
+`flat` uses a PID-derived CID without a role suffix, `corner_parent` uses `-P`,
+and `corner_child` uses `-C`. Keys and values ignore case and surrounding value
+whitespace. The old `parent` and `child` flags are ignored. Material surfaces and
+extrusion curves inherit the suffix before their cell/curve code, for example
+`CID_BKT_W1_03_01-P-0A` and `CID_BKT_W1_03_01-P-INT_B1`.
+Existing PC save/create/match/spawn/sync/update paths apply the rule. Changing to
+`flat` clears a stale panel CID role suffix. A missing or unsupported unit type
+does not rewrite an existing custom panel CID or fall back to legacy flags.
+
+Since version 1.0.86, panel and managed dependency object names use a shortened
+CID: `CID_BKT_S1_06_14` becomes `S1_06_14`, and
+`CID_BKT_S1_06_14-P-INT_B1` becomes `S1_06_14-P-INT_B1`. The leading `CID_BKT_`
+is removed without changing the full CID user text; other `CID_` identifiers lose
+only `CID_`, and custom identifiers are preserved. Prefix matching ignores case.
+Create, save, match, spawn, sync, and update normalize source-panel names from the
+current CID. Spawn/update/sync apply the same rule to surfaces and extrusion curves.
+Run PCUpdate on existing configured panels to refresh their dependency names.
+Both sync commands detect name-only changes; missing CID leaves the panel name alone.
 
 Baked cladding surfaces and extrusion curves inherit the panel's `CW_1.05_LOT`
 value, including leading zeros. `PCUpdate`, `PCSyncSrf`, and `PCSyncCrv` use this

@@ -102,24 +102,20 @@ internal static class Program
 
         try
         {
-            OperationResponse<PanelCladdingDependencyReconciliationPlan> planResponse =
-                new PanelCladdingDependencyReconciliationService().CreatePlan([], []);
-            Require(planResponse.Success && planResponse.Data is not null,
-                $"The empty reconciliation plan failed: {planResponse.Message}");
-
             Type serviceType = typeof(PanelCladdingDependencyReconciliationService).Assembly.GetType(
                 "PanelCladdingEditor.Infrastructure.Rhino.Live.PanelCladding.LivePanelCladdingUpdateService") ??
                 throw new InvalidOperationException("LivePanelCladdingUpdateService is missing.");
             MethodInfo apply = serviceType.GetMethod(
                 "Apply",
-                BindingFlags.Static | BindingFlags.NonPublic) ??
+                BindingFlags.Instance | BindingFlags.NonPublic) ??
                 throw new InvalidOperationException("LivePanelCladdingUpdateService.Apply is missing.");
-            Type preparedType = apply.GetParameters()[2].ParameterType.GetGenericArguments()[0];
-            Array prepared = Array.CreateInstance(preparedType, 0);
+            var keys = new PanelCladdingKeyService();
+            object service = Activator.CreateInstance(serviceType,
+                [null, keys, new PanelCladdingSpawnPlanningService(keys), new PanelCladdingDependencyReconciliationService()])!;
 
             object response = apply.Invoke(
-                null,
-                [document, Array.Empty<Guid>(), prepared, planResponse.Data]) ??
+                service,
+                [document, "unused-for-empty-batch", Array.Empty<Guid>()]) ??
                 throw new InvalidOperationException("PCUpdate Apply returned null.");
             bool success = (bool?)response.GetType().GetProperty("Success")?.GetValue(response) ?? false;
             string message = (string?)response.GetType().GetProperty("Message")?.GetValue(response) ?? string.Empty;

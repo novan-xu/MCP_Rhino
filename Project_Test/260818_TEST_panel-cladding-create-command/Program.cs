@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using PanelCladdingEditor.Application.Interfaces;
 using PanelCladdingEditor.Application.Services.PanelCladding;
@@ -16,10 +17,12 @@ internal static class Program
     {
         var planner = new PanelCladdingCreatePlanningService(new PanelCladdingKeyService());
         VerifyGridPlanning(planner);
+        VerifyUnitDimensions(planner);
         VerifyMultiPanelAndFailureBehavior(planner);
         VerifyCommandContract();
 
         Console.WriteLine("[OK] H/V guides create canonical bottom-up and left-right panel cells.");
+        Console.WriteLine("[OK] PCCreate writes per-panel dimensions, refreshes stale keys, and uses invariant five-decimal values.");
         Console.WriteLine("[OK] Remote, exterior, diagonal, and duplicate guides are handled deterministically.");
         Console.WriteLine("[OK] Existing grid/type/signature metadata resets while unrelated panel metadata is preserved.");
         Console.WriteLine("[OK] PCCreate exposes the required panel-first, curve-second Rhino command flow.");
@@ -27,19 +30,9 @@ internal static class Program
 
     private static void VerifyGridPlanning(PanelCladdingCreatePlanningService planner)
     {
-        var keys = new PanelCladdingKeyService();
-        PanelCladdingTopologyPayloads completeMasks = RequireData(
-            keys.EncodeTopology(new PanelCladdingTopologyState
-            {
-                MergeRuns =
-                [
-                    new(PanelCladdingTopologyAxis.Horizontal, 0, 0, 1),
-                    new(PanelCladdingTopologyAxis.Vertical, 0, 0, 1)
-                ]
-            }, 1, 1),
-            "Encode complete create topology");
         var userText = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
+            [PanelCladdingKeyService.MergeMaskKey] = "stale-merge",
             ["CW_2.03_OFFSET_H0"] = "10",
             ["CW_2.04_OFFSET_V0"] = "25",
             ["CW_4.00_CLADDING_0A"] = "GL01",
@@ -77,9 +70,11 @@ internal static class Program
 
         var expectedWrites = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
+            ["CW_2.00_UNIT_DIMENSION"] = "100.00000x80.00000",
+            ["CW_2.01_UNIT_WIDTH"] = "100.00000",
+            ["CW_2.02_UNIT_HEIGHT"] = "80.00000",
             ["CW_2.03_OFFSET_H0"] = "20",
             ["CW_2.04_OFFSET_V0"] = "40",
-            [PanelCladdingKeyService.MergeMaskKey] = completeMasks.MergeMask,
             [PanelCladdingKeyService.CladdingLogicKey] =
                 "{\"0A\":\"\",\"0B\":\"\",\"1A\":\"\",\"1B\":\"\"}",
             ["CW_4.00_CLADDING_0A"] = " ",
@@ -99,7 +94,7 @@ internal static class Program
             "CW_2.03_OFFSET_H0", "CW_2.04_OFFSET_V0", "CW_4.00_CLADDING_0A",
             "CW_9.99_OFFSET_CUSTOM", PanelCladdingKeyService.TypeCodeKey,
             PanelCladdingKeyService.LegacyTypeCodeKey, PanelCladdingKeyService.SignatureKey,
-            PanelCladdingKeyService.LegacySignatureKey
+            PanelCladdingKeyService.LegacySignatureKey, PanelCladdingKeyService.MergeMaskKey
         })
         {
             Require(panel.UserTextDeletes.Contains(deleted, StringComparer.OrdinalIgnoreCase),
@@ -112,6 +107,66 @@ internal static class Program
         {
             Require(!panel.UserTextDeletes.Contains(preserved, StringComparer.OrdinalIgnoreCase),
                 $"Unrelated panel metadata must be preserved: {preserved}");
+        }
+    }
+
+    private static void VerifyUnitDimensions(PanelCladdingCreatePlanningService planner)
+    {
+        var stale = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["CW_2.00_UNIT_DIMENSION"] = "999x888",
+            ["cw_2.01_unit_width"] = "999",
+            ["CW_2.02_Unit_Height"] = "888",
+            ["Custom"] = "preserve"
+        };
+        PanelCladdingCreatePanelSnapshot translated = Snapshot(
+            PanelOneId,
+            new[] { Guide("40000000-0000-0000-0000-000000000001", (-20d, 50d, 0d), (120d, 50d, 0d)) },
+            stale,
+            xMinimum: -12.5d,
+            xMaximum: 110.956789d,
+            yMinimum: 20d,
+            yMaximum: 87.891234d);
+        PanelCladdingCreatePanelSnapshot fresh = Snapshot(
+            PanelTwoId,
+            new[] { Guide("40000000-0000-0000-0000-000000000002", (-5d, 30d, 0d), (105d, 30d, 0d)) });
+
+        CultureInfo originalCulture = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("fr-FR");
+            PanelCladdingCreatePlan plan = RequireData(planner.CreatePlan(new[] { translated, fresh }),
+                "Create dimensions under comma-decimal culture");
+            PanelCladdingCreatePanelPlan first = plan.Panels[0];
+            Require(first.UserTextWrites["CW_2.00_UNIT_DIMENSION"] == "123.45679x67.89123" &&
+                    first.UserTextWrites["CW_2.01_UNIT_WIDTH"] == "123.45679" &&
+                    first.UserTextWrites["CW_2.02_UNIT_HEIGHT"] == "67.89123",
+                "Dimensions must use local extents and invariant five-decimal rounding, not absolute coordinates or guide lengths.");
+            Require(first.UserTextWrites["CW_2.03_OFFSET_H0"] == "30",
+                "Dimension writes must preserve the local H offset.");
+            Require(plan.Panels[1].UserTextWrites["CW_2.00_UNIT_DIMENSION"] == "100.00000x80.00000" &&
+                    plan.Panels[1].UserTextWrites["CW_2.01_UNIT_WIDTH"] == "100.00000" &&
+                    plan.Panels[1].UserTextWrites["CW_2.02_UNIT_HEIGHT"] == "80.00000",
+                "Each panel must receive its own dimensions, including panels without existing dimension keys.");
+
+            var applied = new Dictionary<string, string>(stale, StringComparer.Ordinal);
+            foreach (string key in first.UserTextDeletes)
+            {
+                applied.Remove(key);
+            }
+            foreach ((string key, string value) in first.UserTextWrites)
+            {
+                applied[key] = value;
+            }
+            Require(!applied.ContainsKey("cw_2.01_unit_width") && !applied.ContainsKey("CW_2.02_Unit_Height") &&
+                    applied["CW_2.00_UNIT_DIMENSION"] == "123.45679x67.89123" &&
+                    applied["CW_2.01_UNIT_WIDTH"] == "123.45679" &&
+                    applied["CW_2.02_UNIT_HEIGHT"] == "67.89123" && applied["Custom"] == "preserve",
+                "Applying the plan must replace stale dimensions/casing and preserve unrelated metadata.");
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
         }
     }
 
@@ -197,15 +252,19 @@ internal static class Program
     private static PanelCladdingCreatePanelSnapshot Snapshot(
         Guid objectId,
         IReadOnlyList<PanelCladdingCreateGuideSnapshot> guides,
-        IReadOnlyDictionary<string, string>? userText = null)
+        IReadOnlyDictionary<string, string>? userText = null,
+        double xMinimum = 0d,
+        double xMaximum = 100d,
+        double yMinimum = 0d,
+        double yMaximum = 80d)
     {
         return new PanelCladdingCreatePanelSnapshot
         {
             ObjectId = objectId,
-            XMinimum = 0d,
-            XMaximum = 100d,
-            YMinimum = 0d,
-            YMaximum = 80d,
+            XMinimum = xMinimum,
+            XMaximum = xMaximum,
+            YMinimum = yMinimum,
+            YMaximum = yMaximum,
             ZMinimum = -1d,
             ZMaximum = 1d,
             Tolerance = 0.001d,

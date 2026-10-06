@@ -12,6 +12,13 @@ The smoke verifies:
 - shifted parent references follow the new labels;
 - deterministic deletion, Add H, and Add V off-screen WPF renders are non-empty.
 
+The 2026-10-06 owner-boundary follow-up reconstructs the reported 3-column/4-row
+layout and inspects the actual WPF dashed drawing segments. It checks spanning
+cells, indirect and hidden-member parent references, alternative owner labels,
+separate same-material regions, an L-shaped logical cell, deleted interiors,
+invalid cycles, and blank assignments. Its seven PNGs are written under
+`Project_Test/261006_TEST_pc-editor-owner-boundaries/`.
+
 Run:
 
 ```powershell

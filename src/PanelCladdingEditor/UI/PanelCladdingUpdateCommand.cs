@@ -71,6 +71,19 @@ public sealed class PanelCladdingUpdateCommand : RhinoCommand
             $"created {result.CreatedSurfaceIds.Count} surface(s) and {result.CreatedCurveIds.Count} curve(s), " +
             $"updated {result.UpdatedSurfaceIds.Count} surface(s) and {result.UpdatedCurveIds.Count} curve(s), " +
             $"deleted {result.DeletedObjectIds.Count} obsolete or duplicate object(s).");
+        if (result.DuplicateCidGroups.Count > 0)
+        {
+            int skippedCount = result.DuplicateCidGroups.Sum(group => group.PanelObjectIds.Count);
+            RhinoApp.WriteLine($"Skipped {skippedCount} panel(s) with duplicate CIDs; these panels remain selected for inspection.");
+            foreach (PanelCladdingDuplicateCidGroup group in result.DuplicateCidGroups)
+            {
+                RhinoApp.WriteLine($"Duplicate CID {group.Cid}: {group.PanelObjectIds.Count} panels.");
+            }
+        }
+        if (result.PreservedAmbiguousDependencyIds.Count > 0)
+        {
+            RhinoApp.WriteLine($"Left {result.PreservedAmbiguousDependencyIds.Count} legacy dependencies unchanged because their CID does not identify a single selected panel.");
+        }
         return Result.Success;
     }
 

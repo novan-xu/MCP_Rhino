@@ -49,6 +49,9 @@ project.nuget.cache
 *.temp
 *.cache
 
+# Machine-specific registry exports retained only for local install rollback.
+**/activation-prior-registry.reg
+
 # =========================
 # Project-specific generated artifacts
 # =========================

@@ -196,12 +196,22 @@ public sealed partial class PanelCladdingCreatePlanningService
         string[] deletes = panel.UserText.Keys
             .Where(key => ResetAttributeRegex().IsMatch(key) ||
                 PanelCladdingKeyService.IsTopologyKey(key) ||
+                string.Equals(key, PanelCladdingKeyService.UnitDimensionKey, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(key, PanelCladdingKeyService.UnitWidthKey, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(key, PanelCladdingKeyService.UnitHeightKey, StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(key, PanelCladdingKeyService.SignatureKey, StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(key, PanelCladdingKeyService.LegacySignatureKey, StringComparison.OrdinalIgnoreCase))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(key => key, StringComparer.OrdinalIgnoreCase)
             .ToArray();
-        var writes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        string unitWidth = PanelCladdingKeyService.FormatUnitDimension(width);
+        string unitHeight = PanelCladdingKeyService.FormatUnitDimension(height);
+        var writes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            [PanelCladdingKeyService.UnitDimensionKey] = $"{unitWidth}x{unitHeight}",
+            [PanelCladdingKeyService.UnitWidthKey] = unitWidth,
+            [PanelCladdingKeyService.UnitHeightKey] = unitHeight
+        };
         PanelCladdingCidService.AddPanelCidWrite(writes, panel.UserText);
         for (int index = 0; index < horizontal.Length; index++)
         {
@@ -312,7 +322,6 @@ public sealed partial class PanelCladdingCreatePlanningService
         double[] xCuts = [0d, .. vertical, width];
         double[] yCuts = [0d, .. horizontal, height];
         var present = new HashSet<PanelCladdingSegmentCoordinate>();
-        var mergeRuns = new List<PanelCladdingMergeRun>();
 
         BuildAxis(
             PanelCladdingTopologyAxis.Horizontal,
@@ -320,16 +329,14 @@ public sealed partial class PanelCladdingCreatePlanningService
             xCuts,
             candidates,
             tolerance,
-            present,
-            mergeRuns);
+            present);
         BuildAxis(
             PanelCladdingTopologyAxis.Vertical,
             vertical,
             yCuts,
             candidates,
             tolerance,
-            present,
-            mergeRuns);
+            present);
 
         var missing = new List<PanelCladdingSegmentCoordinate>();
         for (int track = 0; track < horizontal.Count; track++)
@@ -356,8 +363,7 @@ public sealed partial class PanelCladdingCreatePlanningService
         }
         return new TrackTopology(present, new PanelCladdingTopologyState
         {
-            MissingSegments = missing,
-            MergeRuns = mergeRuns
+            MissingSegments = missing
         });
     }
 
@@ -367,8 +373,7 @@ public sealed partial class PanelCladdingCreatePlanningService
         IReadOnlyList<double> cuts,
         IReadOnlyList<GuideCandidate> candidates,
         double tolerance,
-        ISet<PanelCladdingSegmentCoordinate> present,
-        ICollection<PanelCladdingMergeRun> mergeRuns)
+        ISet<PanelCladdingSegmentCoordinate> present)
     {
         for (int track = 0; track < offsets.Count; track++)
         {
@@ -376,38 +381,13 @@ public sealed partial class PanelCladdingCreatePlanningService
                 .Where(candidate => candidate.Axis == axis &&
                     Math.Abs(candidate.Position - offsets[track]) <= tolerance)
                 .ToArray();
-            var trackPresent = new bool[cuts.Count - 1];
-            for (int bay = 0; bay < trackPresent.Length; bay++)
+            // Guides establish coverage only; new atoms remain segmented until explicitly merged.
+            for (int bay = 0; bay < cuts.Count - 1; bay++)
             {
-                trackPresent[bay] = IsIntervalCovered(guides, cuts[bay], cuts[bay + 1], tolerance);
-                if (trackPresent[bay])
+                if (IsIntervalCovered(guides, cuts[bay], cuts[bay + 1], tolerance))
                 {
                     present.Add(new PanelCladdingSegmentCoordinate(axis, track, bay));
                 }
-            }
-
-            var mergedJunctions = new bool[Math.Max(0, trackPresent.Length - 1)];
-            for (int junction = 0; junction < mergedJunctions.Length; junction++)
-            {
-                mergedJunctions[junction] = trackPresent[junction] && trackPresent[junction + 1] &&
-                    guides.Any(guide => guide.Start <= cuts[junction] + tolerance &&
-                        guide.End >= cuts[junction + 2] - tolerance);
-            }
-            int start = 0;
-            while (start < mergedJunctions.Length)
-            {
-                if (!mergedJunctions[start])
-                {
-                    start++;
-                    continue;
-                }
-                int end = start;
-                while (end + 1 < mergedJunctions.Length && mergedJunctions[end + 1])
-                {
-                    end++;
-                }
-                mergeRuns.Add(new PanelCladdingMergeRun(axis, track, start, end + 1));
-                start = end + 1;
             }
         }
     }

@@ -1,0 +1,62 @@
+{
+  "version": "1.0.86",
+  "priorVersion": "1.0.84",
+  "installation": "passed",
+  "installedRhp": "%LOCALAPPDATA%\\PanelCladdingEditor\\plugin\\1.0.86\\PanelCladdingEditor.rhp",
+  "rhpSha256": "124598be6c9684664fe5726cfbe07b271c951aa09e0e215f765621ddd18837c0",
+  "hostPersistence": "same-user WMI-launched PowerShell nonce independently verified through Windows registry provider before activation; nonce key removed",
+  "installerValidation": "Install and mandatory Validate passed; another host process independently ran Validate after installer exit",
+  "commandListExact": true,
+  "registeredCommands": [
+    "PCClear",
+    "PCCreate",
+    "PCCrvTemplate",
+    "PCEditor",
+    "PCMatchCrv",
+    "PCMatchSrf",
+    "PCSpawnCrv",
+    "PCSpawnSrf",
+    "PCSyncCrv",
+    "PCSyncSrf",
+    "PCUpdate"
+  ],
+  "allThreeRegistryTimestampsAdvanced": true,
+  "installedKeyTimes": [
+    {
+      "name": "",
+      "writtenUtc": "2026-10-06T21:25:22.0864077Z"
+    },
+    {
+      "name": "\\PlugIn",
+      "writtenUtc": "2026-10-06T21:25:22.0874164Z"
+    },
+    {
+      "name": "\\CommandList",
+      "writtenUtc": "2026-10-06T21:25:22.0919336Z"
+    }
+  ],
+  "windowsRegistryProviderAgreement": true,
+  "previousRhpRollbackCopyVerified": true,
+  "rhinoProcessesAfterInstallation": 0,
+  "postStartVerification": "passed: exact installed 1.0.86 RHP loaded; Rhino-owned root and CommandList advanced, installer-owned PlugIn unchanged",
+  "postStartLoadedModules": [
+    {
+      "ProcessId": 43292,
+      "FileName": "%LOCALAPPDATA%\\PanelCladdingEditor\\plugin\\1.0.86\\PanelCladdingEditor.rhp"
+    }
+  ],
+  "postStartKeyTimes": [
+    {
+      "name": "",
+      "writtenUtc": "2026-10-06T21:27:08.3486409Z"
+    },
+    {
+      "name": "\\PlugIn",
+      "writtenUtc": "2026-10-06T21:25:22.0874164Z"
+    },
+    {
+      "name": "\\CommandList",
+      "writtenUtc": "2026-10-06T21:27:08.3506428Z"
+    }
+  ]
+}

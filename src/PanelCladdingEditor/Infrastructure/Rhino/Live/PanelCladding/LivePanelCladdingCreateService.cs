@@ -112,8 +112,8 @@ public sealed class LivePanelCladdingCreateService : ILivePanelCladdingCreateSer
             {
                 proposed.SetUserString(key, value);
             }
-            LivePanelCladdingCidService.Normalize(proposed);
-            if (!UserTextEquals(original, proposed))
+            bool identityChanged = LivePanelCladdingCidService.Normalize(proposed);
+            if (identityChanged || !UserTextEquals(original, proposed))
             {
                 prepared.Add(new PreparedPanelMutation(panelObject, original, proposed));
             }

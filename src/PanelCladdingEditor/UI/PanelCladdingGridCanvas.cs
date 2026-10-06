@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using PanelCladdingEditor.Application.Services.PanelCladding;
 using PanelCladdingEditor.Domain.Models.PanelCladding;
 
 namespace PanelCladdingEditor.UI;
@@ -273,7 +274,7 @@ public sealed class PanelCladdingGridCanvas : Canvas
 
         if (_view == PanelEditorView.Cladding)
         {
-            DrawParentBoundaries(drawingContext);
+            DrawParentBoundaries(drawingContext, topology, xPositions, yPositions);
             _visibleExtrusions = Array.Empty<PanelExtrusionSegment>();
         }
         else
@@ -590,65 +591,67 @@ public sealed class PanelCladdingGridCanvas : Canvas
         dc.DrawLine(pen, end, end - screen * 5d - perpendicular * 4d);
     }
 
-    private void DrawParentBoundaries(DrawingContext dc)
+    private void DrawParentBoundaries(
+        DrawingContext dc,
+        PanelCladdingCellTopology topology,
+        IReadOnlyList<double> xPositions,
+        IReadOnlyList<double> yPositions)
     {
         if (_layout is null)
         {
             return;
         }
+        var expanded = new PanelCladdingLogicalCellService().ExpandGroups(
+            topology.Groups.Select(group => group.Cells).ToArray(), _values);
+        var resolved = new PanelCladdingRegionService(new PanelCladdingKeyService()).Resolve(_layout.Cells, expanded);
+        if (!resolved.Success || resolved.Data is null)
+        {
+            return;
+        }
+        var ownerByKey = resolved.Data.Regions.SelectMany(region => region.Cells.Select(cell =>
+                (cell.UserTextKey, region.OwnerCellLabel)))
+            .ToDictionary(item => item.UserTextKey, item => item.OwnerCellLabel, StringComparer.OrdinalIgnoreCase);
+        var cellsByCoordinate = _layout.Cells.ToDictionary(cell => (cell.Column, cell.Row));
         var boundaries = new List<(Point Start, Point End, Brush GapBrush)>();
-        var boundaryKeys = new HashSet<string>(StringComparer.Ordinal);
         foreach (PanelCladdingCell cell in _layout.Cells)
         {
-            if (!_values.TryGetValue(cell.UserTextKey, out string? value) || !IsCellReference(value, out string? reference))
+            PanelCladdingCellGroup? group = topology.FindByCellKey(cell.UserTextKey);
+            if (group is null || !ownerByKey.TryGetValue(cell.UserTextKey, out string? owner))
             {
                 continue;
             }
-            PanelCladdingCell? parent = _layout.Cells.FirstOrDefault(item =>
-                string.Equals(item.ShortLabel, reference, StringComparison.OrdinalIgnoreCase));
-            if (parent is null || !_cellRects.TryGetValue(cell.UserTextKey, out Rect childRect) ||
-                !_cellRects.TryGetValue(parent.UserTextKey, out Rect parentRect))
+            // Only physical neighbors share an edge. Representative labels can be arbitrarily far apart.
+            foreach (bool vertical in new[] { true, false })
             {
-                continue;
-            }
-            Point start;
-            Point end;
-            if (parent.Column == cell.Column - 1)
-            {
-                double x = (childRect.Left + parentRect.Right) / 2d;
-                start = new Point(x, Math.Max(childRect.Top, parentRect.Top));
-                end = new Point(x, Math.Min(childRect.Bottom, parentRect.Bottom));
-            }
-            else if (parent.Column == cell.Column + 1)
-            {
-                double x = (childRect.Right + parentRect.Left) / 2d;
-                start = new Point(x, Math.Max(childRect.Top, parentRect.Top));
-                end = new Point(x, Math.Min(childRect.Bottom, parentRect.Bottom));
-            }
-            else if (parent.Row == cell.Row - 1)
-            {
-                double y = (childRect.Bottom + parentRect.Top) / 2d;
-                start = new Point(Math.Max(childRect.Left, parentRect.Left), y);
-                end = new Point(Math.Min(childRect.Right, parentRect.Right), y);
-            }
-            else if (parent.Row == cell.Row + 1)
-            {
-                double y = (childRect.Top + parentRect.Bottom) / 2d;
-                start = new Point(Math.Max(childRect.Left, parentRect.Left), y);
-                end = new Point(Math.Min(childRect.Right, parentRect.Right), y);
-            }
-            else
-            {
-                continue;
-            }
-            if ((end - start).LengthSquared < 1d)
-            {
-                continue;
-            }
-            string key = $"{start.X:0.###},{start.Y:0.###}:{end.X:0.###},{end.Y:0.###}";
-            if (boundaryKeys.Add(key))
-            {
-                boundaries.Add((start, end, ResolveBoundaryGapBrush(cell)));
+                var coordinate = vertical ? (cell.Column + 1, cell.Row) : (cell.Column, cell.Row + 1);
+                if (!cellsByCoordinate.TryGetValue(coordinate, out PanelCladdingCell? neighbor) ||
+                    ReferenceEquals(group, topology.FindByCellKey(neighbor.UserTextKey)) ||
+                    !ownerByKey.TryGetValue(neighbor.UserTextKey, out string? neighborOwner) ||
+                    !string.Equals(owner, neighborOwner, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                int displayRow = _layout.RowCount - 1 - cell.Row;
+                Point start;
+                Point end;
+                if (vertical)
+                {
+                    double x = xPositions[cell.Column + 1];
+                    start = new Point(x, yPositions[displayRow] +
+                        (cell.Row == _layout.RowCount - 1 ? PanelFrameStroke : PanelDividerStroke / 2d));
+                    end = new Point(x, yPositions[displayRow + 1] -
+                        (cell.Row == 0 ? PanelFrameStroke : PanelDividerStroke / 2d));
+                }
+                else
+                {
+                    double y = yPositions[displayRow];
+                    start = new Point(xPositions[cell.Column] +
+                        (cell.Column == 0 ? PanelFrameStroke : PanelDividerStroke / 2d), y);
+                    end = new Point(xPositions[cell.Column + 1] -
+                        (cell.Column == _layout.ColumnCount - 1 ? PanelFrameStroke : PanelDividerStroke / 2d), y);
+                }
+                boundaries.Add((start, end, ResolveBoundaryGapBrush(group.Representative)));
             }
         }
         foreach ((Point start, Point end, Brush gapBrush) in boundaries)

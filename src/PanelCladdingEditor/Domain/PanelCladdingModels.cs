@@ -600,6 +600,7 @@ public sealed class PanelCladdingSurfaceSyncPanelSnapshot
 public sealed class PanelCladdingSurfaceSyncSurfaceSnapshot
 {
     public Guid ObjectId { get; init; }
+    public string ObjectName { get; init; } = string.Empty;
     public Guid PanelObjectId { get; init; }
     public string PanelId { get; init; } = string.Empty;
     public string Cid { get; init; } = string.Empty;
@@ -614,6 +615,7 @@ public sealed class PanelCladdingSurfaceSyncSurfaceSnapshot
 public sealed class PanelCladdingSurfaceSyncCurveSnapshot
 {
     public Guid ObjectId { get; init; }
+    public string ObjectName { get; init; } = string.Empty;
     public Guid PanelObjectId { get; init; }
     public string PanelId { get; init; } = string.Empty;
     public string Cid { get; init; } = string.Empty;
@@ -683,7 +685,8 @@ public sealed class PanelCladdingSurfaceSyncSurfacePlan
     public bool CidChanged { get; init; }
     public bool PidChanged { get; init; }
     public bool ReleaseChanged { get; init; }
-    public bool MetadataChanged => CladdingKeyChanged || CoverageChanged || CidChanged || PidChanged || ReleaseChanged;
+    public bool NameChanged { get; init; }
+    public bool MetadataChanged => CladdingKeyChanged || CoverageChanged || CidChanged || PidChanged || ReleaseChanged || NameChanged;
 }
 
 public sealed class PanelCladdingSurfaceSyncPanelPlan
@@ -695,6 +698,7 @@ public sealed class PanelCladdingSurfaceSyncPanelPlan
         new Dictionary<string, string>();
     public string CladdingLogic { get; init; } = string.Empty;
     public bool CladdingChanged { get; init; }
+    public bool NameChanged { get; init; }
 }
 
 public sealed class PanelCladdingSurfaceSyncCurvePlan

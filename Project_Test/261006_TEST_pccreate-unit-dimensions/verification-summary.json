@@ -1,0 +1,15 @@
+{
+  "version": "1.0.80",
+  "createDebug": "passed",
+  "createRelease": "passed",
+  "curveTopologyDebug": "passed",
+  "sparseTopologyDebug": "passed",
+  "pluginDebugBuild": "passed: 0 warnings, 0 errors",
+  "pluginReleaseBuild": "passed: 0 warnings, 0 errors",
+  "compiledAssemblyIdentity": "passed: nonempty, manifest-matched, distinct from MCP_Rhino",
+  "bundleFilesVerified": 27,
+  "rhpSha256": "11f24bac28843c872ea162004d27b4a6e2838e08057e24faa0258ef25570badd",
+  "stagedBundle": "%LOCALAPPDATA%\\PanelCladdingEditor\\staged\\1.0.80-pccreate-dimensions-261006",
+  "installation": "not performed",
+  "liveRhinoCommandValidation": "not performed"
+}

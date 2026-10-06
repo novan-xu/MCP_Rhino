@@ -1,4 +1,4 @@
-# Panel parent/child CID regression
+# Panel unit-type CID regression
 
 Run from the repository root:
 
@@ -12,18 +12,20 @@ or modify a Rhino document. The fixture's document name is an identifier only.
 
 Coverage:
 
-- Exact parent and child panel/surface/curve CIDs, including `-0A` and `-INT_B1`.
-- Unchanged PID inheritance and unchanged ordinary panel behavior.
+- Exact corner_parent, corner_child, and flat panel/surface/curve CIDs, including
+  `-0A` and `-INT_B1`, driven only by `CW_1.06_UNIT_TYPE`.
+- Unchanged PID inheritance and unchanged behavior for absent unit types.
 - Spawn and update surface plans, all three editor save scopes, and PCCreate writes.
 - Both sync scopes, with legacy and already suffixed surface CIDs and no coverage payload.
 - Panel CID-only changes included in the sync commit path.
-- Missing stored CID on a flagged panel, repeated execution, and switching role flags.
-- Case-insensitive flag keys, trimmed values, exact `1` activation, and parent precedence.
-- Unflagged custom CIDs preserved, including CIDs ending in `-P` or `-C`.
+- Missing stored CID on a typed panel, repeated execution, and corner-to-flat transitions.
+- Case-insensitive unit-type keys/values, trimmed values, and ignored legacy flags.
+- Missing/unsupported unit types preserve custom CIDs, including `-P` or `-C` endings.
+- Missing PID never produces a panel CID write.
 - Existing dependency scope includes the selected role and legacy unsuffixed output,
   and excludes the other role's already suffixed output.
 
-## Results (2026-09-23)
+## Historical results (2026-09-23, previous flag-based contract)
 
 Debug and Release focused runs: exit 0. Output in each configuration:
 

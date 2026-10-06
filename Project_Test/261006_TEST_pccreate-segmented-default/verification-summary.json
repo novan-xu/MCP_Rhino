@@ -1,0 +1,25 @@
+{
+  "version": "1.0.81",
+  "regressions": [
+    "create Debug",
+    "create Release",
+    "curve-topology Debug",
+    "curve-topology Release",
+    "sparse-topology Debug",
+    "extrusion-sync Debug"
+  ],
+  "regressionResult": "all passed",
+  "continuous2H2VGrid": {
+    "mergedCurves": 0,
+    "intermediateSegments": 12,
+    "cells": 9,
+    "perimeterFrames": 4
+  },
+  "standaloneBuilds": "Debug and Release passed: 0 warnings, 0 errors",
+  "assemblyIdentity": "passed before packaging and on staged RHP; matches product manifest and differs from MCP_Rhino",
+  "bundleFilesVerified": 27,
+  "rhpSha256": "e62185223b9cc64b5f121b0b7fb1834aae04b64b9e285c34195f715661edeb8c",
+  "stagedBundle": "%LOCALAPPDATA%\\PanelCladdingEditor\\staged\\1.0.81-pccreate-segmented-261006",
+  "installation": "not performed",
+  "liveRhinoValidation": "not performed"
+}

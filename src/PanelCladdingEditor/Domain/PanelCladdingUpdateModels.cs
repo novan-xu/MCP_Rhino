@@ -40,9 +40,24 @@ public sealed class PanelCladdingDependencyReconciliationPlan
 public sealed class PanelCladdingUpdateResult
 {
     public IReadOnlyList<Guid> SourcePanelIds { get; init; } = Array.Empty<Guid>();
+    public IReadOnlyList<PanelCladdingDuplicateCidGroup> DuplicateCidGroups { get; init; } =
+        Array.Empty<PanelCladdingDuplicateCidGroup>();
+    public IReadOnlyList<Guid> PreservedAmbiguousDependencyIds { get; init; } = Array.Empty<Guid>();
     public IReadOnlyList<Guid> CreatedSurfaceIds { get; init; } = Array.Empty<Guid>();
     public IReadOnlyList<Guid> CreatedCurveIds { get; init; } = Array.Empty<Guid>();
     public IReadOnlyList<Guid> UpdatedSurfaceIds { get; init; } = Array.Empty<Guid>();
     public IReadOnlyList<Guid> UpdatedCurveIds { get; init; } = Array.Empty<Guid>();
     public IReadOnlyList<Guid> DeletedObjectIds { get; init; } = Array.Empty<Guid>();
+}
+
+public sealed record PanelCladdingUpdateSource(Guid ObjectId, string PanelId, string PanelCid);
+
+public sealed record PanelCladdingDuplicateCidGroup(string Cid, IReadOnlyList<Guid> PanelObjectIds);
+
+public sealed class PanelCladdingUpdateSelection
+{
+    public IReadOnlyList<PanelCladdingUpdateSource> ProcessableSources { get; init; } =
+        Array.Empty<PanelCladdingUpdateSource>();
+    public IReadOnlyList<PanelCladdingDuplicateCidGroup> DuplicateCidGroups { get; init; } =
+        Array.Empty<PanelCladdingDuplicateCidGroup>();
 }

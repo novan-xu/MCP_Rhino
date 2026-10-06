@@ -22,22 +22,28 @@ internal static class LivePanelCladdingCidService
     {
         IReadOnlyDictionary<string, string> text = Read(attributes);
         string? cid = PanelCladdingCidService.PanelCidWrite(text);
-        if (cid is null)
+        bool changed = false;
+        if (cid is not null)
         {
-            return false;
+            string key = PanelCladdingSpawnPlanningService.CidUserTextKey;
+            string[] keys = text.Keys.Where(item => string.Equals(item, key, StringComparison.OrdinalIgnoreCase)).ToArray();
+            if (keys.Length != 1 || keys[0] != key || text[key] != cid)
+            {
+                foreach (string existing in keys)
+                {
+                    attributes.DeleteUserString(existing);
+                }
+                attributes.SetUserString(key, cid);
+                changed = true;
+            }
         }
-        string key = PanelCladdingSpawnPlanningService.CidUserTextKey;
-        string[] keys = text.Keys.Where(item => string.Equals(item, key, StringComparison.OrdinalIgnoreCase)).ToArray();
-        if (keys.Length == 1 && keys[0] == key && text[key] == cid)
+        if (PanelCladdingCidService.PanelNameWrite(text) is string name &&
+            !string.Equals(attributes.Name, name, StringComparison.Ordinal))
         {
-            return false;
+            attributes.Name = name;
+            changed = true;
         }
-        foreach (string existing in keys)
-        {
-            attributes.DeleteUserString(existing);
-        }
-        attributes.SetUserString(key, cid);
-        return true;
+        return changed;
     }
 
     internal static OperationResponse<IReadOnlyList<Change>> Prepare(RhinoDoc document, IEnumerable<Guid> ids)

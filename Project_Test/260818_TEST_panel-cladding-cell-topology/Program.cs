@@ -21,11 +21,160 @@ internal static class Program
         ConnectedAndNonRectangularTopologyUsesCanonicalLabels();
         AddHorizontalCreatesAndRenumbersOnlyTargetCells();
         AddVerticalCreatesAndRenumbersOnlyTargetCells();
+        IrregularParentBoundariesFollowResolvedRegions();
+        NonrectangularParentBoundariesUsePhysicalEdges();
 
         Console.WriteLine("[OK] Deleted horizontal and vertical INT boundaries produce canonical logical cells.");
         Console.WriteLine("[OK] Deletion clears the complete affected group, renders one spanning cell, and is undoable.");
         Console.WriteLine("[OK] Add H creates/renumbers rows without phantom neighboring cells.");
         Console.WriteLine("[OK] Add V creates/renumbers columns without phantom neighboring cells.");
+    }
+
+    private static void NonrectangularParentBoundariesUsePhysicalEdges()
+    {
+        PanelCladdingLayout layout = BuildLayout(2, 2, new Dictionary<string, string>
+        {
+            [Key(0, "A")] = "MPL-001", [Key(1, "A")] = "",
+            [Key(0, "B")] = "", [Key(1, "B")] = "0A"
+        });
+        HashSet<string> deleted =
+        [
+            PanelExtrusionTopology.AtomicId(PanelExtrusionAxis.Horizontal, 10d, 0),
+            PanelExtrusionTopology.AtomicId(PanelExtrusionAxis.Vertical, 10d, 0)
+        ];
+        var canvas = new PanelCladdingGridCanvas { Width = 720, Height = 1000 };
+        var values = layout.Cells.ToDictionary(cell => cell.UserTextKey, cell => cell.Value);
+        canvas.SetLayout(layout, values, new Dictionary<string, PanelCladdingMaterial>(), []);
+        canvas.SetExtrusionState(PanelEditorView.Cladding, [], [], deleted);
+        string path = Path.GetFullPath(Path.Combine("Project_Test", "261006_TEST_pc-editor-owner-boundaries", "nonrectangular-boundaries.png"));
+        Render(canvas, 720, 1000, path, minimumBytes: 5000);
+        var dashed = DashedLines(canvas);
+        Require(dashed.Count == 2, "The L-shaped cladding should have exactly two dashed notch edges.");
+        AssertBoundary(canvas, dashed, "0B", "1B", vertical: true, dashedExpected: true);
+        AssertBoundary(canvas, dashed, "1A", "1B", vertical: false, dashedExpected: true);
+        AssertBoundary(canvas, dashed, "0A", "1A", vertical: true, dashedExpected: false);
+        AssertBoundary(canvas, dashed, "0A", "0B", vertical: false, dashedExpected: false);
+
+        values[Key(0, "A")] = "1B"; // A cyclic draft cannot resolve to a cladding.
+        canvas.SetValues(values, new Dictionary<string, PanelCladdingMaterial>());
+        Render(canvas, 720, 1000, Path.ChangeExtension(path, "invalid.png"), minimumBytes: 5000);
+        Require(DashedLines(canvas).Count == 0, "Invalid parent cycles must not invent dashed boundaries.");
+        values[Key(0, "A")] = "";
+        values[Key(1, "B")] = "";
+        canvas.SetValues(values, new Dictionary<string, PanelCladdingMaterial>());
+        Render(canvas, 720, 1000, Path.ChangeExtension(path, "blank.png"), minimumBytes: 5000);
+        Require(DashedLines(canvas).Count == 0, "Separate unassigned groups must not share an owner.");
+        Console.WriteLine("[OK] Nonrectangular notch edges render correctly; deleted interiors, cycles, and blanks create no false dashes.");
+    }
+
+    private static void IrregularParentBoundariesFollowResolvedRegions()
+    {
+        // Reconstruct the supplied screenshot: 0B/0C/0D span columns 0-1,
+        // and 2A spans rows A-B. Blank primitive members have no displayed assignment.
+        PanelCladdingLayout cells = BuildLayout(3, 4, new Dictionary<string, string>
+        {
+            [Key(0, "A")] = "MPL-002", [Key(1, "A")] = "MPL-001", [Key(2, "A")] = "1A",
+            [Key(0, "B")] = "1A", [Key(1, "B")] = "", [Key(2, "B")] = "",
+            [Key(0, "C")] = "MPL-001", [Key(1, "C")] = "", [Key(2, "C")] = "0C",
+            [Key(0, "D")] = "MPL-002", [Key(1, "D")] = "", [Key(2, "D")] = "0D"
+        });
+        var layout = new PanelCladdingLayout
+        {
+            ObjectId = Guid.NewGuid(), Width = 90d, Height = 200d,
+            HorizontalOffsets = [25d, 100d, 185d], VerticalOffsets = [22.5d, 45d],
+            Cells = cells.Cells, ModelUnitScaleToMillimeters = 25.4d
+        };
+        HashSet<string> deleted =
+        [
+            PanelExtrusionTopology.AtomicId(PanelExtrusionAxis.Vertical, 22.5d, 1),
+            PanelExtrusionTopology.AtomicId(PanelExtrusionAxis.Vertical, 22.5d, 2),
+            PanelExtrusionTopology.AtomicId(PanelExtrusionAxis.Vertical, 22.5d, 3),
+            PanelExtrusionTopology.AtomicId(PanelExtrusionAxis.Horizontal, 25d, 2)
+        ];
+        var values = layout.Cells.ToDictionary(cell => cell.UserTextKey, cell => cell.Value);
+        var materials = new Dictionary<string, PanelCladdingMaterial>
+        {
+            ["MPL-001"] = new() { Code = "MPL-001", Name = "Light panel", Category = "MPL", Color = Color.FromRgb(160, 160, 160) },
+            ["MPL-002"] = new() { Code = "MPL-002", Name = "Dark panel", Category = "MPL", Color = Color.FromRgb(84, 89, 92) }
+        };
+        var canvas = new PanelCladdingGridCanvas { Width = 720, Height = 1000 };
+        canvas.SetLayout(layout, values, materials, []);
+        canvas.SetExtrusionState(PanelEditorView.Cladding, [], [], deleted);
+        string output = Path.GetFullPath(Path.Combine("Project_Test", "261006_TEST_pc-editor-owner-boundaries"));
+        Directory.CreateDirectory(output);
+        Render(canvas, 720, 1000, Path.Combine(output, "irregular-parent-boundaries.png"));
+
+        var dashed = DashedLines(canvas);
+        Require(dashed.Count == 5, $"Expected five owner-interior segments in the screenshot fixture, got {dashed.Count}.");
+        AssertBoundary(canvas, dashed, "0D", "2D", vertical: true, dashedExpected: true);
+        AssertBoundary(canvas, dashed, "0C", "2C", vertical: true, dashedExpected: true);
+        AssertBoundary(canvas, dashed, "0B", "2A", vertical: true, dashedExpected: true);
+        AssertBoundary(canvas, dashed, "1A", "2A", vertical: true, dashedExpected: true);
+        AssertBoundary(canvas, dashed, "1A", "0B", vertical: false, dashedExpected: true);
+        AssertBoundary(canvas, dashed, "0A", "0B", vertical: false, dashedExpected: false);
+        AssertBoundary(canvas, dashed, "0B", "0C", vertical: false, dashedExpected: false);
+
+        // Indirect ownership and references to a nonrepresentative physical member
+        // describe the same cladding and must produce exactly the same drawing.
+        values[Key(2, "A")] = "0B";
+        values[Key(2, "D")] = "1D";
+        canvas.SetValues(values, materials);
+        Render(canvas, 720, 1000, Path.Combine(output, "indirect-parent-boundaries.png"));
+        Require(DashedLines(canvas).ToHashSet().SetEquals(dashed),
+            "Indirect and hidden-member references changed the interior boundary set.");
+
+        // Move the material owner to a later-numbered logical cell.
+        values[Key(0, "B")] = "2A";
+        values[Key(1, "A")] = "0B";
+        values[Key(2, "A")] = "MPL-001";
+        canvas.SetValues(values, materials);
+        Render(canvas, 720, 1000, Path.Combine(output, "renumbered-owner-boundaries.png"));
+        Require(DashedLines(canvas).ToHashSet().SetEquals(dashed),
+            "Changing the owning cell label changed the interior boundary set.");
+
+        // Equal material codes alone never merge two separately assigned claddings.
+        values[Key(0, "B")] = "MPL-001";
+        values[Key(1, "A")] = "MPL-001";
+        values[Key(2, "A")] = "1A";
+        canvas.SetValues(values, materials);
+        Render(canvas, 720, 1000, Path.Combine(output, "separate-same-material-boundaries.png"));
+        var separate = DashedLines(canvas);
+        Require(separate.Count == 3, "Same-material separate owners were incorrectly joined.");
+        AssertBoundary(canvas, separate, "1A", "0B", vertical: false, dashedExpected: false);
+        AssertBoundary(canvas, separate, "0B", "2A", vertical: true, dashedExpected: false);
+        Console.WriteLine("[OK] Screenshot boundaries follow resolved ownership, including chains and spanning cells; separate equal-material regions stay solid.");
+    }
+
+    private static List<(Point Start, Point End)> DashedLines(PanelCladdingGridCanvas canvas) =>
+        GeometryDrawings(VisualTreeHelper.GetDrawing(canvas)).Where(drawing =>
+                drawing.Pen?.DashStyle.Dashes.Count > 0 && drawing.Geometry is LineGeometry)
+            .Select(drawing => (LineGeometry)drawing.Geometry)
+            .Select(line => (line.StartPoint, line.EndPoint)).ToList();
+
+    private static IEnumerable<GeometryDrawing> GeometryDrawings(Drawing drawing)
+    {
+        if (drawing is GeometryDrawing geometry) yield return geometry;
+        if (drawing is DrawingGroup group)
+            foreach (Drawing child in group.Children)
+                foreach (GeometryDrawing item in GeometryDrawings(child)) yield return item;
+    }
+
+    private static void AssertBoundary(PanelCladdingGridCanvas canvas,
+        IReadOnlyList<(Point Start, Point End)> lines, string first, string second, bool vertical, bool dashedExpected)
+    {
+        var rects = Field<Dictionary<string, Rect>>(canvas, "_cellRects");
+        Rect a = rects[Key(int.Parse(first[..1]), first[1..])];
+        Rect b = rects[Key(int.Parse(second[..1]), second[1..])];
+        // Sample the shared edge away from T-junctions; first is left/below second.
+        Point sample = vertical
+            ? new Point((a.Right + b.Left) / 2d, (Math.Max(a.Top, b.Top) + Math.Min(a.Bottom, b.Bottom)) / 2d)
+            : new Point((Math.Max(a.Left, b.Left) + Math.Min(a.Right, b.Right)) / 2d, (a.Top + b.Bottom) / 2d);
+        bool actual = lines.Any(line => vertical
+            ? Math.Abs(line.Start.X - sample.X) < 0.01d && Math.Abs(line.End.X - sample.X) < 0.01d &&
+              sample.Y > Math.Min(line.Start.Y, line.End.Y) && sample.Y < Math.Max(line.Start.Y, line.End.Y)
+            : Math.Abs(line.Start.Y - sample.Y) < 0.01d && Math.Abs(line.End.Y - sample.Y) < 0.01d &&
+              sample.X > Math.Min(line.Start.X, line.End.X) && sample.X < Math.Max(line.Start.X, line.End.X));
+        Require(actual == dashedExpected, $"Boundary {first}/{second} should be {(dashedExpected ? "dashed" : "solid")}.");
     }
 
     private static void DeletedBoundaryMergesAndUndoRestoresCells()
@@ -264,7 +413,7 @@ internal static class Program
     private static string OutputPath(string fileName) => Path.GetFullPath(Path.Combine(
         "Project_Test", "260818_TEST_panel-cladding-cell-topology", fileName));
 
-    private static void Render(FrameworkElement root, int width, int height, string outputPath)
+    private static void Render(FrameworkElement root, int width, int height, string outputPath, long minimumBytes = 20_000L)
     {
         root.Measure(new Size(width, height));
         root.Arrange(new Rect(0d, 0d, width, height));
@@ -275,7 +424,7 @@ internal static class Program
         encoder.Frames.Add(BitmapFrame.Create(bitmap));
         using FileStream stream = File.Create(outputPath);
         encoder.Save(stream);
-        Require(new FileInfo(outputPath).Length > 20_000L, $"Rendered topology image is unexpectedly empty: {outputPath}");
+        Require(new FileInfo(outputPath).Length > minimumBytes, $"Rendered topology image is unexpectedly empty: {outputPath}");
     }
 
     private static IEnumerable<T> Descendants<T>(DependencyObject root) where T : DependencyObject
