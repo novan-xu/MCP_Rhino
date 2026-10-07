@@ -614,14 +614,22 @@ public partial class PanelCladdingEditorWindow : Window
             return;
         }
         string unit = PanelCladdingGridCanvas.UnitLabel(_layout.ModelUnitScaleToMillimeters);
-        string panelId = string.IsNullOrWhiteSpace(_layout.ObjectName)
-            ? $"PID-{_layout.ObjectId.ToString("N")[..8].ToUpperInvariant()}"
-            : _layout.ObjectName;
-        PanelIdText.Text = panelId;
-        PanelIdText.ToolTip = _layout.ObjectId.ToString();
+        string cid = _layout.SourceUserText.FirstOrDefault(item => string.Equals(
+            item.Key, PanelCladdingSpawnPlanningService.CidUserTextKey, StringComparison.OrdinalIgnoreCase)).Value?.Trim()
+            ?? string.Empty;
+        if (cid.Length == 0)
+        {
+            string pid = _layout.SourceUserText.FirstOrDefault(item => string.Equals(
+                item.Key, PanelCladdingSpawnPlanningService.PanelIdUserTextKey, StringComparison.OrdinalIgnoreCase)).Value?.Trim()
+                ?? string.Empty;
+            cid = pid.Length > 0 ? PanelCladdingCidService.ResolvePanelCid(pid, _layout.SourceUserText) : string.Empty;
+        }
+        PanelIdText.Text = cid.Length > 0 ? PanelCladdingCidService.ShortName(cid) : "—";
+        PanelIdText.ToolTip = cid.Length > 0 ? cid : "No CID is available for this panel.";
         WallTypeText.Text = FormatWallType(_layout.SystemCode);
         UnitsText.Text = unit;
-        OverallSizeText.Text = $"{_layout.Width:0.0} x {_layout.Height:0.0} {unit}";
+        OverallWidthText.Text = FormattableString.Invariant($"Width  {_layout.Width:0.00000} {unit}");
+        OverallHeightText.Text = FormattableString.Invariant($"Height {_layout.Height:0.00000} {unit}");
         DividerOffsetList.ItemsSource = BuildOffsetDisplay(unit);
         UpdateWorkbookStatus();
     }
@@ -1258,7 +1266,11 @@ public partial class PanelCladdingEditorWindow : Window
             .Where(item => _selectedExtrusions.Contains(item.Id))
             .ToArray();
         int count = selected.Length;
-        SelectedExtrusionCountText.Text = count == 1 ? "1 extrusion" : $"{count} extrusions";
+        ExtrusionAssignmentSection.Visibility = _activeView == PanelEditorView.Extrusion && count > 0
+            ? Visibility.Visible : Visibility.Collapsed;
+        SelectedExtrusionCountText.Text = count == 1 ? "1 curve" : $"{count} curves";
+        SelectedExtrusionNamesText.Text = string.Join(", ", selected.Select(item => item.Code));
+        SelectedExtrusionNamesText.ToolTip = SelectedExtrusionNamesText.Text;
         MergeExtrusionsButton.IsEnabled = count >= 2;
         ExplodeExtrusionsButton.IsEnabled = selected.Any(item => item.IsMerged);
         string[] editableAtoms = selected
@@ -1309,7 +1321,7 @@ public partial class PanelCladdingEditorWindow : Window
             ? "Select a frame or intermediate curve, then drag a profile here."
             : assignedCodes.Length == 0
                 ? "Drop an extrusion profile here to assign it to the selected curves."
-                : "Modifiers apply to curve length. Remove a card to make that profile available again.";
+                : "Drop more profiles here. Modifiers adjust curve length; × removes a profile.";
         PanelGridCanvas.SetExtrusionState(
             _activeView,
             _selectedExtrusions,
@@ -1520,7 +1532,7 @@ public partial class PanelCladdingEditorWindow : Window
         MaterialLegendSection.Visibility = extrusion ? Visibility.Collapsed : Visibility.Visible;
         ExtrusionLegendSection.Visibility = extrusion ? Visibility.Visible : Visibility.Collapsed;
         CladdingAssignmentSection.Visibility = extrusion ? Visibility.Collapsed : Visibility.Visible;
-        ExtrusionAssignmentSection.Visibility = extrusion ? Visibility.Visible : Visibility.Collapsed;
+        ExtrusionAssignmentSection.Visibility = Visibility.Collapsed;
         FrameTypologySection.Visibility = extrusion ? Visibility.Visible : Visibility.Collapsed;
         ExtrusionActions.Visibility = extrusion ? Visibility.Visible : Visibility.Collapsed;
         PanelGridCanvas.SetExtrusionState(

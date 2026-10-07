@@ -114,6 +114,8 @@
                        ..\..\Project_Test\260923_TEST_panel-cladding-role-cid\**\*.cs;
                        ..\..\Project_Test\260923_TEST_panel-cladding-curve-release\**\*.cs;
                        ..\..\Project_Test\260923_TEST_panel-cladding-surface-release\**\*.cs;
+                       ..\..\Project_Test\261006_TEST_panel-cladding-object-names\**\*.cs;
+                       ..\..\Project_Test\261007_TEST_pc-editor-canvas-assignment\**\*.cs;
                        ..\..\Project_Test\260804_TEST_direct-rhp-plugin-identity\RhpExecutableProbe\**\*.cs;
                       ..\..\Project_Test\260805_TEST_rhino-plugin-assembly-identity\PluginAssemblyIdentityProbe\**\*.cs;
                       ..\..\Project_Test\260805_TEST_grasshopper-authoring-tools\ApiProbe\**\*.cs"
