@@ -402,33 +402,33 @@
         </DataTemplate>
 
         <DataTemplate x:Key="AssignedExtrusionTileTemplate" DataType="{x:Type ui:PanelExtrusionAssignmentCard}">
-            <Border Height="126" Padding="6" Margin="0,0,7,7" CornerRadius="5"
+            <Border Height="132" Padding="5" Margin="3,0,3,6" CornerRadius="5"
                     Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}"
                     BorderThickness="1" ToolTip="{Binding DisplayName}">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <Border Background="White" BorderBrush="{StaticResource BorderBrush}"
                             BorderThickness="1" CornerRadius="4" Padding="2">
                         <Image Source="{Binding Thumbnail}" Stretch="Uniform" />
                     </Border>
-                    <Grid Grid.Row="1" Margin="0,5,0,0">
+                    <TextBlock Grid.Row="1" Text="{Binding Code}" FontFamily="Consolas" FontSize="10"
+                               FontWeight="SemiBold" Margin="0,5,0,4"
+                               TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                    <Grid Grid.Row="2">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="52" />
                             <ColumnDefinition Width="24" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="{Binding Code}" FontFamily="Consolas" FontSize="10"
-                                   FontWeight="SemiBold" VerticalAlignment="Center"
-                                   TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
-                        <TextBox Grid.Column="1" Height="24" Padding="4,0" Margin="4,0,3,0"
+                        <TextBox Height="24" Padding="4,0" Margin="0,0,3,0"
                                  Text="{Binding ModifierText, Mode=OneWay}" VerticalContentAlignment="Center"
                                  FontFamily="Consolas" FontSize="10" ToolTip="{Binding ModifierToolTip}"
                                  PreviewKeyDown="OnAssignedModifierPreviewKeyDown"
                                  LostKeyboardFocus="OnAssignedModifierLostKeyboardFocus" />
-                        <Button Grid.Column="2" Content="×" Width="22" Height="24" Padding="0"
+                        <Button Grid.Column="1" Content="×" Width="22" Height="24" Padding="0"
                                 Style="{StaticResource CompactDangerButton}"
                                 Click="OnRemoveExtrusionAssignmentClick"
                                 ToolTip="Remove this profile from the selected curves" />
@@ -515,10 +515,66 @@
                         <StackPanel>
                             <TextBlock Text="TOTAL PANEL SIZE" Foreground="{StaticResource MutedBrush}"
                                        FontSize="9" FontWeight="SemiBold" TextAlignment="Right" />
-                            <TextBlock x:Name="OverallSizeText" Text="—" FontFamily="Consolas" FontSize="12"
+                            <TextBlock x:Name="OverallWidthText" Text="Width  —" FontFamily="Consolas" FontSize="12"
                                        FontWeight="SemiBold" TextAlignment="Right" Margin="0,1,0,0" />
+                            <TextBlock x:Name="OverallHeightText" Text="Height —" FontFamily="Consolas" FontSize="12"
+                                       FontWeight="SemiBold" TextAlignment="Right" Margin="0,2,0,0" />
                         </StackPanel>
                     </Border>
+                    <Grid x:Name="ExtrusionAssignmentSection" Panel.ZIndex="10" Width="220"
+                          HorizontalAlignment="Right" Margin="0,92,18,76" Visibility="Collapsed">
+                        <Border VerticalAlignment="Top" MaxHeight="{Binding ActualHeight, ElementName=ExtrusionAssignmentSection}"
+                                Padding="12" CornerRadius="7" Background="{StaticResource SurfaceBrush}"
+                                BorderBrush="{StaticResource BorderStrongBrush}" BorderThickness="1"
+                                AllowDrop="True" PreviewDragOver="OnExtrusionAssignmentDragOver"
+                                PreviewDrop="OnExtrusionAssignmentDrop">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.12" />
+                            </Border.Effect>
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <StackPanel Margin="0,0,0,10">
+                                    <TextBlock Text="ASSIGNED PROFILES" Style="{StaticResource EyebrowText}" />
+                                    <TextBlock x:Name="SelectedExtrusionNamesText" FontFamily="Consolas" FontSize="13"
+                                               FontWeight="SemiBold" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                                               Margin="0,5,0,0" />
+                                    <Grid Margin="0,7,0,0">
+                                        <TextBlock Foreground="{StaticResource MutedBrush}" FontSize="11"
+                                                   VerticalAlignment="Center" TextWrapping="NoWrap">
+                                            <Run x:Name="SelectedExtrusionCountText" Text="0 curves" />
+                                            <Run Text=" selected" />
+                                        </TextBlock>
+                                        <Button x:Name="ClearExtrusionAssignmentsButton" Content="Clear all"
+                                                Style="{StaticResource CompactDangerButton}" Height="28"
+                                                HorizontalAlignment="Right" Click="OnClearExtrusionAssignmentsClick" />
+                                    </Grid>
+                                </StackPanel>
+                                <ScrollViewer x:Name="ExtrusionAssignmentScroll" Grid.Row="1"
+                                              VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                    <StackPanel>
+                                        <ItemsControl x:Name="SelectedExtrusionAssignments"
+                                                      Margin="-3,0,-3,0" ItemTemplate="{StaticResource AssignedExtrusionTileTemplate}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <UniformGrid Columns="2" />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                        </ItemsControl>
+                                        <Border Padding="10" MinHeight="68" Background="{StaticResource RaisedBrush}"
+                                                BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="5">
+                                            <TextBlock x:Name="ExtrusionAssignmentHelpText"
+                                                       Text="Drag a profile here to assign it to this curve."
+                                                       Foreground="{StaticResource MutedBrush}" FontSize="11"
+                                                       TextWrapping="Wrap" VerticalAlignment="Center" />
+                                        </Border>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </Grid>
+                        </Border>
+                    </Grid>
                     <StackPanel x:Name="ExtrusionActions" HorizontalAlignment="Center" VerticalAlignment="Bottom"
                                 Margin="0,0,0,14" Orientation="Horizontal" Visibility="Collapsed">
                         <Border x:Name="MergeActionGroup" Padding="4" CornerRadius="7"
@@ -677,44 +733,6 @@
                                             </ItemsPanelTemplate>
                                         </ItemsControl.ItemsPanel>
                                     </ItemsControl>
-                                </StackPanel>
-                            </Border>
-
-                            <Border x:Name="ExtrusionAssignmentSection" Style="{StaticResource SideSection}"
-                                    Visibility="Collapsed" AllowDrop="True"
-                                    PreviewDragOver="OnExtrusionAssignmentDragOver"
-                                    PreviewDrop="OnExtrusionAssignmentDrop">
-                                <StackPanel>
-                                    <TextBlock Text="EXTRUSION ASSIGNMENT" Style="{StaticResource EyebrowText}" />
-                                    <TextBlock Margin="0,10,0,12" Foreground="{StaticResource MutedBrush}" FontSize="12">
-                                        <Run x:Name="SelectedExtrusionCountText" Text="0 extrusions" FontWeight="SemiBold"
-                                             Foreground="{StaticResource ForegroundBrush}" />
-                                        <Run Text=" selected" />
-                                    </TextBlock>
-                                    <Border Padding="11" CornerRadius="6" Background="{StaticResource RaisedBrush}"
-                                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
-                                        <StackPanel>
-                                            <Grid Margin="0,0,0,7">
-                                                <TextBlock Text="ASSIGNED PROFILE CODES" Style="{StaticResource EyebrowText}"
-                                                           VerticalAlignment="Center" />
-                                                <Button x:Name="ClearExtrusionAssignmentsButton" Content="Clear all"
-                                                        Style="{StaticResource CompactDangerButton}" Height="28"
-                                                        HorizontalAlignment="Right" Click="OnClearExtrusionAssignmentsClick" />
-                                            </Grid>
-                                            <ItemsControl x:Name="SelectedExtrusionAssignments"
-                                                          ItemTemplate="{StaticResource AssignedExtrusionTileTemplate}">
-                                                <ItemsControl.ItemsPanel>
-                                                    <ItemsPanelTemplate>
-                                                        <UniformGrid Columns="2" />
-                                                    </ItemsPanelTemplate>
-                                                </ItemsControl.ItemsPanel>
-                                            </ItemsControl>
-                                            <TextBlock x:Name="ExtrusionAssignmentHelpText"
-                                                       Text="Select a frame or intermediate curve, then drag a profile here."
-                                                       Foreground="{StaticResource MutedBrush}" FontSize="11"
-                                                       TextWrapping="Wrap" />
-                                        </StackPanel>
-                                    </Border>
                                 </StackPanel>
                             </Border>
 

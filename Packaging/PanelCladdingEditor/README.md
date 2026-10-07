@@ -88,6 +88,14 @@ current CID. Spawn/update/sync apply the same rule to surfaces and extrusion cur
 Run PCUpdate on existing configured panels to refresh their dependency names.
 Both sync commands detect name-only changes; missing CID leaves the panel name alone.
 
+Since version 1.0.87, PCEditor displays total width and height on separate lines
+with five decimal places and shows the shortened panel CID in Current Panel.
+In Extrusion view, selecting frame or intermediate curves opens the floating
+profile-assignment panel on the canvas. Drag profiles from the sidebar into it;
+clear the selection or press Escape to hide it.
+Version 1.0.88 fits assigned profiles into two columns within the same floating
+panel width, with each profile code above its length modifier and remove button.
+
 Baked cladding surfaces and extrusion curves inherit the panel's `CW_1.05_LOT`
 value, including leading zeros. `PCUpdate`, `PCSyncSrf`, and `PCSyncCrv` use this
 canonical lot key for inherited metadata. An absent panel lot leaves synced
