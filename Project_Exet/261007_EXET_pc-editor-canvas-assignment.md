@@ -8,8 +8,9 @@ Execution date: 2026-10-07.
 ## Related artifacts
 
 [TEST](../Project_Test/261007_TEST_pc-editor-canvas-assignment/README.md), standalone
-smoke project, and four offscreen screenshots in the same folder. No commit or PR
-was requested or created.
+smoke project, and five offscreen screenshots in the same folder.
+Implementation commit: `0c3c0c298c99923c46f514663f31c365538f6121`.
+GitHub publication: [PR #9](https://github.com/novan-xu/MCP_Rhino/pull/9).
 
 ## Implemented scope
 
