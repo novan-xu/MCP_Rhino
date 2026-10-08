@@ -4,6 +4,8 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using PanelCladdingEditor.Domain.Models.PanelCladding;
+using PanelCladdingEditor.Infrastructure.PanelCladding;
 using PanelCladdingEditor.UI;
 
 namespace MaterialCatalogueEditingSmoke;
@@ -12,10 +14,16 @@ internal static class Program
 {
     private static readonly Color OriginalColor = Color.FromRgb(0x21, 0x35, 0x47);
     private static readonly Color EditedColor = Color.FromRgb(0xD2, 0x69, 0x1E);
+    private static string _outputDirectory = Path.Combine("Project_Test", "260818_TEST_material-catalogue-editing");
 
     [STAThread]
-    private static void Main()
+    private static void Main(string[] args)
     {
+        if (args.Length > 0)
+        {
+            _outputDirectory = Path.GetFullPath(args[0]);
+        }
+        Directory.CreateDirectory(_outputDirectory);
         var colorPicker = new StubColorPicker(EditedColor);
         var categoryPrompt = new StubCategoryPrompt("Wood", "wood");
         PanelCladdingMaterial[] fixture =
@@ -113,8 +121,9 @@ internal static class Program
         code.Text = "NEW-001";
         description.Text = "New composite finish";
         category.SelectedItem = "Composite";
-        Require(configured.SelectedItem is null && (string?)action.Content == "Add material",
-            "An unused code did not clear the stale edit selection and show Add material.");
+        Require(configured.SelectedItem is null && (string?)action.Content == "Add material" &&
+                !Named<Button>(dialog, "RemoveMaterialButton").IsEnabled,
+            "An unused code did not clear the stale edit/delete target and show Add material.");
         int countBeforeAdd = dialog.Materials.Count;
         Click(action);
         Require(dialog.Materials.Count == countBeforeAdd + 1 &&
@@ -136,11 +145,104 @@ internal static class Program
         VerifyLayout(dialog, root, category, description, palette, colorAssist);
         Render(root, 720, 740, OutputPath("material-catalogue-editing-720x740.png"));
         Render(root, 620, 640, OutputPath("material-catalogue-editing-620x640.png"));
+        VerifyRemoval();
 
         Console.WriteLine("[OK] Catalogue selection loads exact material attributes without color replacement.");
         Console.WriteLine("[OK] Existing codes save in place; unused codes add exactly one material.");
         Console.WriteLine("[OK] Category dropdown/addition and case-insensitive duplicate protection passed.");
         Console.WriteLine("[OK] Responsive catalogue wrap, expanded description, palette bounds, and equal footer passed.");
+    }
+
+    private static void VerifyRemoval()
+    {
+        PanelCladdingMaterial[] source =
+        [
+            .. Enumerable.Range(1, 14).Select(index =>
+                Material($"GLS-{index:000}", $"Glass finish {index}", "Glass", OriginalColor)),
+            Material("LONG-MATERIAL-01", "Long-code finish", "Metal", EditedColor)
+        ];
+        var dialog = new MaterialSetupDialog(null, string.Empty, source,
+            new StubColorPicker(EditedColor), new StubCategoryPrompt("Unused"));
+        FrameworkElement root = (FrameworkElement)dialog.Content;
+        ListBox configured = Named<ListBox>(dialog, "ConfiguredList");
+        Button remove = Named<Button>(dialog, "RemoveMaterialButton");
+        Require(!remove.IsEnabled, "Removal must be disabled with no selected material.");
+        Click(remove);
+        Require(dialog.Materials.Count == source.Length, "No-selection removal changed the catalogue.");
+        configured.SelectedIndex = 0;
+        Require(remove.IsEnabled, "Selecting a catalogue material did not enable removal.");
+        foreach ((int width, int height) in new[] { (720, 740), (620, 640) })
+        {
+            Layout(root, width, height);
+            Require(Left(remove, root) >= Left(configured, root) + configured.ActualWidth &&
+                    Left(remove, root) + remove.ActualWidth <= width &&
+                    remove.ActualWidth == 40d && remove.ActualHeight == 40d,
+                "Trash button overlaps the catalogue or is clipped at the supported dialog size.");
+            Render(root, width, height, OutputPath($"material-catalogue-removal-{width}x{height}.png"));
+        }
+
+        string workbookPath = Path.Combine(Path.GetTempPath(), $"material-removal-{Guid.NewGuid():N}.xlsx");
+        var repository = new OpenXmlPanelCladdingWorkbookRepository();
+        void SaveCatalogue()
+        {
+            var prepared = repository.PrepareMaterialCatalog(new PanelCladdingMaterialCatalogSaveRequest
+            {
+                WorkbookPath = workbookPath,
+                AllowCreate = !File.Exists(workbookPath),
+                Materials = dialog.Materials.Select(item => item.ToCatalogItem()).ToArray()
+            });
+            Require(prepared.Success && prepared.Data is not null, prepared.Message);
+            using var update = prepared.Data!;
+            var committed = update.Commit();
+            Require(committed.Success, committed.Message);
+        }
+        try
+        {
+            SaveCatalogue();
+            byte[] originalWorkbook = File.ReadAllBytes(workbookPath);
+            configured.SelectedItem = dialog.Materials.Last();
+            double priorWidth = dialog.CatalogueItemWidth;
+            Click(remove);
+            Require(dialog.Materials.Count == source.Length - 1 &&
+                    dialog.Materials.Select(item => item.Code).SequenceEqual(source.SkipLast(1).Select(item => item.Code)),
+                "Removal did not preserve every unselected material in order.");
+            Require(configured.SelectedItem is null && !remove.IsEnabled &&
+                    Named<TextBox>(dialog, "CodeText").Text == string.Empty &&
+                    Named<TextBox>(dialog, "NameText").Text == string.Empty &&
+                    (string?)Named<Button>(dialog, "MaterialActionButton").Content == "Add material",
+                "Removal retained a stale deletion target or material edit fields.");
+            Require(dialog.CatalogueItemWidth < priorWidth, "Removal did not recalculate tile width.");
+            Click(remove);
+            Require(dialog.Materials.Count == source.Length - 1, "Repeated removal deleted an unselected entry.");
+            Require(source.Length == 15 && source.Last().Code == "LONG-MATERIAL-01" &&
+                    File.ReadAllBytes(workbookPath).SequenceEqual(originalWorkbook),
+                "Pending removal mutated the caller catalogue or workbook before confirmation.");
+            var reopened = new MaterialSetupDialog(source);
+            Require(reopened.Materials.Count == source.Length,
+                "Discarding the working copy lost a source material.");
+
+            SaveCatalogue();
+            var reduced = repository.ReadMaterialCatalog(workbookPath);
+            Require(reduced.Success && reduced.Data is not null &&
+                    reduced.Data.Materials.Select(item => item.Code).SequenceEqual(dialog.Materials.Select(item => item.Code)),
+                "The reduced catalogue did not persist through the existing save path.");
+            while (dialog.Materials.Count > 0)
+            {
+                configured.SelectedIndex = 0;
+                Click(remove);
+            }
+            Require(!remove.IsEnabled, "Removing the last material left removal enabled.");
+            SaveCatalogue();
+            var empty = repository.ReadMaterialCatalog(workbookPath);
+            Require(empty.Success && empty.Data is { Materials.Count: 0, UsesLegacyTypeFallback: false },
+                "An empty catalogue did not persist as an explicit empty Materials sheet.");
+        }
+        finally
+        {
+            File.Delete(workbookPath);
+        }
+        Console.WriteLine("[OK] Selected-only removal, no-selection guard, edit reset, and copy isolation passed.");
+        Console.WriteLine("[OK] Reduced and empty catalogue persistence and trash-button layout passed.");
     }
 
     private static void VerifyLayout(
@@ -250,8 +352,7 @@ internal static class Program
         Require(new FileInfo(path).Length > 10_000, $"Render is unexpectedly empty: {path}");
     }
 
-    private static string OutputPath(string fileName) => Path.GetFullPath(Path.Combine(
-        "Project_Test", "260818_TEST_material-catalogue-editing", fileName));
+    private static string OutputPath(string fileName) => Path.GetFullPath(Path.Combine(_outputDirectory, fileName));
 
     private static void Require(bool condition, string message)
     {

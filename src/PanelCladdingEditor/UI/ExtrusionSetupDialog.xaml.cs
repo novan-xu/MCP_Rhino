@@ -13,6 +13,7 @@ namespace PanelCladdingEditor.UI;
 public partial class ExtrusionSetupDialog : Window
 {
     private readonly PanelCladdingEditorController? _controller;
+    private readonly IExtrusionCatalogueClearPrompt _clearPrompt;
     private readonly ObservableCollection<PanelFrameExtrusion> _extrusions;
     private readonly ListCollectionView _poolView;
     private readonly ListCollectionView _readyView;
@@ -28,9 +29,19 @@ public partial class ExtrusionSetupDialog : Window
         PanelCladdingEditorController? controller,
         string workbookPath,
         IEnumerable<PanelFrameExtrusion> extrusions)
+        : this(controller, workbookPath, extrusions, new ExtrusionCatalogueClearPrompt())
+    {
+    }
+
+    public ExtrusionSetupDialog(
+        PanelCladdingEditorController? controller,
+        string workbookPath,
+        IEnumerable<PanelFrameExtrusion> extrusions,
+        IExtrusionCatalogueClearPrompt clearPrompt)
     {
         InitializeComponent();
         _controller = controller;
+        _clearPrompt = clearPrompt ?? throw new ArgumentNullException(nameof(clearPrompt));
         _extrusions = new ObservableCollection<PanelFrameExtrusion>(extrusions.Select(item => item.Copy()));
         Extrusions = _extrusions;
         _poolView = new ListCollectionView(_extrusions) { Filter = item => item is PanelFrameExtrusion profile && !profile.IsConfigured };
@@ -155,7 +166,7 @@ public partial class ExtrusionSetupDialog : Window
         {
             _extrusions.Add(PanelFrameExtrusion.FromCatalogItem(item));
         }
-        PdfPathText.Text = _extrusions.FirstOrDefault()?.SourcePdfPath ?? PdfPathText.Text;
+        PdfPathText.Text = _extrusions.FirstOrDefault()?.SourcePdfPath ?? string.Empty;
         ImportStatusText.Text = _extrusions.Count == 0
             ? "This workbook does not yet contain an extrusion catalogue."
             : $"Loaded {_extrusions.Count} project profiles from the workbook.";
@@ -380,9 +391,28 @@ public partial class ExtrusionSetupDialog : Window
         EditorPreview.Source = null;
         EditorCodeText.Text = "Select a profile";
         EditorDescriptionText.Text = string.Empty;
+        DimensionTabs.SelectedIndex = 0;
+        QuantityText.Clear();
+        FixedRadio.IsChecked = true;
+        ZeroValueText.Clear();
         ConfigureButton.IsEnabled = false;
+        ConfigureButton.Content = "Move to ready catalogue";
         ReturnButton.IsEnabled = false;
         RefreshParentCodes(string.Empty);
+    }
+
+    private void OnClearAllClick(object sender, RoutedEventArgs e)
+    {
+        if (!_clearPrompt.ConfirmClear(this, _extrusions.Count))
+        {
+            return;
+        }
+
+        _extrusions.Clear();
+        PdfPathText.Clear();
+        ClearEditor();
+        RefreshViews();
+        ImportStatusText.Text = "Catalogue cleared. Choose another PDF to extract, or Confirm to save.";
     }
 
     private void OnAcceptClick(object sender, RoutedEventArgs e)

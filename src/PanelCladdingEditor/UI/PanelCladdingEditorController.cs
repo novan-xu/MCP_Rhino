@@ -12,7 +12,6 @@ public sealed class PanelCladdingEditorController
     private readonly IPanelPreviewRenderer _previewRenderer;
     private readonly IPanelCladdingWorkbookRepository? _workbookRepository;
     private readonly IPanelFrameExtrusionScheduleImporter? _frameExtrusionImporter;
-    private readonly PanelFrameTypologyService _frameTypologyService;
 
     public PanelCladdingEditorController(
         ILivePanelCladdingRepository liveRepository,
@@ -28,7 +27,6 @@ public sealed class PanelCladdingEditorController
         _ = signatureService; // Retain constructor compatibility while type generation is suspended.
         _workbookRepository = workbookRepository;
         _frameExtrusionImporter = frameExtrusionImporter;
-        _frameTypologyService = new PanelFrameTypologyService(new PanelCladdingKeyService());
     }
 
     public OperationResponse<PanelCladdingLayout> Load(string filePath, Guid objectId) =>
@@ -38,12 +36,6 @@ public sealed class PanelCladdingEditorController
 
     public OperationResponse<PanelCladdingSaveResult> Save(PanelCladdingSaveRequest request) =>
         _saveService.Save(request);
-
-    public OperationResponse<PanelFrameTypologyIdentity> PreviewFrameTypology(
-        PanelCladdingLayout layout,
-        PanelFrameAssignmentState assignments,
-        string systemCode) =>
-        _frameTypologyService.Create(layout, assignments, systemCode);
 
     public OperationResponse<PanelCladdingMaterialCatalog> LoadMaterialCatalog(string workbookPath) =>
         _workbookRepository is null

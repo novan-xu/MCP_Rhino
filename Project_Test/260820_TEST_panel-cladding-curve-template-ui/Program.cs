@@ -78,6 +78,13 @@ internal static class Program
         ];
         Require(horizontal.MergeRuns.SequenceEqual(expectedHorizontal),
             $"Unexpected H-priority runs: {FormatRuns(horizontal.MergeRuns)}");
+        OperationResponse<PanelCladdingTopologyState> combined = keys.DecodeTopology(
+            new Dictionary<string, string> { [PanelCladdingKeyService.FrameConfigKey] = horizontal.FrameConfig }, 2, 3);
+        Require(combined.Success && combined.Data is not null &&
+                combined.Data.MergeRuns.SequenceEqual(expectedHorizontal) &&
+                combined.Data.MissingSegments.ToHashSet().SetEquals(original.MissingSegments) &&
+                combined.Data.HiddenSegments.ToHashSet().SetEquals(original.HiddenSegments),
+            "Template combined configuration must retain delete/hide state with the new merge runs.");
         Require(horizontal.MergeRuns.All(run => run.Axis == PanelCladdingTopologyAxis.Horizontal),
             "H priority retained a non-horizontal merge run.");
         Require(horizontal.UserTextDeletes.ToHashSet(StringComparer.OrdinalIgnoreCase).SetEquals(
@@ -309,12 +316,12 @@ internal static class Program
                 liveSource.IndexOf("_planning.CreatePlan", StringComparison.Ordinal) <
                 liveSource.IndexOf("BeginUndoRecord", StringComparison.Ordinal),
             "Curve-template mutation is not planned first, batched into one Undo record, and rollback-capable.");
-        Require(liveSource.Contains("PanelCladdingKeyService.MergeMaskKey", StringComparison.Ordinal) &&
+        Require(liveSource.Contains("PanelCladdingKeyService.FrameConfigKey", StringComparison.Ordinal) &&
                 liveSource.Contains("HasNonblankMergeMask", StringComparison.Ordinal) &&
                 liveSource.Contains("IsNullOrWhiteSpace(panelPlan.MergeMask)", StringComparison.Ordinal) &&
                 !liveSource.Contains("SegmentMaskKey", StringComparison.Ordinal) &&
                 !liveSource.Contains("HideMaskKey", StringComparison.Ordinal),
-            "The live mutation does not guard existing masks/no-op defaults or writes another topology key.");
+            "The live mutation must guard configured/no-op panels and write combined configuration.");
         Require(liveSource.Contains("panelPlan.UserTextDeletes", StringComparison.Ordinal),
             "The live mutation does not apply planned signature invalidation after a mask change.");
     }

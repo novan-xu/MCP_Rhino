@@ -66,6 +66,8 @@ public sealed class PanelCladdingUpdateCommand : RhinoCommand
         }
 
         PanelCladdingUpdateResult result = response.Data;
+        RhinoApp.WriteLine($"Standardized point order on {result.ReorderedPanelIds.Count} selected surface(s).");
+        foreach (string warning in result.PointOrderWarnings) RhinoApp.WriteLine("Point order skipped: " + warning);
         RhinoApp.WriteLine(
             $"PCUpdate processed {result.SourcePanelIds.Count} panel(s): " +
             $"created {result.CreatedSurfaceIds.Count} surface(s) and {result.CreatedCurveIds.Count} curve(s), " +

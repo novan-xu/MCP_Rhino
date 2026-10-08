@@ -1,0 +1,9 @@
+{
+  "success": true,
+  "launch": "Win32_Process.Create with ShowWindow=0",
+  "provider": "StdRegProv via HKEY_USERS/current SID",
+  "nonceMatched": true,
+  "probeRemoved": true,
+  "previousRhp": "%LOCALAPPDATA%\\PanelCladdingEditor\\plugin\\1.0.93\\PanelCladdingEditor.rhp",
+  "previousRhpExists": true
+}

@@ -19,11 +19,12 @@ internal static class Program
         VerifyDanglingAndCascadingGuidesReject();
         VerifySeparateCurvesDoNotInventMerge();
         VerifyCurveMaskMatch();
+        VerifyCurveAssignmentMatch();
         VerifyCommandContract();
         Console.WriteLine("[OK] PCCreate infers closed atomic segments and logical cells from on-panel guides.");
         Console.WriteLine("[OK] Continuous and split guides default to segmented curves; a 2H/2V grid emits twelve intermediate segments.");
         Console.WriteLine("[OK] PCCreate rejects endpoint-only and cascading dangling guides.");
-        Console.WriteLine("[OK] PCMatchCrv transfers only masks across equal H/V counts.");
+        Console.WriteLine("[OK] PCMatchCrv transfers sparse masks and full extrusion assignments across equal H/V counts.");
     }
 
     private static void VerifyContinuousGridSpawnsSegments()
@@ -173,8 +174,9 @@ internal static class Program
                 MatchSnapshot(SourceId, sourceText, 100d, 100d),
                 [MatchSnapshot(TargetId, targetText, 180d, 240d)])).Targets.Single();
         Require(targetPlan.UserTextWrites.Count == 1 &&
-                targetPlan.UserTextWrites[PanelCladdingKeyService.SegmentMaskKey] == sourceMasks.SegmentMask,
-            "PCMatchCrv did not write only the source's nondefault segment mask.");
+                targetPlan.UserTextWrites[PanelCladdingKeyService.FrameConfigKey] ==
+                    Required(keys.EncodeFrameConfiguration(sourceTopology, 2, 1)),
+            "PCMatchCrv did not write the source's combined frame configuration.");
         Require(targetPlan.UserTextDeletes.All(PanelCladdingKeyService.IsTopologyKey),
             "PCMatchCrv planned a non-topology deletion.");
         IReadOnlyDictionary<string, string> applied =
@@ -211,6 +213,196 @@ internal static class Program
         RequireFailure(invalidSource, "SOURCE_INVALID");
     }
 
+    private static void VerifyCurveAssignmentMatch()
+    {
+        var keys = new PanelCladdingKeyService();
+        var assignments = new PanelFrameAssignmentService();
+        var planner = new PanelCladdingCurveMatchPlanningService(keys);
+        var h0 = new PanelCladdingSegmentCoordinate(PanelCladdingTopologyAxis.Horizontal, 0, 0);
+        var h1 = new PanelCladdingSegmentCoordinate(PanelCladdingTopologyAxis.Horizontal, 0, 1);
+        var v0 = new PanelCladdingSegmentCoordinate(PanelCladdingTopologyAxis.Vertical, 0, 0);
+        var hidden = new PanelCladdingSegmentCoordinate(PanelCladdingTopologyAxis.Vertical, 0, 2);
+        var missing = new PanelCladdingSegmentCoordinate(PanelCladdingTopologyAxis.Horizontal, 1, 1);
+        var topology = new PanelCladdingTopologyState
+        {
+            MissingSegments = [missing],
+            HiddenSegments = [hidden],
+            MergeRuns = [new(PanelCladdingTopologyAxis.Horizontal, 0, 0, 1)]
+        };
+        var state = new PanelFrameAssignmentState
+        {
+            FrameAssignments = new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["FRM_0"] = ["1D-H0579", "0D-FIX", "0D-SPACED"],
+                ["FRM_3"] = ["1D-H0579"]
+            },
+            SegmentAssignments =
+            [
+                new(h0, ["1D-H0579"]), new(h1, ["1D-H0579"]),
+                new(v0, ["0D-SPACED"]), new(hidden, ["0D-FIX"])
+            ],
+            Definitions = new Dictionary<string, PanelFrameProfileDefinition>
+            {
+                ["1D-H0579"] = new()
+                {
+                    Code = "1D-H0579", BaseCode = "H0579", SourceCode = "ALU-H0579",
+                    Category = "FRAMING", Dimension = PanelFrameProfileDimension.OneDimensional,
+                    Calculation = PanelFrameProfileCalculation.Length, CalculationValue = 2d
+                },
+                ["0D-FIX"] = new()
+                {
+                    Code = "0D-FIX", BaseCode = "FIX", SourceCode = "ALU-FIX",
+                    Category = "FIXING", Dimension = PanelFrameProfileDimension.ZeroDimensional,
+                    Calculation = PanelFrameProfileCalculation.FixedQuantity, CalculationValue = 3d,
+                    ParentCode = "1D-H0579"
+                },
+                ["0D-SPACED"] = new()
+                {
+                    Code = "0D-SPACED", BaseCode = "SPACED", SourceCode = "ALU-SPACED",
+                    Category = "FIXING", Dimension = PanelFrameProfileDimension.ZeroDimensional,
+                    Calculation = PanelFrameProfileCalculation.Spacing, CalculationValue = 24d
+                }
+            },
+            CurveModifiers = new Dictionary<string, double>
+            {
+                ["FRM_0"] = 4d,
+                [PanelFrameAssignmentService.SegmentKey(h0)] = -2d,
+                [PanelFrameAssignmentService.SegmentKey(h1)] = -2d
+            }
+        };
+        string encoded = Required(assignments.Encode(state, 2, 1, topology));
+        var sourceText = new Dictionary<string, string>(Grid(
+            "30", "70", "50", Required(keys.EncodeTopology(topology, 2, 1))))
+        {
+            [PanelCladdingKeyService.FrameTypeKey] = encoded,
+            [PanelCladdingKeyService.LegacyFrameTypologyKey] = "SOURCE-STALE",
+            [PanelCladdingKeyService.GetCellKey(0, "A")] = "MPL-001"
+        };
+        var targetText = new Dictionary<string, string>(Grid(
+            "20", "160", "65", Required(keys.EncodeTopology(new(), 2, 1))))
+        {
+            [PanelCladdingKeyService.FrameTypeKey.ToLowerInvariant()] =
+                "{\"v\":1,\"f\":{\"FRM_2\":[\"1D-OLD\"]},\"s\":[{\"a\":\"H\",\"t\":1,\"b\":1,\"c\":[\"1D-OLD\"]}]}",
+            [PanelCladdingKeyService.LegacyFrameTypologyKey.ToLowerInvariant()] = "TARGET-STALE",
+            [PanelCladdingKeyService.SignatureKey] = "STALE-SIGNATURE",
+            [PanelCladdingKeyService.LegacySignatureKey] = "STALE-LEGACY",
+            [PanelCladdingKeyService.GetCellKey(0, "A")] = "GLS-001",
+            [PanelCladdingKeyService.UnitWidthKey] = "180.00000",
+            ["CW_1.01_PID"] = "TARGET-PID",
+            ["CustomNote"] = "preserve"
+        };
+        PanelCladdingMatchPanelSnapshot source = MatchSnapshot(SourceId, sourceText, 100d, 100d, "WT-01");
+        PanelCladdingMatchPanelSnapshot[] targets =
+        [
+            MatchSnapshot(TargetId, targetText, 180d, 240d, "WT-02"),
+            MatchSnapshot(Guid.Parse("33333333-3333-3333-3333-333333333333"), targetText, 220d, 300d, "WT-03")
+        ];
+        PanelCladdingMatchPlan plan = Required(planner.CreatePlan(source, targets));
+        var legacyFrameText = new Dictionary<string, string>(sourceText);
+        legacyFrameText.Remove(PanelCladdingKeyService.FrameTypeKey);
+        legacyFrameText[PanelCladdingKeyService.LegacyFrameAssignmentsKey] = encoded;
+        PanelCladdingMatchTargetPlan migrated = Required(planner.CreatePlan(
+            MatchSnapshot(SourceId, legacyFrameText, 100d, 100d), [targets[0]])).Targets.Single();
+        Require(migrated.UserTextWrites[PanelCladdingKeyService.FrameTypeKey] == encoded &&
+                migrated.UserTextWrites.ContainsKey(PanelCladdingKeyService.FrameConfigKey) &&
+                !migrated.UserTextWrites.Keys.Any(PanelCladdingKeyService.IsRetiredFrameKey),
+            "PCMatchCrv must migrate an older source to the new frame keys.");
+        foreach (PanelCladdingMatchTargetPlan targetPlan in plan.Targets)
+        {
+            PanelCladdingMatchPanelSnapshot target = targets.Single(item => item.ObjectId == targetPlan.ObjectId);
+            IReadOnlyDictionary<string, string> applied = PanelCladdingMatchPlanningService.ApplyUserTextPlan(
+                target.UserText, targetPlan);
+            PanelCladdingKeySet parsed = Required(keys.Parse(
+                applied, target.Geometry.Width, target.Geometry.Height, 0.001d));
+            Require(Required(assignments.Encode(parsed.FrameAssignments, 2, 1, parsed.Topology)) == encoded,
+                "PCMatchCrv lost profiles, definitions, quantities, parent links or modifiers.");
+            Require(!parsed.FrameAssignments.Definitions.ContainsKey("1D-OLD") &&
+                    parsed.FrameAssignments.SegmentAssignments.Any(item => item.Segment == hidden) &&
+                    !parsed.FrameAssignments.SegmentAssignments.Any(item => item.Segment == missing),
+                "Old assignments must be replaced atomically with source topology, including hidden assignments.");
+            foreach ((string key, string value) in targetText.Where(item =>
+                         !PanelCladdingKeyService.IsTopologyKey(item.Key) &&
+                         !item.Key.Equals(PanelCladdingKeyService.FrameTypeKey, StringComparison.OrdinalIgnoreCase) &&
+                         !item.Key.Equals(PanelCladdingKeyService.LegacyFrameTypologyKey, StringComparison.OrdinalIgnoreCase) &&
+                         !item.Key.Equals(PanelCladdingKeyService.SignatureKey, StringComparison.OrdinalIgnoreCase) &&
+                         !item.Key.Equals(PanelCladdingKeyService.LegacySignatureKey, StringComparison.OrdinalIgnoreCase)))
+            {
+                Require(applied[key] == value, $"PCMatchCrv changed target metadata: {key}.");
+            }
+            Require(!applied.ContainsKey(PanelCladdingKeyService.SignatureKey) &&
+                    !applied.ContainsKey(PanelCladdingKeyService.LegacySignatureKey),
+                "PCMatchCrv retained stale signatures.");
+            Require(applied[PanelCladdingKeyService.FrameConfigKey] ==
+                    Required(keys.EncodeFrameConfiguration(topology, 2, 1)) &&
+                    !applied.ContainsKey(PanelCladdingKeyService.LegacyFrameTypologyKey),
+                "PCMatchCrv must copy topology configuration and retire frame typology.");
+            IReadOnlyList<PanelCladdingExtrusionCurvePlan> curves = Required(
+                new PanelCladdingExtrusionPlanningService().CreatePlan(
+                    "TARGET-PID", "TARGET-CID", target.Geometry.Width, target.Geometry.Height, parsed,
+                    PanelCladdingExtrusionPlanningService.PanelSurfaceLayerRootPath + "::" + target.SystemCode));
+            PanelCladdingExtrusionCurvePlan frame = curves.Single(curve => curve.Code == "FRM_0");
+            PanelCladdingExtrusionCurvePlan merged = curves.Single(curve => curve.Kind == PanelCladdingExtrusionCurveKind.Merged);
+            Require(frame.End == target.Geometry.Width && frame.AssignedExtrusionCodes.Count == 3 &&
+                    frame.UserTextWrites["1D-H0579"] == "(LL+4)*2" &&
+                    frame.UserTextWrites["0D-FIX"] == "3" && frame.UserTextWrites["0D-SPACED"] == "(LL+4)/24" &&
+                    merged.End == target.Geometry.Width && merged.UserTextWrites["1D-H0579"] == "(LL-2)*2" &&
+                    curves.Single(curve => curve.AtomicSegments.Contains(v0)).UserTextWrites["0D-SPACED"] == "LL/24" &&
+                    !curves.Any(curve => curve.AtomicSegments.Contains(hidden) || curve.AtomicSegments.Contains(missing)),
+                "Matched assignments did not generate target-sized curves with copied formulas and suppression.");
+            PanelCladdingMatchTargetPlan repeated = Required(planner.CreatePlan(source,
+                [MatchSnapshot(target.ObjectId, applied, target.Geometry.Width, target.Geometry.Height, target.SystemCode)]))
+                .Targets.Single();
+            IReadOnlyDictionary<string, string> reapplied = PanelCladdingMatchPlanningService.ApplyUserTextPlan(applied, repeated);
+            Require(applied.Count == reapplied.Count && applied.All(item => reapplied[item.Key] == item.Value),
+                "Repeated PCMatchCrv changed already-matched assignments or derived metadata.");
+        }
+        Require(source.UserText.Count == sourceText.Count && sourceText.All(item => source.UserText[item.Key] == item.Value),
+            "PCMatchCrv mutated its source.");
+
+        var emptySourceText = new Dictionary<string, string>(sourceText);
+        emptySourceText.Remove(PanelCladdingKeyService.FrameTypeKey);
+        PanelCladdingMatchTargetPlan clear = Required(planner.CreatePlan(
+            MatchSnapshot(SourceId, emptySourceText, 100d, 100d), [targets[0]])).Targets.Single();
+        IReadOnlyDictionary<string, string> cleared = PanelCladdingMatchPlanningService.ApplyUserTextPlan(targetText, clear);
+        Require(!cleared.ContainsKey(PanelCladdingKeyService.FrameTypeKey) &&
+                !cleared.ContainsKey(PanelCladdingKeyService.LegacyFrameTypologyKey) &&
+                Required(keys.Parse(cleared, 180d, 240d, 0.001d)).FrameAssignments.IsEmpty,
+            "An unassigned source must remove case-variant target assignment and typology keys.");
+
+        var legacySourceText = new Dictionary<string, string>(emptySourceText)
+        {
+            [PanelCladdingKeyService.FrameTypeKey] = "{\"v\":1,\"f\":{\"FRM_0\":[\"1D-LEGACY\"]},\"s\":[]}"
+        };
+        PanelCladdingMatchTargetPlan legacyPlan = Required(planner.CreatePlan(
+            MatchSnapshot(SourceId, legacySourceText, 100d, 100d), [targets[0]])).Targets.Single();
+        Require(Required(assignments.Decode(legacyPlan.UserTextWrites, 2, 1, topology))
+                .Definitions["1D-LEGACY"].CalculationValue == 1d,
+            "Legacy assignments must acquire their existing default length definition when matched.");
+        foreach (string badPayload in new[]
+                 {
+                     "not-json",
+                     "{\"v\":1,\"f\":{},\"s\":[{\"a\":\"H\",\"t\":0,\"b\":0,\"c\":[\"1D-H0579\"]}]}"
+                 })
+        {
+            var badSource = new Dictionary<string, string>(sourceText)
+            {
+                [PanelCladdingKeyService.FrameTypeKey] = badPayload
+            };
+            RequireFailure(planner.CreatePlan(MatchSnapshot(SourceId, badSource, 100d, 100d), targets), "SOURCE_INVALID");
+        }
+        var badTarget = new Dictionary<string, string>(targetText)
+        {
+            [PanelCladdingKeyService.FrameTypeKey.ToLowerInvariant()] = "not-json"
+        };
+        OperationResponse<PanelCladdingMatchPlan> rejected = planner.CreatePlan(source,
+            [targets[0], MatchSnapshot(targets[1].ObjectId, badTarget, 220d, 300d)]);
+        RequireFailure(rejected, "TARGET_INVALID");
+        Require(rejected.Data is null, "A bad later target must not return a partial match plan.");
+        Console.WriteLine("[OK] PCMatchCrv copies perimeter, merged, vertical and hidden assignments; formulas generate on target-sized curves.");
+        Console.WriteLine("[OK] PCMatchCrv copies frame configuration, replaces/clears stale assignments, supports legacy payloads and is idempotent.");
+        Console.WriteLine("[OK] Malformed payloads and inconsistent merged assignments reject before any target plan is returned.");
+    }
+
     private static void VerifyCommandContract()
     {
         Assembly assembly = typeof(PanelCladdingCurveMatchPlanningService).Assembly;
@@ -228,7 +420,7 @@ internal static class Program
         Require(source.Contains("EnglishName => \"PCMatchCrv\"", StringComparison.Ordinal),
             "The exact PCMatchCrv public command name is missing.");
         Require(source.Contains("new PanelCladdingCurveMatchPlanningService(keys)", StringComparison.Ordinal),
-            "PCMatchCrv is not routed through the mask-only planner.");
+            "PCMatchCrv is not routed through the curve-match planner.");
         string geometrySource = File.ReadAllText(Path.Combine(
             FindRepositoryRoot(), "src", "PanelCladdingEditor", "Infrastructure", "Rhino", "Live",
             "PanelCladding", "LivePanelCladdingGeometryPartitionService.cs"));
@@ -290,9 +482,11 @@ internal static class Program
         Guid id,
         IReadOnlyDictionary<string, string> userText,
         double width,
-        double height) => new()
+        double height,
+        string systemCode = "") => new()
     {
         ObjectId = id,
+        SystemCode = systemCode,
         Geometry = new PanelCladdingMatchGeometryDescriptor
         {
             GeometryClass = PanelGeometryClass.Planar,

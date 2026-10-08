@@ -176,14 +176,6 @@ public sealed class PanelFrameProfileDefinition
     public string ParentCode { get; init; } = string.Empty;
 }
 
-public sealed class PanelFrameTypologyIdentity
-{
-    public int SchemaVersion { get; init; } = 1;
-    public string TypologyCode { get; init; } = string.Empty;
-    public string FullDigest { get; init; } = string.Empty;
-    public string CanonicalPayload { get; init; } = string.Empty;
-}
-
 public sealed class PanelCladdingAxisCorrespondence
 {
     public IReadOnlyList<int?> OldToNewTracks { get; init; } = Array.Empty<int?>();
@@ -371,7 +363,7 @@ public sealed class PanelCladdingSaveResult
 {
     public Guid ObjectId { get; init; }
     public string TypeCode { get; init; } = string.Empty;
-    public string FrameTypology { get; init; } = string.Empty;
+    public string FrameConfig { get; init; } = string.Empty;
     public string StoredSignature { get; init; } = string.Empty;
     public string WorkbookPath { get; init; } = string.Empty;
     public string SheetName { get; init; } = string.Empty;
@@ -447,6 +439,7 @@ public sealed class PanelCladdingMatchGeometryDescriptor
 public sealed class PanelCladdingMatchPanelSnapshot
 {
     public Guid ObjectId { get; init; }
+    public string SystemCode { get; init; } = string.Empty;
     public PanelCladdingMatchGeometryDescriptor Geometry { get; init; } = new();
     public IReadOnlyDictionary<string, string> UserText { get; init; } =
         new Dictionary<string, string>();
@@ -566,6 +559,7 @@ public sealed class PanelCladdingCurveTemplatePanelPlan
 {
     public Guid ObjectId { get; init; }
     public string MergeMask { get; init; } = string.Empty;
+    public string FrameConfig { get; init; } = string.Empty;
     public IReadOnlyList<string> UserTextDeletes { get; init; } = Array.Empty<string>();
     public IReadOnlyList<PanelCladdingMergeRun> MergeRuns { get; init; } =
         Array.Empty<PanelCladdingMergeRun>();

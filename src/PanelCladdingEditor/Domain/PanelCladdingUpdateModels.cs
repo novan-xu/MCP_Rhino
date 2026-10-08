@@ -39,6 +39,8 @@ public sealed class PanelCladdingDependencyReconciliationPlan
 
 public sealed class PanelCladdingUpdateResult
 {
+    public IReadOnlyList<Guid> ReorderedPanelIds { get; set; } = Array.Empty<Guid>();
+    public IReadOnlyList<string> PointOrderWarnings { get; set; } = Array.Empty<string>();
     public IReadOnlyList<Guid> SourcePanelIds { get; init; } = Array.Empty<Guid>();
     public IReadOnlyList<PanelCladdingDuplicateCidGroup> DuplicateCidGroups { get; init; } =
         Array.Empty<PanelCladdingDuplicateCidGroup>();

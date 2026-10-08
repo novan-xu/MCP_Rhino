@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/PanelCladdingEditor/PanelCladdingEditor.csproj"
+                      AdditionalProperties="PanelCladdingTestHost=true" />
+    <None Include="../261007_TEST_panel-cladding-pid/tutorial-fixture.json"
+          Link="tutorial-fixture.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

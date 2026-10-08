@@ -208,8 +208,11 @@
 
         <Border Grid.Row="4" Padding="18,12" Background="{StaticResource RaisedBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button Content="Cancel" Width="116" Style="{StaticResource BaseButton}" Click="OnCancelClick" />
-                <Button Content="Confirm" Width="116" Margin="8,0,0,0" Style="{StaticResource PrimaryButton}" Click="OnAcceptClick" />
+                <Button x:Name="ClearAllButton" Content="Clear all" Width="116" Margin="0,0,8,0"
+                        Style="{StaticResource DangerButton}" Click="OnClearAllClick"
+                        ToolTip="Clear configured and unconfigured profiles and reset the schedule PDF path." />
+                <Button x:Name="CancelButton" Content="Cancel" Width="116" Style="{StaticResource BaseButton}" Click="OnCancelClick" />
+                <Button x:Name="ConfirmButton" Content="Confirm" Width="116" Margin="8,0,0,0" Style="{StaticResource PrimaryButton}" Click="OnAcceptClick" />
             </StackPanel>
         </Border>
     </Grid>

@@ -50,6 +50,7 @@ $expectedCommands = @(
     'PCEditor',
     'PCMatchCrv',
     'PCMatchSrf',
+    'PCpid',
     'PCSpawnCrv',
     'PCSpawnSrf',
     'PCSyncCrv',

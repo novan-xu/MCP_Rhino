@@ -33,6 +33,10 @@ internal static class Program
         var userText = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             [PanelCladdingKeyService.MergeMaskKey] = "stale-merge",
+            [PanelCladdingKeyService.FrameConfigKey] = "stale-config",
+            [PanelCladdingKeyService.FrameTypeKey] = "stale-type",
+            [PanelCladdingKeyService.LegacyFrameAssignmentsKey] = "stale-assignments",
+            [PanelCladdingKeyService.LegacyFrameTypologyKey] = "stale-typology",
             ["CW_2.03_OFFSET_H0"] = "10",
             ["CW_2.04_OFFSET_V0"] = "25",
             ["CW_4.00_CLADDING_0A"] = "GL01",
@@ -70,6 +74,7 @@ internal static class Program
 
         var expectedWrites = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
+            [PanelCladdingKeyService.FrameConfigKey] = RequireData(new PanelCladdingKeyService().EncodeFrameConfiguration(new(), 1, 1), "default frame config"),
             ["CW_2.00_UNIT_DIMENSION"] = "100.00000x80.00000",
             ["CW_2.01_UNIT_WIDTH"] = "100.00000",
             ["CW_2.02_UNIT_HEIGHT"] = "80.00000",
@@ -83,6 +88,10 @@ internal static class Program
             ["CW_4.01_CLADDING_1B"] = " "
         };
         Require(panel.UserTextWrites.Count == expectedWrites.Count, "Grid write count is incorrect.");
+        Require(new[] { PanelCladdingKeyService.FrameTypeKey, PanelCladdingKeyService.LegacyFrameAssignmentsKey,
+                    PanelCladdingKeyService.LegacyFrameTypologyKey }
+                .All(key => panel.UserTextDeletes.Contains(key, StringComparer.OrdinalIgnoreCase)),
+            "PCCreate must clear previous assignments and retired typology when resetting the grid.");
         foreach ((string key, string value) in expectedWrites)
         {
             Require(panel.UserTextWrites.TryGetValue(key, out string? actual) && actual == value,

@@ -28,6 +28,10 @@ internal static class Program
                 [PanelCladdingKeyService.SignatureKey] = "v1:sha256:configured",
                 [PanelCladdingKeyService.LegacyTypeCodeKey] = "LEGACY",
                 [PanelCladdingKeyService.LegacySignatureKey] = "legacy-signature",
+                [PanelCladdingKeyService.FrameConfigKey] = "config",
+                [PanelCladdingKeyService.FrameTypeKey] = "assignments",
+                [PanelCladdingKeyService.LegacyFrameAssignmentsKey] = "old-assignments",
+                [PanelCladdingKeyService.LegacyFrameTypologyKey] = "old-typology",
                 ["CW_2.03_OFFSET_H0"] = "40",
                 ["CW_2.04_OFFSET_V0"] = "30",
                 ["CW_9.99_OFFSET_CUSTOM"] = "preserve",
@@ -51,11 +55,11 @@ internal static class Program
             "Create clear plan");
         Require(plan.Panels.Select(panel => panel.ObjectId).SequenceEqual(new[] { PanelOneId, PanelTwoId }),
             "Input order must be preserved and duplicate panel ids must collapse.");
-        Require(plan.Panels[0].UserTextDeletes.Count == 6,
-            "Configured panel should delete two cells, two type keys, and two signature keys.");
+        Require(plan.Panels[0].UserTextDeletes.Count == 10,
+            "Configured panel should clear cells, type/signature metadata, and current/retired frame keys.");
         Require(plan.Panels[1].UserTextDeletes.Count == 0,
             "Unconfigured panel should remain a no-op.");
-        Require(plan.RemovedKeyCount == 6, "Removed key total is incorrect.");
+        Require(plan.RemovedKeyCount == 10, "Removed key total is incorrect.");
         foreach (string expected in new[]
         {
             "CW_4.00_CLADDING_0A",
@@ -63,7 +67,11 @@ internal static class Program
             PanelCladdingKeyService.TypeCodeKey,
             PanelCladdingKeyService.SignatureKey,
             PanelCladdingKeyService.LegacyTypeCodeKey,
-            PanelCladdingKeyService.LegacySignatureKey
+            PanelCladdingKeyService.LegacySignatureKey,
+            PanelCladdingKeyService.FrameConfigKey,
+            PanelCladdingKeyService.FrameTypeKey,
+            PanelCladdingKeyService.LegacyFrameAssignmentsKey,
+            PanelCladdingKeyService.LegacyFrameTypologyKey
         })
         {
             Require(plan.Panels[0].UserTextDeletes.Contains(expected, StringComparer.OrdinalIgnoreCase),

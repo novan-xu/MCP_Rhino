@@ -53,8 +53,10 @@ public sealed class LivePanelCladdingCurveTemplateService : ILivePanelCladdingCu
                 ObjectId = objectId,
                 HorizontalTrackCount = layout.Data.HorizontalOffsets.Count,
                 VerticalTrackCount = layout.Data.VerticalOffsets.Count,
-                HasMergeMask = PanelCladdingKeyService.HasNonblankMergeMask(
-                    layout.Data.SourceUserText),
+                HasMergeMask = layout.Data.Topology.MergeRuns.Count > 0 ||
+                    (string.IsNullOrWhiteSpace(layout.Data.SourceUserText.FirstOrDefault(item =>
+                        string.Equals(item.Key, PanelCladdingKeyService.FrameConfigKey, StringComparison.OrdinalIgnoreCase)).Value) &&
+                     PanelCladdingKeyService.HasNonblankMergeMask(layout.Data.SourceUserText)),
                 Topology = layout.Data.Topology
             });
         }
@@ -87,8 +89,37 @@ public sealed class LivePanelCladdingCurveTemplateService : ILivePanelCladdingCu
 
             ObjectAttributes original = panelObject.Attributes.Duplicate();
             ObjectAttributes proposed = panelObject.Attributes.Duplicate();
-            DeleteUserTextCaseInsensitive(proposed, PanelCladdingKeyService.MergeMaskKey);
-            proposed.SetUserString(PanelCladdingKeyService.MergeMaskKey, panelPlan.MergeMask);
+            PanelCladdingCurveTemplatePanelSnapshot snapshot = snapshots.Single(item => item.ObjectId == panelPlan.ObjectId);
+            var proposedTopology = new PanelCladdingTopologyState
+            {
+                MissingSegments = snapshot.Topology.MissingSegments,
+                HiddenSegments = snapshot.Topology.HiddenSegments,
+                MergeRuns = panelPlan.MergeRuns
+            };
+            OperationResponse<PanelFrameAssignmentState> assignments = new PanelFrameAssignmentService().Decode(
+                ReadUserText(original), snapshot.HorizontalTrackCount, snapshot.VerticalTrackCount, proposedTopology);
+            if (!assignments.Success || assignments.Data is null)
+            {
+                return OperationResponse<PanelCladdingCurveTemplateResult>.Fail(assignments.Message);
+            }
+            OperationResponse<string> frameType = new PanelFrameAssignmentService().Encode(
+                assignments.Data, snapshot.HorizontalTrackCount, snapshot.VerticalTrackCount, proposedTopology);
+            if (!frameType.Success || frameType.Data is null)
+            {
+                return OperationResponse<PanelCladdingCurveTemplateResult>.Fail(frameType.Message);
+            }
+            foreach (string key in ReadUserText(original).Keys.Where(key =>
+                         PanelCladdingKeyService.IsRetiredFrameKey(key) ||
+                         string.Equals(key, PanelCladdingKeyService.FrameTypeKey, StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(key, PanelCladdingKeyService.FrameConfigKey, StringComparison.OrdinalIgnoreCase)))
+            {
+                DeleteUserTextCaseInsensitive(proposed, key);
+            }
+            proposed.SetUserString(PanelCladdingKeyService.FrameConfigKey, panelPlan.FrameConfig);
+            if (!string.IsNullOrWhiteSpace(frameType.Data))
+            {
+                proposed.SetUserString(PanelCladdingKeyService.FrameTypeKey, frameType.Data);
+            }
             if (UserTextEquals(original, proposed))
             {
                 continue;
