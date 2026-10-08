@@ -71,3 +71,8 @@ ownership checks, and interactive PCpid/Undo acceptance, await the next session.
 
 The measurement correction is implemented and installed, managed regressions and
 build/package/independent activation checks pass. Native acceptance remains open.
+
+## GitHub publication follow-up (2026-10-07)
+
+Source commit: `e7b302502c62bb7e4a7ec21206bed57dbfa651dd`.
+Pull request: [#10 — panel IDs, frame configuration, and catalogue controls](https://github.com/novan-xu/MCP_Rhino/pull/10).

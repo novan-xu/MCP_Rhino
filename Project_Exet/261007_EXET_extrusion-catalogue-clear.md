@@ -123,3 +123,8 @@ and registry backups are saved beside the activation evidence.
 TEST `activation-summary.json` records success. Rhino process count remained zero;
 no Rhino session or Windows UI automation was started. Exact loaded RHP and
 post-start ownership checks remain pending the next Rhino launch.
+
+## GitHub publication follow-up (2026-10-07)
+
+Source commit: `e7b302502c62bb7e4a7ec21206bed57dbfa651dd`.
+Pull request: [#10 — panel IDs, frame configuration, and catalogue controls](https://github.com/novan-xu/MCP_Rhino/pull/10).

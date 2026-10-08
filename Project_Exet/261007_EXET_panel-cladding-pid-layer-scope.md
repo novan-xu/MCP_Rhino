@@ -115,3 +115,8 @@ Portable evidence is recorded in
 Zero Rhino processes remained at final validation. Installation is complete;
 exact loaded-module/post-start timestamp verification awaits the next Rhino launch.
 Native prompt/write/Undo acceptance remains pending. No user document was modified.
+
+## GitHub publication follow-up (2026-10-07)
+
+Source commit: `e7b302502c62bb7e4a7ec21206bed57dbfa651dd`.
+Pull request: [#10 — panel IDs, frame configuration, and catalogue controls](https://github.com/novan-xu/MCP_Rhino/pull/10).

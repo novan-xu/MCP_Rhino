@@ -135,3 +135,8 @@ exact installed 1.0.89 RHP, and an independent host snapshot confirmed matching
 hash/commands, advanced root and CommandList timestamps and unchanged PlugIn
 timestamp. The activation summary records the results. Native prompt/write/Undo
 acceptance is still distinct from this successful plug-in load check.
+
+## GitHub publication follow-up (2026-10-07)
+
+Source commit: `e7b302502c62bb7e4a7ec21206bed57dbfa651dd`.
+Pull request: [#10 — panel IDs, frame configuration, and catalogue controls](https://github.com/novan-xu/MCP_Rhino/pull/10).

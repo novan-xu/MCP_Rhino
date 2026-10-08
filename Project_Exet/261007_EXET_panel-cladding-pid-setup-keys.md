@@ -92,3 +92,8 @@ Native prompts, persisted document writes and Undo remain pending acceptance.
 
 The requested implementation, automated regressions, package and independently
 validated 1.0.91 installation are complete. Native acceptance remains explicitly open.
+
+## GitHub publication follow-up (2026-10-07)
+
+Source commit: `e7b302502c62bb7e4a7ec21206bed57dbfa651dd`.
+Pull request: [#10 — panel IDs, frame configuration, and catalogue controls](https://github.com/novan-xu/MCP_Rhino/pull/10).

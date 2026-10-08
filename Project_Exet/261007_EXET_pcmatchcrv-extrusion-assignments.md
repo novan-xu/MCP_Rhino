@@ -93,3 +93,8 @@ redesign. The final schema uses CW_1.08_FRAME_CONFIG and CW_1.09_FRAME_TYPE and
 retires the old frame-typology identifier. Installation and independent validation
 evidence is recorded in
 [the frame-attribute EXET](261007_EXET_frame-config-type-attributes.md).
+
+## GitHub publication follow-up (2026-10-07)
+
+Source commit: `e7b302502c62bb7e4a7ec21206bed57dbfa651dd`.
+Pull request: [#10 — panel IDs, frame configuration, and catalogue controls](https://github.com/novan-xu/MCP_Rhino/pull/10).

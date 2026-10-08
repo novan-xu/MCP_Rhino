@@ -135,3 +135,8 @@ rejected by automatic approval policy (`blocked by policy`) before execution.
 It was not retried through another mechanism. The independently verified host
 probe had already been removed and its absence verified before installation;
 this rejection does not change the successful installation record.
+
+## GitHub publication follow-up (2026-10-07)
+
+Source commit: `e7b302502c62bb7e4a7ec21206bed57dbfa651dd`.
+Pull request: [#10 — panel IDs, frame configuration, and catalogue controls](https://github.com/novan-xu/MCP_Rhino/pull/10).

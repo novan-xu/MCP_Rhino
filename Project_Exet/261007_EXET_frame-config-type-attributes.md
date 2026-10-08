@@ -143,3 +143,45 @@ Evidence in TEST: `package-build.log`, `package-assembly-identity.log`,
 Installation and independent validation passed. Rhino was closed throughout and
 was not launched. Exact loaded-RHP and post-start registry timestamp verification,
 plus live command acceptance, remain pending the next Rhino launch.
+
+## GitHub publication follow-up (2026-10-07)
+
+Source commit: `e7b302502c62bb7e4a7ec21206bed57dbfa651dd`.
+Pull request: [#10 — panel IDs, frame configuration, and catalogue controls](https://github.com/novan-xu/MCP_Rhino/pull/10).
+
+Publication validation of the combined source changes passed:
+
+- `dotnet build MCP_Rhino.sln -c Debug --nologo -m:1 -p:BuildInParallel=false`
+  and the corresponding Release command: exit 0, zero warnings/errors.
+- This capability's `Verify-Regression.ps1`: exit 0, all 14 suites in Debug and
+  Release (28 smoke runs), plus both standalone editor builds.
+- `dotnet run --project <project> -c <configuration>` for the five standalone
+  projects under `261007_TEST_panel-cladding-pid`, `panel-cladding-pid-layer-scope`,
+  `panel-cladding-pid-setup-keys`, `panel-cladding-point-order` and
+  `panel-cladding-pid-planar-bounds`: all passed in Debug and Release (10 runs).
+  Each suffix above uses the same `261007_TEST_` prefix under `Project_Test/`.
+- `260903_TEST_pcupdate-command-undo/PCUpdateCommandUndoSmoke.csproj` passed its
+  source/package contract assertions in both configurations (2 runs); the native
+  ambient Undo branch explicitly remained skipped.
+- `260818_TEST_material-catalogue-editing/MaterialCatalogueEditingSmoke.csproj`
+  with an isolated output directory and
+  `260820_TEST_panel-extrusion-assignment/PanelExtrusionAssignmentSmoke.csproj`
+  with `--clear-qa <output-directory>` passed in both configurations (4 runs).
+- `260818_TEST_panel-cladding-pc-commands/PanelCladdingPcCommandsSmoke.csproj`
+  passed in Release (1 run). Total: 45 successful smoke/contract invocations.
+- `Project_Test/260805_TEST_rhino-plugin-assembly-identity/Verify-PluginAssemblyIdentity.ps1`
+  with `-Configuration Debug` and `-Configuration Release` passed, verifying the
+  compiled assembly GUIDs against the manifests and distinct product identities.
+- Git whitespace checks, 17 JSON artifact parses and 10 PowerShell script parses
+  passed. Local verification logs are in ignored `.validation/github-publish-20261007/`.
+
+The first identity check used `-SkipBuild` after test-host builds and found the
+Debug editor RHP absent. Running the verifier with its normal standalone rebuild
+restored the RHPs and passed in both configurations; no source fix was required.
+Test-generated changes to two pre-existing screenshot fixtures were restored.
+Local usernames and process IDs were omitted from three new host-persistence
+summaries before publication, with original raw evidence remaining local.
+
+No product installation or live document mutation was performed during this
+publication. Previously documented native geometry, prompts, writes/rollback,
+Undo acceptance and 1.0.96 post-start verification remain pending.
