@@ -591,7 +591,7 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
             }
 
             OperationResponse<IReadOnlyDictionary<string, string>> inferredMasks =
-                _keys.EncodeNonDefaultTopology(
+                _keys.EncodeFrameConfigurationUserText(
                     keySet.Topology,
                     keySet.HorizontalOffsets.Count,
                     keySet.VerticalOffsets.Count);
@@ -624,6 +624,7 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
                 !string.Equals(storedHeight, expectedHeight, StringComparison.Ordinal) ||
                 !string.Equals(storedDimension, $"{expectedWidth}x{expectedHeight}", StringComparison.Ordinal) ||
                 panel.UserText.Keys.Any(key =>
+                    PanelCladdingKeyService.IsRetiredFrameKey(key) ||
                     string.Equals(
                         key,
                         PanelCladdingKeyService.SignatureKey,
@@ -898,7 +899,7 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
             ObjectAttributes original = rhinoObject.Attributes.Duplicate();
             ObjectAttributes proposed = rhinoObject.Attributes.Duplicate();
             OperationResponse<IReadOnlyDictionary<string, string>> topology =
-                _keys.EncodeNonDefaultTopology(
+                _keys.EncodeFrameConfigurationUserText(
                     panelWrite.Topology,
                     panelWrite.HorizontalOffsets.Count,
                     panelWrite.VerticalOffsets.Count);
@@ -907,17 +908,32 @@ public sealed class LivePanelCladdingSurfaceSyncRepository : ILivePanelCladdingS
                 return OperationResponse<PanelCladdingSurfaceSyncResult>.Fail(
                     $"PANEL_CLADDING_SURFACE_SYNC_TOPOLOGY_INVALID: {panelWrite.ObjectId:D}: {topology.Message}");
             }
+            OperationResponse<string> frameType = new PanelFrameAssignmentService().Encode(
+                currentLayout.Data.FrameAssignments,
+                panelWrite.HorizontalOffsets.Count,
+                panelWrite.VerticalOffsets.Count,
+                panelWrite.Topology);
+            if (!frameType.Success || frameType.Data is null)
+            {
+                return OperationResponse<PanelCladdingSurfaceSyncResult>.Fail(frameType.Message);
+            }
             string?[] existingKeys = proposed.GetUserStrings()?.AllKeys ?? Array.Empty<string?>();
             foreach (string? key in existingKeys)
             {
                 if (key is not null && (_keys.IsOffsetKey(key) || _keys.IsCladdingCellKey(key) ||
                     PanelCladdingKeyService.IsTopologyKey(key) ||
+                    PanelCladdingKeyService.IsRetiredFrameKey(key) ||
+                    string.Equals(key, PanelCladdingKeyService.FrameTypeKey, StringComparison.OrdinalIgnoreCase) ||
                     PanelCladdingKeyService.IsRetiredCladdingTypeKey(key)))
                 {
                     proposed.DeleteUserString(key);
                 }
             }
             DeleteUserTextCaseInsensitive(proposed, PanelCladdingKeyService.SignatureKey);
+            if (!string.IsNullOrWhiteSpace(frameType.Data))
+            {
+                proposed.SetUserString(PanelCladdingKeyService.FrameTypeKey, frameType.Data);
+            }
             DeleteUserTextCaseInsensitive(proposed, PanelCladdingKeyService.LegacySignatureKey);
             DeleteUserTextCaseInsensitive(proposed, PanelCladdingKeyService.UnitWidthKey);
             DeleteUserTextCaseInsensitive(proposed, PanelCladdingKeyService.UnitHeightKey);

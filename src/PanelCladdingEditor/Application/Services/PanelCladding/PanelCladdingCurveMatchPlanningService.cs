@@ -7,6 +7,7 @@ namespace PanelCladdingEditor.Application.Services.PanelCladding;
 public sealed class PanelCladdingCurveMatchPlanningService : IPanelCladdingMatchPlanningService
 {
     private readonly PanelCladdingKeyService _keys;
+    private readonly PanelFrameAssignmentService _assignments = new();
 
     public PanelCladdingCurveMatchPlanningService(PanelCladdingKeyService keys)
     {
@@ -45,7 +46,7 @@ public sealed class PanelCladdingCurveMatchPlanningService : IPanelCladdingMatch
             return OperationResponse<PanelCladdingMatchPlan>.Fail(sourceLayout.Message);
         }
         OperationResponse<IReadOnlyDictionary<string, string>> sourceMasks =
-            _keys.EncodeNonDefaultTopology(
+            _keys.EncodeFrameConfigurationUserText(
                 sourceLayout.Data.Topology,
                 sourceLayout.Data.HorizontalOffsets.Count,
                 sourceLayout.Data.VerticalOffsets.Count);
@@ -53,6 +54,17 @@ public sealed class PanelCladdingCurveMatchPlanningService : IPanelCladdingMatch
         {
             return OperationResponse<PanelCladdingMatchPlan>.Fail(
                 $"PANEL_CLADDING_CURVE_MATCH_SOURCE_INVALID: {sourceMasks.Message}");
+        }
+
+        OperationResponse<string> sourceAssignments = _assignments.Encode(
+            sourceLayout.Data.FrameAssignments,
+            sourceLayout.Data.HorizontalOffsets.Count,
+            sourceLayout.Data.VerticalOffsets.Count,
+            sourceLayout.Data.Topology);
+        if (!sourceAssignments.Success || sourceAssignments.Data is null)
+        {
+            return OperationResponse<PanelCladdingMatchPlan>.Fail(
+                $"PANEL_CLADDING_CURVE_MATCH_SOURCE_INVALID: {sourceAssignments.Message}");
         }
 
         var targetPlans = new List<PanelCladdingMatchTargetPlan>(distinctTargets.Length);
@@ -73,8 +85,19 @@ public sealed class PanelCladdingCurveMatchPlanningService : IPanelCladdingMatch
                     $"target={targetLayout.Data.HorizontalOffsets.Count}H/{targetLayout.Data.VerticalOffsets.Count}V");
             }
 
+            var writes = new Dictionary<string, string>(sourceMasks.Data, StringComparer.OrdinalIgnoreCase);
+            if (!string.IsNullOrWhiteSpace(sourceAssignments.Data))
+            {
+                writes[PanelCladdingKeyService.FrameTypeKey] = sourceAssignments.Data;
+            }
+
             string[] deletes = target.UserText.Keys
                 .Where(key => PanelCladdingKeyService.IsTopologyKey(key) ||
+                    string.Equals(
+                        key,
+                        PanelCladdingKeyService.FrameTypeKey,
+                        StringComparison.OrdinalIgnoreCase) ||
+                    PanelCladdingKeyService.IsRetiredFrameKey(key) ||
                     string.Equals(
                         key,
                         PanelCladdingKeyService.SignatureKey,
@@ -90,9 +113,7 @@ public sealed class PanelCladdingCurveMatchPlanningService : IPanelCladdingMatch
             {
                 ObjectId = target.ObjectId,
                 UserTextDeletes = deletes,
-                UserTextWrites = new Dictionary<string, string>(
-                    sourceMasks.Data,
-                    StringComparer.OrdinalIgnoreCase)
+                UserTextWrites = writes
             });
         }
 

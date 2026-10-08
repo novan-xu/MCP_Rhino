@@ -19,8 +19,13 @@ internal static class Program
     [STAThread]
     private static int Main(string[] args)
     {
-        string pdfPath = args.FirstOrDefault() ?? Environment.GetEnvironmentVariable("PANEL_EXTRUSION_SCHEDULE_PDF") ?? string.Empty;
-        VerifyAssignmentSerializationAndFrameTypology();
+        bool clearQa = args.FirstOrDefault() == "--clear-qa";
+        string pdfPath = clearQa ? string.Empty : args.FirstOrDefault() ?? Environment.GetEnvironmentVariable("PANEL_EXTRUSION_SCHEDULE_PDF") ?? string.Empty;
+        if (clearQa)
+        {
+            VerifyCatalogueClear(Path.GetFullPath(args[1]));
+        }
+        VerifyAssignmentSerializationAndFrameConfiguration();
         VerifyBakedCurveAssignments();
         VerifyConfiguredProfileFormulas();
         VerifySourceContracts();
@@ -30,7 +35,7 @@ internal static class Program
         }
         Console.WriteLine("[OK] additive 1D/0D assignments serialize deterministically and validate merge runs.");
         Console.WriteLine("[OK] LL modifiers, quantities, fixed counts, and spacing formulas are correct.");
-        Console.WriteLine("[OK] frame typology responds to topology masks and assigned extrusion codes.");
+        Console.WriteLine("[OK] frame config stores topology; frame type stores assigned profile definitions.");
         Console.WriteLine("[OK] exact Rhino keys and baked-curve take-off key are present in production sources.");
         if (!string.IsNullOrWhiteSpace(pdfPath))
         {
@@ -39,7 +44,127 @@ internal static class Program
         return 0;
     }
 
-    private static void VerifyAssignmentSerializationAndFrameTypology()
+    private static void VerifyCatalogueClear(string outputDirectory)
+    {
+        Directory.CreateDirectory(outputDirectory);
+        var drawing = new DrawingVisual();
+        using (DrawingContext context = drawing.RenderOpen())
+        {
+            context.DrawRectangle(Brushes.White, null, new Rect(0, 0, 120, 70));
+            context.DrawRectangle(null, new Pen(Brushes.Black, 2), new Rect(15, 15, 90, 40));
+            context.DrawRectangle(null, new Pen(Brushes.Black, 1), new Rect(20, 20, 80, 30));
+        }
+        var bitmap = new RenderTargetBitmap(120, 70, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(drawing);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var image = new MemoryStream();
+        encoder.Save(image);
+        PanelFrameExtrusionCatalogItem Raw(string code, string pdfPath) => new()
+        {
+            BaseCode = code, SourceCode = $"ALU-{code}", Category = "FRAMING",
+            SourcePageNumber = 1, SourcePdfPath = pdfPath, ThumbnailPng = image.ToArray()
+        };
+        const string originalPdf = @"C:\Temp\schedule-before.pdf";
+        PanelFrameExtrusionCatalogItem[] initial =
+        [
+            Raw("H0703", originalPdf),
+            Configured(Raw("H0651", originalPdf), PanelFrameProfileDimension.OneDimensional,
+                PanelFrameProfileCalculation.Length, 2d),
+            Configured(Raw("H0652", originalPdf), PanelFrameProfileDimension.ZeroDimensional,
+                PanelFrameProfileCalculation.Spacing, 24d, ExpectedProfile)
+        ];
+        PanelFrameExtrusion[] caller = initial.Select(PanelFrameExtrusion.FromCatalogItem).ToArray();
+        string workbookPath = Path.Combine(Path.GetTempPath(), $"extrusion-clear-{Guid.NewGuid():N}.xlsx");
+        var workbook = new OpenXmlPanelCladdingWorkbookRepository();
+        var live = new StubLiveRepository(BuildLayout());
+        var signature = new PanelCladdingTypeSignatureService(new PanelCladdingKeyService());
+        var importer = new StubScheduleImporter(path => Raw("H0651", path));
+        var controller = new PanelCladdingEditorController(live, new PanelCladdingSaveService(live, signature),
+            new PanelPreviewRenderer(), signature, workbook, importer);
+        void Save(IEnumerable<PanelFrameExtrusionCatalogItem> items) => Required(
+            controller.SaveFrameExtrusionCatalog(new PanelFrameExtrusionCatalogSaveRequest
+            {
+                WorkbookPath = workbookPath, AllowCreate = !File.Exists(workbookPath), Extrusions = items.ToArray()
+            }), "save extrusion catalogue");
+        try
+        {
+            Save(initial);
+            byte[] originalWorkbook = File.ReadAllBytes(workbookPath);
+            var prompt = new StubClearPrompt(false, true, true);
+            var dialog = new ExtrusionSetupDialog(controller, workbookPath, caller, prompt);
+            T Named<T>(string name) where T : FrameworkElement =>
+                (T)(dialog.FindName(name) ?? throw new InvalidOperationException($"Missing {name}"));
+            ListBox pool = Named<ListBox>("PoolList");
+            ListBox ready = Named<ListBox>("ReadyList");
+            Button clear = Named<Button>("ClearAllButton");
+            TextBox pdf = Named<TextBox>("PdfPathText");
+            var selected = ready.Items.Cast<PanelFrameExtrusion>().Single(item => item.Code == "0D-H0652");
+            ready.SelectedItem = selected;
+            Named<TextBox>("QuantityText").Text = "7";
+            FrameworkElement root = (FrameworkElement)dialog.Content;
+            // The detached content render needs the background normally supplied by its Window.
+            ((System.Windows.Controls.Panel)root).Background = dialog.Background;
+            foreach ((int width, int height) in new[] { (1220, 820), (1040, 700) })
+            {
+                Render(root, width, height, Path.Combine(outputDirectory, $"extrusion-clear-{width}x{height}.png"));
+                Point buttonOrigin = clear.TranslatePoint(new Point(0, 0), root);
+                Point cancelOrigin = Named<Button>("CancelButton").TranslatePoint(new Point(0, 0), root);
+                Require(buttonOrigin.X >= 0 && buttonOrigin.Y + clear.ActualHeight <= height &&
+                        buttonOrigin.X + clear.ActualWidth < cancelOrigin.X,
+                    "Clear all is clipped or overlaps the footer at a supported dialog size.");
+            }
+
+            clear.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Require(prompt.CallCount == 1 && prompt.ProfileCount == 3 && ReferenceEquals(prompt.Owner, dialog) &&
+                    pool.Items.Count == 1 && ready.Items.Count == 2 && ReferenceEquals(ready.SelectedItem, selected) &&
+                    pdf.Text == originalPdf && Named<TextBox>("QuantityText").Text == "7" &&
+                    Named<TextBox>("ZeroValueText").Text == "24",
+                "Declining confirmation changed the catalogue, path, selection or editor values.");
+            clear.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Require(prompt.CallCount == 2 && dialog.Extrusions.Count == 0 && pool.Items.Count == 0 &&
+                    ready.Items.Count == 0 && pool.SelectedItem is null && ready.SelectedItem is null && pdf.Text.Length == 0,
+                "Accepted clear did not remove both configured/unconfigured lists and the PDF path.");
+            Require(Named<Image>("EditorPreview").Source is null &&
+                    Named<TextBlock>("EditorCodeText").Text == "Select a profile" &&
+                    Named<TextBox>("QuantityText").Text.Length == 0 && Named<TextBox>("ZeroValueText").Text.Length == 0 &&
+                    Named<TabControl>("DimensionTabs").SelectedIndex == 0 && Named<RadioButton>("FixedRadio").IsChecked == true &&
+                    Named<ComboBox>("ParentCodeCombo").Items.Count == 1 &&
+                    !Named<Button>("ConfigureButton").IsEnabled && !Named<Button>("ReturnButton").IsEnabled,
+                "Clear left a selected profile, preview, configuration value or parent behind.");
+            Require(Named<TextBlock>("PoolCountText").Text.StartsWith("0 ", StringComparison.Ordinal) &&
+                    Named<TextBlock>("ReadyCountText").Text.StartsWith("0 ", StringComparison.Ordinal) &&
+                    Named<TextBox>("WorkbookPathText").Text == workbookPath && dialog.WorkbookPath == workbookPath &&
+                    caller.Length == 3 && caller.Count(item => item.IsConfigured) == 2 &&
+                    File.ReadAllBytes(workbookPath).SequenceEqual(originalWorkbook),
+                "Clear changed the save destination, caller or workbook, or failed to refresh counts.");
+            var cancelled = new ExtrusionSetupDialog(controller, workbookPath, caller, new StubClearPrompt());
+            Require(cancelled.Extrusions.Count == 3, "Discarding pending clear did not retain the saved catalogue.");
+            Save(dialog.Extrusions.Select(item => item.ToCatalogItem()));
+            var reopened = new ExtrusionSetupDialog(controller, workbookPath, caller, new StubClearPrompt());
+            Require(reopened.Extrusions.Count == 0 && ((TextBox)reopened.FindName("PdfPathText")).Text.Length == 0,
+                "Saved empty catalogue reopened with old profiles or inherited PDF path.");
+            Render(root, 1220, 820, Path.Combine(outputDirectory, "extrusion-clear-empty.png"));
+
+            pdf.Text = @"C:\Temp\schedule-next.pdf";
+            clear.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Require(prompt.ProfileCount == 0 && pdf.Text.Length == 0,
+                "Clear did not reset a PDF path when the catalogue was already empty.");
+            pdf.Text = @"C:\Temp\schedule-next.pdf";
+            Named<Button>("ExtractButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Require(importer.LastPath == pdf.Text && pool.Items.Count == 1 && ready.Items.Count == 0 &&
+                    dialog.Extrusions.Single().SourceCode == "ALU-H0651" && !dialog.Extrusions.Single().IsConfigured &&
+                    Named<Button>("ExtractButton").IsEnabled,
+                "Extraction after clear failed or carried over old configuration for the same source code.");
+        }
+        finally
+        {
+            File.Delete(workbookPath);
+        }
+        Console.WriteLine("[OK] Clear confirmation decline/accept, complete reset, working-copy isolation, empty save/reopen and re-extraction passed.");
+    }
+
+    private static void VerifyAssignmentSerializationAndFrameConfiguration()
     {
         var keys = new PanelCladdingKeyService();
         var assignments = new PanelFrameAssignmentService();
@@ -64,57 +189,26 @@ internal static class Program
         Require(Required(assignments.Encode(decoded, 1, 1, layout.Topology), "re-encode assignments") == payload,
             "Assignment payload was not deterministic.");
 
-        var typology = new PanelFrameTypologyService(keys, assignments);
-        PanelFrameTypologyIdentity first = Required(typology.Create(layout, state, "CW01"), "create frame typology");
-        Require(first.TypologyCode.StartsWith("CW01-2X2-", StringComparison.Ordinal),
-            $"Unexpected frame typology format: {first.TypologyCode}");
-        var changedAssignments = new PanelFrameAssignmentState
+        string config = Required(keys.EncodeFrameConfiguration(layout.Topology, 1, 1), "encode configuration");
+        foreach (PanelCladdingTopologyState changed in new[]
+                 {
+                     new PanelCladdingTopologyState(),
+                     new PanelCladdingTopologyState
+                     {
+                         MergeRuns = layout.Topology.MergeRuns,
+                         HiddenSegments = [new(PanelCladdingTopologyAxis.Vertical, 0, 0)]
+                     },
+                     new PanelCladdingTopologyState
+                     {
+                         MergeRuns = layout.Topology.MergeRuns,
+                         MissingSegments = [new(PanelCladdingTopologyAxis.Vertical, 0, 1)]
+                     }
+                 })
         {
-            FrameAssignments = state.FrameAssignments,
-            SegmentAssignments = state.SegmentAssignments.Select((item, index) => index == 2
-                ? item with { Codes = ["1D-H0999"] }
-                : item).ToArray(),
-            Definitions = Definitions(ExpectedProfile, "1D-H0677", "1D-H0999")
-        };
-        PanelFrameTypologyIdentity second = Required(typology.Create(layout, changedAssignments, "CW01"),
-            "create changed frame typology");
-        Require(first.TypologyCode != second.TypologyCode,
-            "Changing a main-frame extrusion code did not change frame typology.");
-
-        PanelCladdingLayout hiddenLayout = BuildLayout(new PanelCladdingTopologyState
-        {
-            MergeRuns = layout.Topology.MergeRuns,
-            HiddenSegments =
-            [
-                new PanelCladdingSegmentCoordinate(PanelCladdingTopologyAxis.Vertical, 0, 0)
-            ]
-        });
-        PanelFrameTypologyIdentity hidden = Required(typology.Create(hiddenLayout, state, "CW01"),
-            "create hidden frame typology");
-        Require(first.TypologyCode != hidden.TypologyCode,
-            "Changing a hide mask did not change frame typology.");
-        PanelFrameTypologyIdentity unmerged = Required(typology.Create(
-                BuildLayout(new PanelCladdingTopologyState()),
-                state,
-                "CW01"),
-            "create unmerged frame typology");
-        Require(first.TypologyCode != unmerged.TypologyCode,
-            "Changing a merge mask did not change frame typology.");
-        PanelFrameTypologyIdentity segmented = Required(typology.Create(
-                BuildLayout(new PanelCladdingTopologyState
-                {
-                    MergeRuns = layout.Topology.MergeRuns,
-                    MissingSegments =
-                    [
-                        new PanelCladdingSegmentCoordinate(PanelCladdingTopologyAxis.Vertical, 0, 1)
-                    ]
-                }),
-                state,
-                "CW01"),
-            "create segmented frame typology");
-        Require(first.TypologyCode != segmented.TypologyCode,
-            "Changing a segment mask did not change frame typology.");
-
+            Require(Required(keys.EncodeFrameConfiguration(changed, 1, 1), "changed config") != config,
+                "Changing merge, hide or delete state did not change frame config.");
+        }
+        VerifyFrameAttributeMigration(keys, layout.Topology, payload);
         var invalidMerge = new PanelFrameAssignmentState
         {
             SegmentAssignments =
@@ -127,6 +221,76 @@ internal static class Program
         Require(!assignments.Normalize(invalidMerge, 1, 1, layout.Topology).Success,
             "A merge run accepted inconsistent atomic assignment sets.");
         VerifySavePersistence(layout, state);
+    }
+
+    private static void VerifyFrameAttributeMigration(
+        PanelCladdingKeyService keys, PanelCladdingTopologyState topology, string typePayload)
+    {
+        var assignments = new PanelFrameAssignmentService();
+        PanelCladdingTopologyPayloads masks = Required(keys.EncodeTopology(topology, 1, 1), "legacy masks");
+        string config = Required(keys.EncodeFrameConfiguration(topology, 1, 1), "combined masks");
+        var legacy = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [PanelCladdingKeyService.SegmentMaskKey.ToLowerInvariant()] = masks.SegmentMask,
+            [PanelCladdingKeyService.MergeMaskKey.ToLowerInvariant()] = masks.MergeMask,
+            [PanelCladdingKeyService.HideMaskKey.ToLowerInvariant()] = masks.HideMask,
+            [PanelCladdingKeyService.LegacyFrameAssignmentsKey.ToLowerInvariant()] = typePayload,
+            [PanelCladdingKeyService.LegacyFrameTypologyKey.ToLowerInvariant()] = "RETIRED",
+            [PanelCladdingKeyService.FrameConfigKey] = " ",
+            [PanelCladdingKeyService.FrameTypeKey] = " "
+        };
+        PanelCladdingTopologyState loaded = Required(keys.DecodeTopology(legacy, 1, 1), "legacy fallback config");
+        Require(Required(keys.EncodeFrameConfiguration(loaded, 1, 1), "re-encode legacy") == config &&
+                Required(assignments.Encode(Required(assignments.Decode(legacy, 1, 1, loaded), "legacy type"),
+                    1, 1, loaded), "re-encode legacy type") == typePayload,
+            "PCpid blank placeholders must not hide legacy masks or assignments.");
+        var canonical = new Dictionary<string, string>(legacy)
+        {
+            [PanelCladdingKeyService.FrameConfigKey] = config,
+            [PanelCladdingKeyService.FrameTypeKey] = typePayload,
+            [PanelCladdingKeyService.MergeMaskKey.ToLowerInvariant()] = "obsolete-invalid",
+            [PanelCladdingKeyService.LegacyFrameAssignmentsKey.ToLowerInvariant()] = "obsolete-invalid"
+        };
+        Require(keys.DecodeTopology(canonical, 1, 1).Success && assignments.Decode(canonical, 1, 1, topology).Success,
+            "Canonical frame values must take precedence over old keys.");
+        var invalidConfig = new Dictionary<string, string>(legacy) { [PanelCladdingKeyService.FrameConfigKey] = "not-json" };
+        var invalidType = new Dictionary<string, string>(legacy) { [PanelCladdingKeyService.FrameTypeKey] = "not-json" };
+        Require(!keys.DecodeTopology(invalidConfig, 1, 1).Success &&
+                !assignments.Decode(invalidType, 1, 1, topology).Success,
+            "Malformed canonical data must fail instead of restoring legacy values.");
+        var conflictConfig = new Dictionary<string, string>(canonical) { [PanelCladdingKeyService.FrameConfigKey.ToLowerInvariant()] = "different" };
+        var conflictType = new Dictionary<string, string>(canonical) { [PanelCladdingKeyService.FrameTypeKey.ToLowerInvariant()] = "different" };
+        Require(!keys.DecodeTopology(conflictConfig, 1, 1).Success && !assignments.Decode(conflictType, 1, 1, topology).Success,
+            "Conflicting case variants must fail.");
+        Require(!PanelCladdingKeyService.ValidateFrameAttributeNames(conflictConfig).Success &&
+                !PanelCladdingKeyService.ValidateFrameAttributeNames(conflictType).Success &&
+                PanelCladdingKeyService.ValidateFrameAttributeNames(canonical).Success,
+            "Live snapshots must reject conflicting names before case-insensitive dictionary normalization.");
+        Require(!keys.DecodeTopology(new Dictionary<string, string> { [PanelCladdingKeyService.FrameConfigKey] = config }, 2, 1).Success,
+            "Combined configuration must still validate grid dimensions.");
+        foreach (string malformed in new[] { "{\"v\":2}", "{\"v\":1}", config.Replace("\"v\":1", "\"v\":1,\"v\":1") })
+        {
+            Require(!keys.DecodeTopology(new Dictionary<string, string> { [PanelCladdingKeyService.FrameConfigKey] = malformed }, 1, 1).Success,
+                "Invalid configuration schema was accepted.");
+        }
+        PanelCladdingLayout layout = BuildLayout(topology, sourceUserText: legacy);
+        var repository = new CapturingLiveRepository(layout);
+        var service = new PanelCladdingSaveService(repository, new PanelCladdingTypeSignatureService(keys));
+        Required(service.Save(new PanelCladdingSaveRequest
+        {
+            FilePath = layout.DocumentPath, ObjectId = layout.ObjectId,
+            ExpectedGeometryFingerprint = layout.GeometryFingerprint,
+            HorizontalOffsets = layout.HorizontalOffsets, VerticalOffsets = layout.VerticalOffsets,
+            Topology = topology, FrameAssignments = Required(assignments.Decode(typePayload, 1, 1, topology), "legacy state"),
+            Scope = PanelCladdingSaveScope.Extrusions
+        }), "migrate legacy extrusion save");
+        PanelAttributeCommitRequest commit = repository.LastCommit!;
+        Require(legacy.Keys.Where(PanelCladdingKeyService.IsRetiredFrameKey)
+                    .All(key => commit.UserTextDeletes.Contains(key, StringComparer.OrdinalIgnoreCase)) &&
+                commit.UserTextWrites[PanelCladdingKeyService.FrameConfigKey] == config &&
+                commit.UserTextWrites[PanelCladdingKeyService.FrameTypeKey] == typePayload,
+            "Extrusion save failed to migrate legacy data and delete retired attributes.");
+        Console.WriteLine("[OK] New frame keys round-trip; legacy/blank fallback, precedence, malformed/conflict rejection and save migration pass.");
     }
 
     private static void VerifySavePersistence(PanelCladdingLayout layout, PanelFrameAssignmentState state)
@@ -155,12 +319,13 @@ internal static class Program
             throw new InvalidOperationException("Assigned extrusion save returned no result.");
         PanelAttributeCommitRequest commit = repository.LastCommit ??
             throw new InvalidOperationException("Assigned extrusion save did not commit panel attributes.");
-        Require(commit.UserTextWrites.ContainsKey(PanelCladdingKeyService.FrameAssignmentsKey),
-            "Assigned extrusion save omitted CW_2.09_FRAME_ASSIGNMENTS.");
-        Require(commit.UserTextWrites.TryGetValue(PanelCladdingKeyService.FrameTypologyKey, out string? storedTypology) &&
-                storedTypology == saveResult.FrameTypology &&
-                storedTypology.StartsWith("CW01-2X2-", StringComparison.Ordinal),
-            "Assigned extrusion save omitted or mismatched CW_1.5D_FRAME TYPOLOGY.");
+        Require(commit.UserTextWrites.ContainsKey(PanelCladdingKeyService.FrameTypeKey),
+            "Assigned extrusion save omitted CW_1.09_FRAME_TYPE.");
+        Require(commit.UserTextWrites.TryGetValue(PanelCladdingKeyService.FrameConfigKey, out string? storedConfig) &&
+                storedConfig == saveResult.FrameConfig &&
+                keys.DecodeTopology(commit.UserTextWrites, 1, 1).Success &&
+                !commit.UserTextWrites.Keys.Any(PanelCladdingKeyService.IsRetiredFrameKey),
+            "Assigned extrusion save must persist config and type without retired keys.");
     }
 
     private static void VerifyRealScheduleAndWorkbook(string pdfPath)
@@ -438,9 +603,9 @@ internal static class Program
         string keySource = File.ReadAllText(Path.Combine(root, "src", "PanelCladdingEditor", "Application", "Services", "PanelCladdingKeyService.cs"));
         string plannerSource = File.ReadAllText(Path.Combine(root, "src", "PanelCladdingEditor", "Application", "Services", "PanelCladding", "PanelCladdingExtrusionPlanningService.cs"));
         string syncSource = File.ReadAllText(Path.Combine(root, "src", "PanelCladdingEditor", "Infrastructure", "Rhino", "Live", "PanelCladding", "LivePanelCladdingSurfaceSyncRepository.cs"));
-        Require(keySource.Contains("CW_1.5D_FRAME TYPOLOGY", StringComparison.Ordinal),
-            "Exact frame typology Rhino key is absent.");
-        Require(keySource.Contains("CW_2.09_FRAME_ASSIGNMENTS", StringComparison.Ordinal),
+        Require(keySource.Contains("CW_1.08_FRAME_CONFIG", StringComparison.Ordinal),
+            "Exact frame configuration Rhino key is absent.");
+        Require(keySource.Contains("CW_1.09_FRAME_TYPE", StringComparison.Ordinal),
             "Frame assignment persistence key is absent.");
         Require(plannerSource.Contains("AssignedExtrusionsUserTextKey = \"Extrusions\"", StringComparison.Ordinal),
             "Baked curves do not expose the extrusion take-off user-text key.");
@@ -450,8 +615,10 @@ internal static class Program
 
     private static PanelCladdingLayout BuildLayout(
         PanelCladdingTopologyState? topology = null,
-        string workbookPath = "") => new()
+        string workbookPath = "",
+        IReadOnlyDictionary<string, string>? sourceUserText = null) => new()
     {
+        SourceUserText = sourceUserText ?? new Dictionary<string, string>(),
         ObjectId = Guid.Parse("A8200000-0000-0000-0000-000000000901"),
         DocumentPath = "C:\\Temp\\frame-typology.3dm",
         GeometryFingerprint = "FRAME-TYPOLOGY-SMOKE",
@@ -588,6 +755,35 @@ internal static class Program
 
         public OperationResponse<string> SetWorkbookPath(string filePath, string path) =>
             OperationResponse<string>.Ok(path);
+    }
+
+    private sealed class StubClearPrompt(params bool[] responses) : IExtrusionCatalogueClearPrompt
+    {
+        private readonly Queue<bool> _responses = new(responses);
+        public int CallCount { get; private set; }
+        public int ProfileCount { get; private set; }
+        public Window? Owner { get; private set; }
+        public bool ConfirmClear(Window owner, int profileCount)
+        {
+            CallCount++;
+            Owner = owner;
+            ProfileCount = profileCount;
+            return _responses.Dequeue();
+        }
+    }
+
+    private sealed class StubScheduleImporter(Func<string, PanelFrameExtrusionCatalogItem> profileFactory)
+        : IPanelFrameExtrusionScheduleImporter
+    {
+        public string? LastPath { get; private set; }
+        public OperationResponse<PanelFrameExtrusionScheduleImportResult> Import(PanelFrameExtrusionScheduleImportRequest request)
+        {
+            LastPath = request.PdfPath;
+            return OperationResponse<PanelFrameExtrusionScheduleImportResult>.Ok(new()
+            {
+                PdfPath = request.PdfPath, ImportedPageNumbers = [1], Extrusions = [profileFactory(request.PdfPath)]
+            });
+        }
     }
 
     private sealed class CapturingLiveRepository(PanelCladdingLayout layout) : ILivePanelCladdingRepository

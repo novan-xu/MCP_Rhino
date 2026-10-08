@@ -6,7 +6,7 @@ it with `Install-PanelCladdingEditor.ps1`.
 
 The Rhino command surface uses the `PC` prefix: `_PCEditor`, `_PCCreate`, `_PCClear`,
 `_PCCrvTemplate`, `_PCMatchSrf`, `_PCMatchCrv`, `_PCSpawnSrf`, `_PCSpawnCrv`, `_PCSyncSrf`,
-`_PCSyncCrv`, and `_PCUpdate`. `PCUpdate` treats the selected panels' saved attributes as
+`_PCSyncCrv`, `_PCUpdate`, and `_PCpid`. `PCUpdate` treats the selected panels' saved attributes as
 authoritative and reconciles all CID-bearing managed surfaces and curves: matching objects are
 rebuilt, missing objects are created, and stale or duplicate objects are deleted. `PCCrvTemplate`
 assigns a full-run horizontal or vertical merge mask only to selected
@@ -15,6 +15,92 @@ skipped and reported while the remaining eligible panels are updated. Selecting 
 panels succeeds without changes. A one-row/one-column case with no applicable
 run remains mask-free. Surface commands operate only on cladding Breps; curve commands operate only
 on extrusion curves.
+
+Since 1.0.96, `PCMatchCrv` copies extrusion assignments together with the segment, merge and hide
+masks. Select target panel Breps, then the source; horizontal/vertical grid counts
+must match. Profiles, quantities, formulas, parent links and length modifiers are
+replaced by the source assignments, while target dimensions, offsets and cladding
+remain intact. Configuration is stored in `CW_1.08_FRAME_CONFIG`, and profile
+assignments in `CW_1.09_FRAME_TYPE`. An unassigned source
+clears target assignments. Run `PCUpdate` to rebuild existing managed curves from
+the matched panel settings, or `PCSpawnCrv` to generate curves.
+
+Since 1.0.95, Extrusion Setup includes Clear all beside Cancel. After a Yes/No
+confirmation it clears configured and unconfigured profiles, editor values and
+the schedule PDF path. Confirm saves the cleared catalogue; Cancel discards it.
+The project workbook remains selected so a new schedule can be extracted.
+
+Since 1.0.94, Material Setup includes a trash button beside the project material
+catalogue. Select a material to remove it from the working catalogue, then choose
+Confirm to save or Cancel to discard the change. Existing panel assignments are
+preserved.
+
+Since 1.0.93, PCpid measures the outer boundary on Rhino's verified face plane.
+It no longer treats bounding-box thickness as nonplanarity; actual nonplanar
+surfaces are still rejected at the document tolerance.
+
+`PCpid` (1.0.89) is the first setup step, before PCCreate. In a saved document it
+prompts for a three-letter project code, the panels to update,
+a north-facade panel, and a first-floor panel. It writes
+`CW_1.03_ELEVATION`, `CW_1.04_LEVEL`, `CW_1.01_PID` and `CW_1.02_CID`, for example
+`PID_BKT_W3_05_11` and `CID_BKT_W3_05_11`. CID keeps the existing unit-type role
+suffix policy, and the panel name follows the existing shortened-CID convention.
+Bay is the last PID/CID segment; PCpid does not introduce another user-text key.
+
+Since 1.0.90, numbering considers every surface/Brep on
+`01_CW Panels::Surfaces-PNL` and every nested sublayer, including hidden, locked
+and reference panels as read-only context. Only selected editable panels in this
+subtree receive PID/CID/elevation/level/name changes. North and first-floor
+references may be unselected panels in the subtree. Unrelated layers and similarly
+named sibling layers are excluded from numbering.
+
+Since 1.0.91, PCpid also ensures all 30 panel setup keys requested for CW_1.00–1.11,
+CW_2.00–2.02, the four CW_2.05 anchor fields, CW_2.06 penetration, the four CW_5.00
+definitions, CW_6.00 wind loads, CW_6.01 PSF, CW_6.02 weight and CW_7.00 blinds
+exist on selected panels. Existing non-generated values are retained; unassigned
+fields use a stored space so Rhino retains the key. Width and height come from
+each panel's tight bounds in its own facade plane, in model units with five decimal
+places. Unit dimension is `widthxheight`. These three dimensions are refreshed
+alongside the IDs on every run. Conflicting case variants fail before any writes.
+
+Since 1.0.92, both PCpid and PCUpdate also standardize selected source surfaces
+using the MCP standard four-point skill's convention: lower-left anchor viewed
+from the oriented front, clockwise corners in a gravity-aligned local frame,
+four-point rebuild, front/back flip, then SwapUV. The original front direction,
+footprint, object ID and metadata are retained. Already-standardized surfaces are
+not replaced again. Geometry changes share the owning command's Undo record.
+PCUpdate generates dependencies after this preparation and continues to exclude
+duplicate-CID sources. PCpid's unselected context surfaces are never reordered.
+
+Point ordering supports planar, straight, convex four-corner surfaces without
+holes. Unsupported or ambiguous surfaces are reported as skipped for point order;
+their geometry is retained and the command's other supported operations continue.
+Horizontal faces have no gravity-defined lower-left and are also reported as skipped
+by the ordering step (PCpid still requires vertical facade geometry overall).
+
+The panels must be vertical planar single-face surfaces/Breps with outward normals.
+The north reference defines project north, including for rotated buildings; world
+Z defines up. Same-facing panels on different planes receive separate elevation
+numbers, ordered left-to-right then bottom-to-top when viewed from outside.
+Aligned bottom edges identify levels across the full panel subtree; the picked floor is 01
+and observed rows increment above it (00, -01, etc. below it). Aligned left edges
+identify bays, restarting at 01 for every elevation. All alignment uses document
+tolerance. Unequal panel heights/widths are supported when their starting edges
+align. Missing floors/bays are not inferred from gaps, and staggered layouts may
+require preparation. Temporary IDs, existing elevation text, and object names do
+not drive numbering. Updating a single panel retains the same inferred address as
+updating the complete panel subtree with the same references.
+
+All geometry and document-wide identity checks run before any attribute write.
+Duplicate addresses and collisions with unselected objects fail without changes.
+The PID audit checks the resulting state of all panels in the subtree: selected
+proposed IDs plus unselected existing IDs. Even duplicate PIDs on two unselected
+panels are reported and block writes. Blank unselected IDs stay blank; selected
+updates that resolve old duplicates are allowed.
+Renumbering a panel that already has generated dependencies is blocked until those
+dependencies are cleared. An identical rerun makes no changes. Attribute changes
+share one Rhino Undo entry; unrelated metadata and geometry are preserved. Escape
+at any of the four prompts exits before attributes are written.
 
 `PCCreate` initializes the selected panels' grid from selected guide curves. Since
 version 1.0.80 it also writes `CW_2.00_UNIT_DIMENSION`, `CW_2.01_UNIT_WIDTH`, and
@@ -65,7 +151,7 @@ while `PCUpdate` and `PCSyncCrv` correct existing curves within the selected-pan
 
 Panel cladding saves persist material-independent cell ownership under
 `CW_2.13_CLADDING_LOGIC`. This key stores ownership JSON, separate from the binary
-hidden-segment mask in `CW_2.11_HIDE_MASK`. `PCSyncSrf` combines that saved owner graph with current Rhino surface
+hidden-segment mask inside `CW_1.08_FRAME_CONFIG`. `PCSyncSrf` combines that saved owner graph with current Rhino surface
 coverage and material layers, while edited splits and merges remain geometry-authoritative.
 
 Since version 1.0.85, panel roles come exclusively from `CW_1.06_UNIT_TYPE`:
@@ -123,24 +209,37 @@ calculate or persist `CW_2.14_CLADDING_TYPE`, and the editor no longer shows a c
 type preview. Every save scope and changed-panel sync removes that attribute and its
 previous names (`CW_2.13_CLADDING_TYPE`, `CW_1.10_CLADDING_TYPE`, `CW_4.00_CLADDING_TYPE`).
 PCClear also recognizes these retired keys. Material, owner-graph, and topology
-validation remain active. Frame typology is independent and remains enabled.
+validation remain active. The former frame-typology identifier is also retired.
 The old identity/workbook utilities remain dormant for a future design decision.
 
-Topology masks are sparse and independent: `CW_2.12_DELETE_MASK` is stored only for missing segments,
-`CW_2.10` only for merges, and `CW_2.11` only for hidden segments. Missing mask attributes decode
-as the all-present, all-segmented, all-visible defaults.
-The delete mask retains the former segment mask's binary encoding and polarity.
+Since 1.0.96, frame configuration is stored as versioned JSON in `CW_1.08_FRAME_CONFIG`:
+`{"v":1,"delete":"<mask>","merge":"<mask>","hide":"<mask>"}`.
+Each field retains the existing mask encoding and grid dimensions, including the
+delete mask's original polarity. A saved default grid also gets a complete config.
+No dimensions, profile definitions or generated typology hash are included in this value.
+
+`CW_1.09_FRAME_TYPE` stores the existing version-2 assignment JSON unchanged: `f`
+contains perimeter assignments, `s` segment assignments, `d` profile definitions
+and calculation settings, and `x` length modifiers. No assigned profiles means
+this key is removed. Generated curve attributes (`Extrusions` and per-code formulas)
+keep their existing format.
+
+Existing `CW_2.12_DELETE_MASK`, `CW_2.10_MERGE_MASK`, `CW_2.11_HIDE_MASK` and
+`CW_2.09_FRAME_ASSIGNMENTS` remain readable for migration. Nonblank new attributes
+take precedence; blank PCpid placeholders allow legacy fallback. Malformed new
+payloads fail validation. Saving extrusions/both or matching curve settings writes
+the new keys and removes the old masks, assignment key and `CW_1.5D_FRAME TYPOLOGY`.
+PCCreate resets frame settings under the new keys; changed template/sync operations
+also use the new format. Cladding-only saves preserve frame settings.
 
 Version 1.0.78 renames the former `CW_2.05_SEGMENT_MASK`, `CW_2.06_MERGE_MASK`, `CW_2.07_HIDE_MASK`,
-and `CW_2.08_CLADDING_LOGIC` keys to the canonical names above and suspends cladding type metadata.
-Existing documents need value-preserving mask/logic migration before using this version.
+and `CW_2.08_CLADDING_LOGIC` keys to the 2.12/2.10/2.11/2.13 names and suspends cladding type metadata.
+Documents predating that rename still require that earlier mask/logic migration.
 
 The extrusion view maintains an image-backed project catalogue of framing profiles in the workbook
 `Extrusions` sheet. PDF schedule die numbers such as `ALU-H0651` import as `1D-ALU-H0651`; profile
 codes are additive per `FRM`/`INT` curve and baked curves expose the sorted codes in `Extrusions`
-user text for length take-off. Panel assignment state is stored in `CW_2.09_FRAME_ASSIGNMENTS`, and
-the deterministic typology governed by segment, merge, hide, and assignment state is stored in
-`CW_1.5D_FRAME TYPOLOGY` only when at least one extrusion code is assigned.
+user text for length take-off. Panel assignment state is stored in `CW_1.09_FRAME_TYPE`.
 
 The package keeps the Windows x64 Skia/HarfBuzz native binaries both in their `.deps.json` runtime
 paths and beside the RHP. Rhino's plug-in load context requires the top-level copies for native

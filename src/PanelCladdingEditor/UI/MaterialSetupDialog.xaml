@@ -373,35 +373,54 @@
                 <Border x:Name="CatalogueSection" Style="{StaticResource SectionBorder}">
                     <StackPanel>
                         <TextBlock Text="PROJECT MATERIAL CATALOGUE" Style="{StaticResource EyebrowText}" />
-                        <ListBox x:Name="ConfiguredList" Margin="0,9,-6,-6" BorderThickness="0"
-                                 MinHeight="46" MaxHeight="224" Background="Transparent"
-                                 ItemContainerStyle="{StaticResource CatalogueItem}"
-                                 ScrollViewer.CanContentScroll="False"
-                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                 SelectionChanged="OnConfiguredSelectionChanged">
-                            <ListBox.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <WrapPanel />
-                                </ItemsPanelTemplate>
-                            </ListBox.ItemsPanel>
-                            <ListBox.ItemTemplate>
-                                <DataTemplate>
-                                    <Grid ToolTip="{Binding DisplayName}">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="12" />
-                                            <ColumnDefinition Width="6" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <Border Width="12" Height="12" CornerRadius="2" Background="{Binding Brush}"
-                                                BorderBrush="#40000000" BorderThickness="1" VerticalAlignment="Center" />
-                                        <TextBlock Grid.Column="2" Text="{Binding Code}" FontFamily="Consolas"
-                                                   FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"
-                                                   TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
-                                    </Grid>
-                                </DataTemplate>
-                            </ListBox.ItemTemplate>
-                        </ListBox>
+                        <Grid Margin="0,9,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="40" />
+                            </Grid.ColumnDefinitions>
+                            <ListBox x:Name="ConfiguredList" Margin="0,0,-6,-6" BorderThickness="0"
+                                     MinHeight="46" MaxHeight="224" Background="Transparent"
+                                     ItemContainerStyle="{StaticResource CatalogueItem}"
+                                     ScrollViewer.CanContentScroll="False"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                     SelectionChanged="OnConfiguredSelectionChanged">
+                                <ListBox.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ListBox.ItemsPanel>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid ToolTip="{Binding DisplayName}">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="12" />
+                                                <ColumnDefinition Width="6" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Width="12" Height="12" CornerRadius="2" Background="{Binding Brush}"
+                                                    BorderBrush="#40000000" BorderThickness="1" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="2" Text="{Binding Code}" FontFamily="Consolas"
+                                                       FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"
+                                                       TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                            <Button x:Name="RemoveMaterialButton" Grid.Column="2" Padding="0"
+                                    VerticalAlignment="Top" Style="{StaticResource BaseButton}"
+                                    Foreground="#B42318" IsEnabled="False"
+                                    AutomationProperties.Name="Remove selected material"
+                                    ToolTip="Remove selected material from the catalogue. Choose Confirm to save."
+                                    ToolTipService.ShowOnDisabled="True" Click="OnRemoveMaterialClick">
+                                <Path Width="18" Height="20" Stretch="Uniform"
+                                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                      StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                      StrokeLineJoin="Round"
+                                      Data="M 2,5 L 18,5 M 7,5 L 7,2 L 13,2 L 13,5 M 4,5 L 5,20 L 15,20 L 16,5 M 8,9 L 8,16 M 12,9 L 12,16" />
+                            </Button>
+                        </Grid>
                     </StackPanel>
                 </Border>
 

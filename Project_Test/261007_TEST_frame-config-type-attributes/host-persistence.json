@@ -1,0 +1,10 @@
+{
+  "success": true,
+  "priorWriteAttestationVerified": true,
+  "priorEvidence": "../261007_TEST_material-catalogue-removal/host-persistence.json and ../261007_TEST_extrusion-catalogue-clear/activation-summary.json",
+  "freshHostProviderAgreement": true,
+  "launch": "Win32_Process.Create with ShowWindow=0",
+  "previousRhp": "%LOCALAPPDATA%\\PanelCladdingEditor\\plugin\\1.0.95\\PanelCladdingEditor.rhp",
+  "previousRhpSha256": "ded2d0f0de6361c5f036f0431e9fa02bb54c033cefce00491ed5e5aa3f257fd8",
+  "newProbeCreated": false
+}

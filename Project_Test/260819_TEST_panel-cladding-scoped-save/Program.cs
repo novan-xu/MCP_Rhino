@@ -75,8 +75,9 @@ internal static class Program
             "Cladding-only save omitted logical cells/logic or did not retire Signature.");
 
         PanelAttributeCommitRequest extrusions = Save(source, PanelCladdingSaveScope.Extrusions);
-        Require(!extrusions.UserTextWrites.Keys.Any(PanelCladdingKeyService.IsTopologyKey),
-            "Extrusion-only save persisted redundant default topology masks.");
+        Require(extrusions.UserTextWrites.ContainsKey(PanelCladdingKeyService.FrameConfigKey) &&
+                !extrusions.UserTextWrites.Keys.Any(PanelCladdingKeyService.IsRetiredFrameKey),
+            "Extrusion-only save must persist combined configuration without retired keys.");
         Require(extrusions.UserTextWrites.Keys.Any(keys.IsOffsetKey),
             "Extrusion-only save omitted offsets.");
         Require(!extrusions.UserTextWrites.Keys.Any(keys.IsCladdingCellKey) &&
@@ -89,10 +90,10 @@ internal static class Program
             "Extrusion-only save changed cladding assignments/type or retained Signature.");
 
         PanelAttributeCommitRequest both = Save(source, PanelCladdingSaveScope.Both);
-        Require(!both.UserTextWrites.Keys.Any(PanelCladdingKeyService.IsTopologyKey) &&
+        Require(both.UserTextWrites.ContainsKey(PanelCladdingKeyService.FrameConfigKey) &&
                 both.UserTextWrites.Keys.Any(keys.IsCladdingCellKey) &&
                 both.UserTextWrites.Keys.Any(keys.IsOffsetKey),
-            "Save Both did not include both scopes with sparse default topology.");
+            "Save Both did not include both scopes with combined configuration.");
 
         foreach (PanelAttributeCommitRequest commit in new[] { cladding, extrusions, both })
         {
@@ -128,8 +129,8 @@ internal static class Program
         Required(window.LoadPanel(source.DocumentPath, source.ObjectId), "Load editor");
         Require(window.FindName("CladdingTypeSection") is null && window.FindName("TypeCodeText") is null,
             "Editor still displays the suspended cladding type preview.");
-        Require(window.FindName("FrameTypologyText") is not null,
-            "Independent frame typology preview was removed.");
+        Require(window.FindName("FrameTypologyText") is null && window.FindName("FrameConfigurationText") is not null,
+            "Retired frame typology display was not replaced with configuration status.");
 
         Button extrusion = Named<Button>(window, "SaveExtrusionsButton");
         Button cladding = Named<Button>(window, "SaveCladdingButton");
@@ -143,14 +144,15 @@ internal static class Program
             "The editor still exposes an Exit button.");
 
         Invoke(window, "OnSaveExtrusionsClick", window, new RoutedEventArgs());
-        Require(!repository.Current.SourceUserText.Keys.Any(PanelCladdingKeyService.IsTopologyKey),
-            "Save Extrusions created redundant default topology attributes.");
+        Require(repository.Current.SourceUserText.ContainsKey(PanelCladdingKeyService.FrameConfigKey) &&
+                !repository.Current.SourceUserText.Keys.Any(PanelCladdingKeyService.IsRetiredFrameKey),
+            "Save Extrusions must store combined configuration without retired attributes.");
         Require(!FieldValue<bool>(window, "_structuralDirty"),
             "Save Extrusions did not clear extrusion dirty state.");
         Invoke(window, "OnSaveCladdingClick", window, new RoutedEventArgs());
         Require(repository.CommitCount == 2 && repository.LastCommit is not null &&
                 !repository.LastCommit.UserTextWrites.Keys.Any(PanelCladdingKeyService.IsTopologyKey) &&
-                !repository.Current.SourceUserText.Keys.Any(PanelCladdingKeyService.IsTopologyKey),
+                repository.Current.SourceUserText.ContainsKey(PanelCladdingKeyService.FrameConfigKey),
             "A partial extrusion save did not refresh the source fingerprint for a following cladding save.");
         window.Close();
     }

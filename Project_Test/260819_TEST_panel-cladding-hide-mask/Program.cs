@@ -169,8 +169,9 @@ internal static class Program
             Snapshot(Guid.Parse("11111111-1111-1111-1111-111111111111"), 90d, 160d, [40d, 80d, 120d], [45d], sourceMasks),
             [Snapshot(Guid.Parse("22222222-2222-2222-2222-222222222222"), 120d, 240d, [60d, 120d, 180d], [70d], targetMasks)])).Targets.Single();
         Require(plan.UserTextWrites.Count == 1 &&
-                plan.UserTextWrites[PanelCladdingKeyService.HideMaskKey] == sourceMasks.HideMask,
-            "PCMatchCrv did not copy only the nondefault hide mask.");
+                plan.UserTextWrites.ContainsKey(PanelCladdingKeyService.FrameConfigKey) &&
+                Required(keys.EncodeTopology(Required(keys.DecodeTopology(plan.UserTextWrites, 3, 1)), 3, 1)).HideMask == sourceMasks.HideMask,
+            "PCMatchCrv did not copy the hide mask in combined configuration.");
     }
 
     private static void EditorExposesAReversibleHiddenState()

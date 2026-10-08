@@ -18,10 +18,10 @@ internal static class Program
 
         Console.WriteLine("[OK] default topology persists no 2.10-2.12 mask attributes.");
         Console.WriteLine("[OK] missing, merge, and hide states persist independently.");
-        Console.WriteLine("[OK] hide-only save removes stale default masks and writes only 2.11.");
+        Console.WriteLine("[OK] hide-only save migrates separate masks into combined frame configuration.");
         Console.WriteLine("[OK] absent topology masks parse, match, and spawn as defaults.");
         Console.WriteLine("[OK] PCCrvTemplate skips configured merge codes and no-ops when no merge is possible.");
-        Console.WriteLine("[OK] surface sync uses sparse persistence while signatures retain full canonical masks.");
+        Console.WriteLine("[OK] surface sync uses combined configuration while signatures retain canonical mask contents.");
         return 0;
     }
 
@@ -128,7 +128,7 @@ internal static class Program
         string[] topologyWrites = commit.UserTextWrites.Keys
             .Where(PanelCladdingKeyService.IsTopologyKey)
             .ToArray();
-        Require(topologyWrites.SequenceEqual([PanelCladdingKeyService.HideMaskKey]),
+        Require(topologyWrites.SequenceEqual([PanelCladdingKeyService.FrameConfigKey]),
             $"Hide-only save wrote unexpected topology keys: {string.Join(", ", topologyWrites)}");
         Require(commit.UserTextDeletes.Contains(
                     PanelCladdingKeyService.SegmentMaskKey,
@@ -162,8 +162,9 @@ internal static class Program
             new PanelCladdingCurveMatchPlanningService(keys).CreatePlan(source, [target]);
         Require(matched.Success && matched.Data is not null, $"Default curve match failed: {matched.Message}");
         PanelCladdingMatchTargetPlan targetPlan = matched.Data!.Targets.Single();
-        Require(!targetPlan.UserTextWrites.Keys.Any(PanelCladdingKeyService.IsTopologyKey),
-            "Default curve match wrote explicit default masks.");
+        Require(targetPlan.UserTextWrites.ContainsKey(PanelCladdingKeyService.FrameConfigKey) &&
+                !targetPlan.UserTextWrites.Keys.Any(PanelCladdingKeyService.IsRetiredFrameKey),
+            "Default curve match must write combined configuration without separate masks.");
         Require(new[]
             {
                 PanelCladdingKeyService.SegmentMaskKey,
@@ -255,7 +256,7 @@ internal static class Program
         string surfaceSync = File.ReadAllText(Path.Combine(
             root, "src", "PanelCladdingEditor", "Infrastructure", "Rhino", "Live",
             "PanelCladding", "LivePanelCladdingSurfaceSyncRepository.cs"));
-        Require(surfaceSync.Contains("EncodeNonDefaultTopology", StringComparison.Ordinal) &&
+        Require(surfaceSync.Contains("EncodeFrameConfigurationUserText", StringComparison.Ordinal) &&
                 surfaceSync.Contains("TopologyPersistenceMatches", StringComparison.Ordinal),
             "Surface sync does not compare and commit the sparse topology representation.");
         string signatures = File.ReadAllText(Path.Combine(

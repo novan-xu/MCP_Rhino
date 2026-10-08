@@ -1,4 +1,4 @@
-﻿using PanelCladdingEditor.Application.Interfaces;
+using PanelCladdingEditor.Application.Interfaces;
 using PanelCladdingEditor.Contracts.Responses;
 using PanelCladdingEditor.Domain.Models.PanelCladding;
 
@@ -13,7 +13,6 @@ public sealed class PanelCladdingSaveService
     private readonly PanelCladdingTopologyNormalizationService _topologyNormalizer;
     private readonly PanelCladdingRegionService _regions;
     private readonly PanelFrameAssignmentService _frameAssignments;
-    private readonly PanelFrameTypologyService _frameTypology;
 
     public PanelCladdingSaveService(
         ILivePanelCladdingRepository liveRepository,
@@ -27,7 +26,6 @@ public sealed class PanelCladdingSaveService
         _ = signatureService; // Retain constructor compatibility while type generation is suspended.
         _regions = new PanelCladdingRegionService(_keys);
         _frameAssignments = new PanelFrameAssignmentService();
-        _frameTypology = new PanelFrameTypologyService(_keys, _frameAssignments);
     }
 
     public PanelCladdingSaveService(
@@ -145,7 +143,6 @@ public sealed class PanelCladdingSaveService
 
         var writes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         PanelCladdingCidService.AddPanelCidWrite(writes, layout.SourceUserText);
-        PanelFrameTypologyIdentity? finalFrameTypology = null;
         if (saveCladding)
         {
             if (!requestedLayout.CanSave)
@@ -191,7 +188,7 @@ public sealed class PanelCladdingSaveService
         if (saveExtrusions)
         {
             OperationResponse<IReadOnlyDictionary<string, string>> topologyResponse =
-                _keys.EncodeNonDefaultTopology(
+                _keys.EncodeFrameConfigurationUserText(
                     topology,
                     requestedLayout.HorizontalOffsets.Count,
                     requestedLayout.VerticalOffsets.Count);
@@ -215,17 +212,7 @@ public sealed class PanelCladdingSaveService
             }
             if (!string.IsNullOrWhiteSpace(assignmentPayload.Data))
             {
-                writes[PanelCladdingKeyService.FrameAssignmentsKey] = assignmentPayload.Data;
-                OperationResponse<PanelFrameTypologyIdentity> typologyResponse = _frameTypology.Create(
-                    requestedLayout,
-                    requestedFrameAssignments,
-                    request.SystemCode);
-                if (!typologyResponse.Success || typologyResponse.Data is null)
-                {
-                    return OperationResponse<PanelCladdingSaveResult>.Fail(typologyResponse.Message);
-                }
-                finalFrameTypology = typologyResponse.Data;
-                writes[PanelCladdingKeyService.FrameTypologyKey] = finalFrameTypology.TypologyCode;
+                writes[PanelCladdingKeyService.FrameTypeKey] = assignmentPayload.Data;
             }
             writes[PanelCladdingKeyService.UnitWidthKey] =
                 PanelCladdingKeyService.FormatUnitDimension(layout.Width);
@@ -252,11 +239,14 @@ public sealed class PanelCladdingSaveService
                  (saveExtrusions && (
                      _keys.IsOffsetKey(key) ||
                      PanelCladdingKeyService.IsTopologyKey(key) ||
-                     string.Equals(key, PanelCladdingKeyService.FrameAssignmentsKey, StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(key, PanelCladdingKeyService.FrameTypologyKey, StringComparison.OrdinalIgnoreCase)))) &&
+                     string.Equals(key, PanelCladdingKeyService.FrameTypeKey, StringComparison.OrdinalIgnoreCase) ||
+                     PanelCladdingKeyService.IsRetiredFrameKey(key)))) &&
                 !writes.ContainsKey(key))
             .ToArray();
         string[] userTextDeletes = obsoleteGridKeys
+            .Concat(saveExtrusions ? layout.SourceUserText.Keys.Where(key =>
+                string.Equals(key, PanelCladdingKeyService.FrameConfigKey, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(key, PanelCladdingKeyService.FrameTypeKey, StringComparison.OrdinalIgnoreCase)) : [])
             .Concat(layout.SourceUserText.Keys.Where(PanelCladdingKeyService.IsRetiredCladdingTypeKey))
             .Concat([
                 PanelCladdingKeyService.SignatureKey,
@@ -284,10 +274,8 @@ public sealed class PanelCladdingSaveService
         return OperationResponse<PanelCladdingSaveResult>.Ok(new PanelCladdingSaveResult
         {
             ObjectId = request.ObjectId,
-            FrameTypology = finalFrameTypology?.TypologyCode ??
-                (saveExtrusions
-                    ? string.Empty
-                    : GetUserText(layout.SourceUserText, PanelCladdingKeyService.FrameTypologyKey)),
+            FrameConfig = writes.GetValueOrDefault(PanelCladdingKeyService.FrameConfigKey) ??
+                GetUserText(layout.SourceUserText, PanelCladdingKeyService.FrameConfigKey),
             StoredSignature = string.Empty,
             WorkbookPath = request.WorkbookPath,
             SheetName = string.Empty,

@@ -61,7 +61,7 @@ public sealed class PanelCladdingMatchCurveCommand : RhinoCommand
         }
 
         RhinoApp.WriteLine(
-            $"PCMatchCrv copied the segment, merge, and hide masks from {response.Data.SourceObjectId:D} " +
+            $"PCMatchCrv copied the segment, merge, and hide masks and extrusion assignments from {response.Data.SourceObjectId:D} " +
             $"to {response.Data.UpdatedTargetIds.Count} panel(s).");
         return Result.Success;
     }
@@ -69,7 +69,7 @@ public sealed class PanelCladdingMatchCurveCommand : RhinoCommand
     private static TargetSelection SelectTargets()
     {
         using var getter = new GetObject();
-        getter.SetCommandPrompt("Select target panel Breps for curve topology matching");
+        getter.SetCommandPrompt("Select target panel Breps to match curve topology and extrusion assignments");
         getter.EnablePreSelect(enable: true, ignoreUnacceptablePreselectedObjects: true);
         getter.GeometryFilter = ObjectType.Brep;
         getter.GroupSelect = true;
@@ -99,7 +99,7 @@ public sealed class PanelCladdingMatchCurveCommand : RhinoCommand
     {
         var targetIds = targetObjectIds.ToHashSet();
         using var getter = new GetObject();
-        getter.SetCommandPrompt("Select one source panel Brep for curve topology matching");
+        getter.SetCommandPrompt("Select one source panel Brep with the curve topology and extrusion assignments to copy");
         getter.EnablePreSelect(enable: false, ignoreUnacceptablePreselectedObjects: true);
         getter.GeometryFilter = ObjectType.Brep;
         getter.SubObjectSelect = false;
