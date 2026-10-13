@@ -37,7 +37,7 @@ builder.Services
                 Subscribe = false
             }
         };
-        options.ServerInstructions = "Use rhino_router_list_documents and rhino_router_select_document to choose an exact saved live Rhino document before calling proxied Rhino tools.";
+        options.ServerInstructions = "For live work, use rhino_router_list_documents and rhino_router_select_document to choose an exact saved open document. Explicit offline .3dm JavaScript uses inspect_document / preview_script / apply_script without Rhino. Explicit DWG/DXF or native Rhino C# uses rhino_offline_preview_rhino_script / apply_rhino_script with installed licensed Rhino 8 in a separate headless worker. C# is trusted full-trust code, not the restricted JavaScript sandbox. Both publish only suffixed copies and preserve the locked source. Never fall back to offline after a live routing error.";
     })
     .WithListToolsHandler((request, cancellationToken) =>
         GetRuntime(request.Services).ListToolsAsync(request, cancellationToken))
@@ -79,6 +79,17 @@ static int RunCommand(string[] commandArgs)
         if (!File.Exists(transportPath))
         {
             Console.Error.WriteLine($"Missing required transport assembly: {transportPath}");
+            return 1;
+        }
+
+        try
+        {
+            MCP_Rhino.Offline.Infrastructure.OfflineRuntimeValidation.Validate();
+            MCP_Rhino.Offline.Infrastructure.OfflineRuntimeValidation.ValidateRhinoWorkerBundle(executableDirectory);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Offline script runtime validation failed: {ex.Message}");
             return 1;
         }
 

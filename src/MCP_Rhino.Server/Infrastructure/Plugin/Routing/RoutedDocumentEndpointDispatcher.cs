@@ -46,6 +46,7 @@ public sealed class RoutedDocumentEndpointDispatcher : IDisposable
         RhinoDoc.EndOpenDocument += OnDocumentChanged;
         RhinoDoc.EndSaveDocument += OnDocumentChanged;
         RhinoDoc.CloseDocument += OnDocumentClosed;
+        RhinoApp.Idle += OnRhinoIdle;
 
         foreach (RhinoDoc document in GetOpenDocuments())
         {
@@ -67,6 +68,7 @@ public sealed class RoutedDocumentEndpointDispatcher : IDisposable
             RhinoDoc.EndOpenDocument -= OnDocumentChanged;
             RhinoDoc.EndSaveDocument -= OnDocumentChanged;
             RhinoDoc.CloseDocument -= OnDocumentClosed;
+            RhinoApp.Idle -= OnRhinoIdle;
             _started = false;
         }
 
@@ -88,7 +90,16 @@ public sealed class RoutedDocumentEndpointDispatcher : IDisposable
 
     private void OnDocumentChanged(object? sender, EventArgs e)
     {
-        ReconcileDocument(GetDocument(sender, e));
+        ReconcileDocument(GetDocument(sender, e) ?? RhinoDoc.ActiveDoc);
+    }
+
+    private void OnRhinoIdle(object? sender, EventArgs e)
+    {
+        RhinoDoc? activeDocument = RhinoDoc.ActiveDoc;
+        if (NeedsReconcile(activeDocument))
+        {
+            ReconcileDocument(activeDocument);
+        }
     }
 
     private void OnDocumentClosed(object? sender, EventArgs e)
@@ -176,6 +187,30 @@ public sealed class RoutedDocumentEndpointDispatcher : IDisposable
             status: state.ListenerStarted ? "READY" : "LISTENER_START_FAILED");
     }
 
+    private bool NeedsReconcile(RhinoDoc? document)
+    {
+        if (_disposed || document is null)
+        {
+            return false;
+        }
+
+        if (!_states.TryGetValue(document.RuntimeSerialNumber, out RoutedDocumentState? state))
+        {
+            return true;
+        }
+
+        if (state.Closing)
+        {
+            return false;
+        }
+
+        string? activePath = string.IsNullOrWhiteSpace(document.Path)
+            ? null
+            : RoutePath.Normalize(document.Path);
+        return !string.Equals(state.FilePath, activePath, StringComparison.OrdinalIgnoreCase)
+            || (activePath is not null && !state.ListenerStarted);
+    }
+
     private void TryWriteDescriptor(RoutedDocumentState state, bool routable, string status)
     {
         try
@@ -246,7 +281,9 @@ public sealed class RoutedDocumentEndpointDispatcher : IDisposable
             return senderDocument;
         }
 
-        object? document = e.GetType().GetProperty("Document", BindingFlags.Instance | BindingFlags.Public)?.GetValue(e);
+        object? document = e.GetType().GetProperty(
+            "Document",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(e);
         return document as RhinoDoc;
     }
 

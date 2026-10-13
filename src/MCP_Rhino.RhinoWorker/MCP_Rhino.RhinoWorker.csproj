@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType><TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms><UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <RhinoSystem>C:\Program Files\Rhino 8\System</RhinoSystem>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Resolver only: do not restore or redistribute its old Rhino/Grasshopper dependency assemblies. -->
+    <PackageDownload Include="Rhino.Inside" Version="[8.0.7-beta]" />
+    <Reference Include="Rhino.Inside"><HintPath>$(NuGetPackageRoot)rhino.inside\8.0.7-beta\lib\net8.0-windows7.0\Rhino.Inside.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="RhinoCommon"><HintPath>$(RhinoSystem)\netcore\RhinoCommon.dll</HintPath><Private>false</Private></Reference>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Scripting" Version="4.6.0" />
+    <Compile Include="..\MCP_Rhino.Offline\Contracts\RhinoWorkerContracts.cs" Link="Contracts\RhinoWorkerContracts.cs" />
+  </ItemGroup>
+</Project>

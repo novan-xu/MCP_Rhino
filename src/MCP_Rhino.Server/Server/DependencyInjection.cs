@@ -9,6 +9,7 @@ using MCP_Rhino.Server.Infrastructure.CLI;
 using MCP_Rhino.Server.Infrastructure.Rhino;
 using MCP_Rhino.Server.Infrastructure.Rhino.Live;
 using MCP_Rhino.Server.Infrastructure.Rhino.Live.Grasshopper;
+using MCP_Rhino.Server.Infrastructure.Rhino.Live.Scripting;
 using MCP_Rhino.Server.Infrastructure.Spreadsheet;
 
 namespace MCP_Rhino.Server.Server;
@@ -18,6 +19,7 @@ public static class DependencyInjection
     public static IServiceCollection AddLiveRhinoAdapters(this IServiceCollection services)
     {
         services.AddSingleton<ILiveRhinoDocumentAccessor, LiveRhinoDocumentAccessor>();
+        services.AddSingleton<ILiveRhinoScriptExecutor, LiveRhinoScriptExecutor>();
         services.AddSingleton<ILiveGeometryBuilder, LiveRhinoGeometryBuilder>();
         services.AddSingleton<ILiveGeneralPrimitiveBuilder, LiveGeneralPrimitiveBuilder>();
         services.AddSingleton<ILiveCurveDerivedGeometryOperator, LiveCurveDerivedGeometryOperator>();
@@ -53,7 +55,9 @@ public static class DependencyInjection
         services.AddSingleton<ILiveBooleanOperator, LiveBooleanOperator>();
         services.AddSingleton<ILiveBlockDefinitionOperator, LiveBlockDefinitionOperator>();
         services.AddSingleton<ILiveBlockInspector, LiveBlockInspector>();
+        services.AddSingleton<ILiveBlockMemberInspector, LiveBlockMemberInspector>();
         services.AddSingleton<ILiveBlockLifecycleOperator, LiveBlockLifecycleOperator>();
+        services.AddSingleton<ILiveStoneWireframeBakeOperator, LiveStoneWireframeBakeOperator>();
         services.AddSingleton<ILiveRhinoDocumentStateOperator, LiveRhinoDocumentStateOperator>();
         services.AddSingleton<ILiveRhinoSelectionOperator, LiveRhinoSelectionOperator>();
         services.AddSingleton<ILiveRhinoViewportCapture, LiveRhinoViewportCapture>();
@@ -70,6 +74,7 @@ public static class DependencyInjection
     public static IServiceCollection AddCliFallbackLiveRhinoAdapters(this IServiceCollection services)
     {
         services.AddSingleton<ILiveRhinoDocumentAccessor, NullLiveRhinoDocumentAccessor>();
+        services.AddSingleton<ILiveRhinoScriptExecutor, LiveRhinoScriptExecutor>();
         services.AddSingleton<ILiveGeometryBuilder, LiveRhinoGeometryBuilder>();
         services.AddSingleton<ILiveGeneralPrimitiveBuilder, LiveGeneralPrimitiveBuilder>();
         services.AddSingleton<ILiveCurveDerivedGeometryOperator, LiveCurveDerivedGeometryOperator>();
@@ -105,7 +110,9 @@ public static class DependencyInjection
         services.AddSingleton<ILiveBooleanOperator, LiveBooleanOperator>();
         services.AddSingleton<ILiveBlockDefinitionOperator, LiveBlockDefinitionOperator>();
         services.AddSingleton<ILiveBlockInspector, LiveBlockInspector>();
+        services.AddSingleton<ILiveBlockMemberInspector, LiveBlockMemberInspector>();
         services.AddSingleton<ILiveBlockLifecycleOperator, LiveBlockLifecycleOperator>();
+        services.AddSingleton<ILiveStoneWireframeBakeOperator, LiveStoneWireframeBakeOperator>();
         services.AddSingleton<ILiveRhinoDocumentStateOperator, LiveRhinoDocumentStateOperator>();
         services.AddSingleton<ILiveRhinoSelectionOperator, LiveRhinoSelectionOperator>();
         services.AddSingleton<ILiveRhinoViewportCapture, LiveRhinoViewportCapture>();
@@ -148,7 +155,10 @@ public static class DependencyInjection
         services.AddSingleton<RhinoArchitecturalBooleanService>();
         services.AddSingleton<RhinoBlockDefinitionService>();
         services.AddSingleton<RhinoBlockInspectionService>();
+        services.AddSingleton<RhinoBlockMemberInspectionService>();
+        services.AddSingleton<RhinoScriptService>();
         services.AddSingleton<RhinoBlockLifecycleService>();
+        services.AddSingleton<RhinoStoneWireframeBakeService>();
         services.AddSingleton<RhinoDocumentStateService>();
         services.AddSingleton<RhinoSelectionService>();
         services.AddSingleton<RhinoViewportCaptureService>();
