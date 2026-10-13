@@ -3,6 +3,7 @@ using MCP_Rhino.Transport.Routing;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
+using MCP_Rhino.Offline.Server;
 
 namespace MCP_Rhino.Router.Routing;
 
@@ -21,6 +22,7 @@ public sealed class RouterRuntime
     private static readonly IReadOnlyList<Tool> ControlTools = CreateControlTools();
 
     private readonly BackendCatalog _catalog;
+    private readonly IReadOnlyDictionary<string, McpServerTool> _offlineTools = OfflineToolRegistration.CreateTools();
     private readonly object _selectionLock = new();
     private readonly object _frontendLock = new();
     private string? _selectedSessionId;
@@ -52,7 +54,7 @@ public sealed class RouterRuntime
 
         return new ListToolsResult
         {
-            Tools = ControlTools.Concat(backendTools).ToList()
+            Tools = ControlTools.Concat(_offlineTools.Values.Select(tool => tool.ProtocolTool)).Concat(backendTools).ToList()
         };
     }
 
@@ -61,7 +63,22 @@ public sealed class RouterRuntime
         CancellationToken cancellationToken)
     {
         RegisterFrontend(request.Server);
+        if (request.Params is { } parameters && _offlineTools.TryGetValue(parameters.Name, out McpServerTool? offlineTool))
+        {
+            CallToolResult? error = ValidateOfflineSource(parameters);
+            if (error is not null) return error;
+            return await offlineTool.InvokeAsync(request, cancellationToken).ConfigureAwait(false);
+        }
         return await CallToolCoreAsync(request.Params, cancellationToken).ConfigureAwait(false);
+    }
+
+    public CallToolResult? ValidateOfflineSource(CallToolRequestParams parameters)
+    {
+        // Offline execution must not wait for or depend on live backend handshakes.
+        if (TryGetStringArgument(parameters, "filePath", out string? path) &&
+            _catalog.Discover().Documents.Any(document => document.Descriptor is { } descriptor && RoutePath.Equals(path, descriptor.FilePath)))
+            return RouterErrors.Create("OFFLINE_SOURCE_OPEN", "This source is known to be open in Rhino. Select its live session and use live tools, or close it before offline editing.");
+        return null;
     }
 
     public async ValueTask<CallToolResult> CallToolCoreAsync(
@@ -290,7 +307,7 @@ public sealed class RouterRuntime
             return RouterErrors.Create("UNKNOWN_TOOL", $"The canonical Rhino MCP surface does not contain '{parameters.Name}'.");
         }
 
-        if (tool.Name.StartsWith(ReservedToolPrefix, StringComparison.Ordinal))
+        if (IsReservedTool(tool.Name))
         {
             return RouterErrors.Create("ROUTER_CONTROL_TOOL_COLLISION", $"The backend tool '{tool.Name}' uses the reserved Router prefix.");
         }
@@ -393,13 +410,16 @@ public sealed class RouterRuntime
     private static IReadOnlyList<Tool> GetCompatibleTools(RouterCatalogSnapshot snapshot)
     {
         IReadOnlyList<Tool> tools = snapshot.CanonicalBackend?.Tools ?? Array.Empty<Tool>();
-        if (tools.Any(tool => tool.Name.StartsWith(ReservedToolPrefix, StringComparison.Ordinal)))
+        if (tools.Any(tool => IsReservedTool(tool.Name)))
         {
             return Array.Empty<Tool>();
         }
 
         return tools;
     }
+
+    private static bool IsReservedTool(string name) => name.StartsWith(ReservedToolPrefix, StringComparison.Ordinal)
+        || name.StartsWith(OfflineToolRegistration.ReservedPrefix, StringComparison.Ordinal);
 
     private static bool HasTopLevelFilePath(Tool tool)
     {

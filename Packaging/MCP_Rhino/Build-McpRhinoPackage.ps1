@@ -125,6 +125,25 @@ Merge-PublishTree $pluginBuild $pluginTarget @('MCP_Rhino.Server.exe', 'MCP_Rhin
 Merge-PublishTree $runtimePublish $pluginTarget
 Merge-PublishTree $routerPublish $binTarget
 
+# The Router must retain the managed scripting library and Rhino3dm native runtime assets.
+foreach ($offlineAssembly in @('MCP_Rhino.Offline.dll', 'Rhino3dm.dll', 'Jint.dll')) {
+    if (-not (Test-Path -LiteralPath (Join-Path $binTarget $offlineAssembly) -PathType Leaf)) {
+        throw "Router bundle is missing offline dependency: $offlineAssembly"
+    }
+}
+if (-not (Test-Path -LiteralPath (Join-Path $binTarget 'runtimes\win-x64\native\librhino3dm_native.dll') -PathType Leaf)) {
+    throw 'Router bundle is missing the Windows x64 Rhino3dm native runtime.'
+}
+foreach ($workerFile in @('MCP_Rhino.RhinoWorker.exe', 'MCP_Rhino.RhinoWorker.dll', 'MCP_Rhino.RhinoWorker.runtimeconfig.json', 'Rhino.Inside.dll', 'Microsoft.CodeAnalysis.CSharp.Scripting.dll')) {
+    if (-not (Test-Path -LiteralPath (Join-Path $binTarget "RhinoWorker\$workerFile") -PathType Leaf)) {
+        throw "Router bundle is missing native Rhino worker dependency: $workerFile"
+    }
+}
+if ((Test-Path -LiteralPath (Join-Path $binTarget 'RhinoCommon.dll')) -or
+    (Test-Path -LiteralPath (Join-Path $binTarget 'RhinoWorker\Rhino3dm.dll'))) {
+    throw 'RhinoCommon/Rhino3dm process isolation was violated.'
+}
+
 $rhpPath = Join-Path $pluginTarget 'MCP_Rhino.Server.rhp'
 $duplicateDllPath = Join-Path $pluginTarget 'MCP_Rhino.Server.dll'
 $duplicateExePath = Join-Path $pluginTarget 'MCP_Rhino.Server.exe'

@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <RhinoSystem>C:\Program Files\Rhino 8\System</RhinoSystem>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Program.csx" />
+    <Compile Include="LinkedScriptChecks.csx" />
+    <Compile Include="UndoScopeChecks.csx" />
+    <Compile Include="AssemblySurfaceChecks.csx" />
+    <Compile Include="..\261010_TEST_stone-bake-missing-only\MissingOnlyChecks.csx" Link="MissingOnlyChecks.csx" />
+    <Compile Include="..\261010_TEST_stone-bake-lintels\LintelChecks.csx" Link="LintelChecks.csx" />
+    <Compile Include="..\..\src\GrasshopperStoneBake\Infrastructure\Rhino\Live\StoneSurfaceBake.cs" Link="StoneSurfaceBake.cs" />
+    <Using Include="Rhino" />
+    <Using Include="Rhino.Geometry" />
+    <Using Include="Rhino.DocObjects" />
+    <Reference Include="RhinoCommon"><HintPath>$(RhinoSystem)\netcore\RhinoCommon.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="Grasshopper"><HintPath>$(RhinoSystem)\..\Plug-ins\Grasshopper\Grasshopper.dll</HintPath></Reference>
+    <Reference Include="GH_IO"><HintPath>$(RhinoSystem)\..\Plug-ins\Grasshopper\GH_IO.dll</HintPath></Reference>
+    <Reference Include="RhinoCodePlatform.Rhino3D"><HintPath>$(RhinoSystem)\RhinoCodePlatform.Rhino3D.dll</HintPath></Reference>
+    <Reference Include="RhinoCodePlatform.GH"><HintPath>$(RhinoSystem)\RhinoCodePlatform.GH.dll</HintPath></Reference>
+    <Reference Include="RhinoCodePlatform.GH1"><HintPath>$(RhinoSystem)\RhinoCodePlatform.GH1.dll</HintPath></Reference>
+    <Reference Include="Rhino.Runtime.Code"><HintPath>$(RhinoSystem)\Rhino.Runtime.Code.dll</HintPath></Reference>
+    <Reference Include="Microsoft.CodeAnalysis"><HintPath>$(RhinoSystem)\Microsoft.CodeAnalysis.dll</HintPath></Reference>
+    <Reference Include="Microsoft.CodeAnalysis.CSharp"><HintPath>$(RhinoSystem)\Microsoft.CodeAnalysis.CSharp.dll</HintPath></Reference>
+    <Reference Include="Microsoft.CodeAnalysis.Scripting"><HintPath>$(RhinoSystem)\Microsoft.CodeAnalysis.Scripting.dll</HintPath></Reference>
+    <Reference Include="Microsoft.CodeAnalysis.CSharp.Scripting"><HintPath>$(RhinoSystem)\Microsoft.CodeAnalysis.CSharp.Scripting.dll</HintPath></Reference>
+  </ItemGroup>
+</Project>

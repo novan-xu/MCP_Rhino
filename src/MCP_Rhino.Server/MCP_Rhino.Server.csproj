@@ -22,6 +22,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.5" />
     <PackageReference Include="ModelContextProtocol" Version="1.1.0" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Scripting" Version="4.6.0" />
     <PackageReference Include="System.Drawing.Common" Version="7.0.0" />
   </ItemGroup>
 
@@ -46,7 +47,10 @@
 
   <ItemGroup>
     <Compile Include="..\..\Project_Test\**\*.cs"
-             Exclude="..\..\Project_Test\260507_TEST_debug-bridge-only-plugin\**\*.cs;
+             Exclude="..\..\Project_Test\261010_TEST_offline-rhino-dwg\**\*.cs;
+                      ..\..\Project_Test\261010_TEST_offline-copy-edit\**\*.cs;
+                      ..\..\Project_Test\261009_TEST_grasshopper-stone-bake\**\*.cs;
+                      ..\..\Project_Test\260507_TEST_debug-bridge-only-plugin\**\*.cs;
                       ..\..\Project_Test\260507_TEST_panel-runtime-policy\**\*.cs;
                       ..\..\Project_Test\260509_TEST_companion-image-attachments\**\*.cs;
                       ..\..\Project_Test\260729_TEST_multi-document-rhino-router\RouterProtocolSmoke\**\*.cs;
@@ -128,6 +132,11 @@
                       ..\..\Project_Archive\Project_Test\260506_TEST_rhino-chat-save-safety\**\*.cs;
                       ..\..\Project_Archive\Project_Test\260506_TEST_rhino-claude-code-companion-ui\**\*.cs"
              LinkBase="Project_Archive\Project_Test" />
+  </ItemGroup>
+
+  <!-- External test source globs must never import another project's generated assemblies. -->
+  <ItemGroup>
+    <Compile Remove="..\..\Project_Test\**\obj\**\*.cs;..\..\Project_Test\**\bin\**\*.cs;..\..\Project_Archive\Project_Test\**\obj\**\*.cs;..\..\Project_Archive\Project_Test\**\bin\**\*.cs" />
   </ItemGroup>
 
   <!-- Production is an automatic Router host, not a Rhino command surface. -->

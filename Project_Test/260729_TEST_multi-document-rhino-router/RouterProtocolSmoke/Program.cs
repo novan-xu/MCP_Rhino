@@ -58,9 +58,13 @@ static async Task RunAsync(string registryPath)
     var routerTwo = new RouterRuntime(catalogTwo);
 
     ListToolsResult tools = await routerOne.ListToolsCoreAsync(CancellationToken.None);
-    Require(tools.Tools.Count == 5, "Router exposes three controls plus both paginated backend tools.");
+    Require(tools.Tools.Count == 10, "Router exposes three controls, five offline script tools, and both paginated backend tools.");
     Require(tools.Tools.Any(tool => tool.Name == "echo_document"), "Canonical backend tool is proxied.");
     Require(tools.Tools.Any(tool => tool.Name == "selected_only_echo"), "Second paginated backend tool is proxied.");
+    Require(ErrorCode(routerOne.ValidateOfflineSource(Call("rhino_offline_preview_script", new { filePath = descriptorA.FilePath }))!) == "OFFLINE_SOURCE_OPEN",
+        "Known open source rejects offline scripts before execution.");
+    Require(routerOne.ValidateOfflineSource(Call("rhino_offline_preview_script", new { filePath = @"C:\fixtures\closed.3dm" })) is null,
+        "Offline routing of a closed path does not require a live backend.");
 
     RouterCatalogSnapshot snapshot = await catalogOne.RefreshAsync(CancellationToken.None);
     Require(snapshot.CanonicalBackend?.Resources.Count == 2, "Paginated resources are fully collected.");

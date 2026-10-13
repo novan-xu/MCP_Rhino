@@ -16,6 +16,8 @@ public sealed class BackendCatalog : IAsyncDisposable
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
     }
 
+    public RouteDiscoverySnapshot Discover() => _discovery.Discover();
+
     public async Task<RouterCatalogSnapshot> RefreshAsync(CancellationToken cancellationToken)
     {
         RouteDiscoverySnapshot discovery = _discovery.Discover();

@@ -113,6 +113,9 @@ public sealed partial class DeveloperCommandHandler
         Add(expectations, ToolSafetyExpectation.ReadOnlyClosedWorld,
             "CheckContinuityInLive",
             "FilterObjects",
+            "InspectBlockMembers",
+            "PreviewRhinoScript",
+            "GetRhinoScriptStatus",
             "GetClosestPointsInLive",
             "GetContourCurvesInLive",
             "GetContourCurvesByFilter",
@@ -169,6 +172,7 @@ public sealed partial class DeveloperCommandHandler
             "PreviewExplodeBlockInstances",
             "PreviewInsertBlockInstances",
             "PreviewPurgeUnusedBlockDefinitions",
+            "PreviewStoneWireframeBake",
             "PreviewTransformBlockInstances",
             "InspectSurfaceRebuildDescriptor",
             "PreviewRedefineSurfacePointOrder",
@@ -206,6 +210,7 @@ public sealed partial class DeveloperCommandHandler
             "SetDocumentUserStrings",
             "ApplyCreateBlockDefinitions",
             "ApplyInsertBlockInstances",
+            "ApplyStoneWireframeBake",
             "ApplyTransformBlockInstances",
             "CreateArcs",
             "CreateBeams",
@@ -282,6 +287,8 @@ public sealed partial class DeveloperCommandHandler
             "SolveGrasshopperDefinition");
 
         Add(expectations, ToolSafetyExpectation.DestructiveOpenWorld,
+            "ApplyRhinoScript",
+            "CancelRhinoScript",
             "ExportDrawingPackage",
             "ExportToDwg",
             "ExportToDxf",
@@ -346,6 +353,22 @@ public sealed partial class DeveloperCommandHandler
         }
 
         RequireMcpToolSafety(methodAttributeCount == BuildToolSafetyExpectations().Count, $"Expected annotated source count to match tool expectation count. Source={methodAttributeCount}.");
+
+        // Offline tools live outside the RHP: inspect their source without loading Rhino3dm in Rhino.
+        string offlineSource = File.ReadAllText(Path.Combine(root, "src", "MCP_Rhino.Offline", "Tools", "OfflineScriptTool.cs"));
+        foreach (string name in new[] { "rhino_offline_inspect_document", "rhino_offline_preview_script", "rhino_offline_apply_script" })
+        {
+            bool apply = name == "rhino_offline_apply_script";
+            string expected = $"[McpServerTool(Name = \"{name}\", ReadOnly = {(!apply).ToString().ToLowerInvariant()}, Destructive = false, OpenWorld = {apply.ToString().ToLowerInvariant()})]";
+            RequireMcpToolSafety(offlineSource.Contains(expected, StringComparison.Ordinal), $"Missing explicit offline safety metadata: {name}");
+        }
+        string nativeSource = File.ReadAllText(Path.Combine(root, "src", "MCP_Rhino.Offline", "Tools", "OfflineRhinoScriptTool.cs"));
+        foreach (string name in new[] { "rhino_offline_preview_rhino_script", "rhino_offline_apply_rhino_script" })
+        {
+            bool executable = name == "rhino_offline_preview_rhino_script";
+            string expected = $"[McpServerTool(Name = \"{name}\", ReadOnly = false, Destructive = {executable.ToString().ToLowerInvariant()}, OpenWorld = true)]";
+            RequireMcpToolSafety(nativeSource.Contains(expected, StringComparison.Ordinal), $"Missing full-trust Rhino safety metadata: {name}");
+        }
     }
 
     private static void RequireMcpToolSafety(bool condition, string message)

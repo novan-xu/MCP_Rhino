@@ -30,6 +30,7 @@ public static class AgentRegistration
         services.AddSingleton<ArchitecturalPrimitiveCreationSkill>();
         services.AddSingleton<ArchitecturalBooleanSkill>();
         services.AddSingleton<BlockLifecycleSkill>();
+        services.AddSingleton<StoneWireframeBakeSkill>();
         services.AddSingleton<ReferenceImageModelBriefSkill>();
         services.AddSingleton<ReferenceImagePrimitiveDecompositionSkill>();
         services.AddSingleton<ReferenceImageProductGeometryPlanningSkill>();
