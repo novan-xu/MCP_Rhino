@@ -61,3 +61,13 @@ standalone commit is `cc4923bdbc10a079cf50d72f4095cd5a68f74bb7`; local master an
 `git ls-remote origin refs/heads/master` matched after push. MCP_Rhino's remote
 master contained four newer commits ending at `593fd0b`; none changed any of the
 655 extracted files. The cleanup integrates that upstream work before publication.
+
+## Upstream integration validation (2026-10-13)
+
+Integrated MCP_Rhino origin/master `593fd0b`. The only merge conflict was solution
+membership; retained all upstream projects and removed only PanelCladdingEditor
+and its standalone smoke project. Rebuilt the integrated MCP solution in Debug
+and Release with zero warnings/errors and reran its compiled identity check.
+All 97 extracted production, packaging and design Git blobs remain byte-identical
+to the original commit. The pre-existing `.gitignore` diff was restored unchanged
+on top of the upstream ignore addition, and remains uncommitted.

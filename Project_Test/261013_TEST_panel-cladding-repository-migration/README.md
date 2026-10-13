@@ -34,3 +34,13 @@ production installation or registry activation was changed. Native Rhino/interac
 acceptance was not rerun for this source-only migration.
 
 The panel validation script and panel commands above are run from the new PanelCladding checkout; they are not MCP build dependencies.
+
+## Upstream integration validation (2026-10-13)
+
+Integrated MCP_Rhino origin/master `593fd0b`. The only merge conflict was solution
+membership; retained all upstream projects and removed only PanelCladdingEditor
+and its standalone smoke project. Rebuilt the integrated MCP solution in Debug
+and Release with zero warnings/errors and reran its compiled identity check.
+All 97 extracted production, packaging and design Git blobs remain byte-identical
+to the original commit. The pre-existing `.gitignore` diff was restored unchanged
+on top of the upstream ignore addition, and remains uncommitted.
