@@ -9,7 +9,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "$configuration solution build failed." }
         & dotnet run --project Project_Test/261010_TEST_offline-copy-edit/OfflineCopyEditSmoke.csproj -c $configuration --no-build
         if ($LASTEXITCODE -ne 0) { throw "$configuration bounded JS regression failed." }
-        & dotnet run --project Project_Test/260729_TEST_multi-document-rhino-router/RouterProtocolSmoke/RouterProtocolSmoke.csproj -c $configuration --no-build
+        & dotnet run --project Project_Archive/Project_Test/260729_TEST_multi-document-rhino-router/RouterProtocolSmoke/RouterProtocolSmoke.csproj -c $configuration --no-build
         if ($LASTEXITCODE -ne 0) { throw "$configuration Router protocol regression failed." }
         & dotnet run --project (Join-Path $PSScriptRoot 'OfflineRhinoSmoke.csproj') -c $configuration -- $configuration
         if ($LASTEXITCODE -ne 0) { throw "$configuration native Rhino integration failed." }

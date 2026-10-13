@@ -149,7 +149,7 @@ Every future method-level `[McpServerTool]` must use explicit named safety annot
 - Export, logging, external-reference, or any tool that writes to caller-provided filesystem paths or external state must set `OpenWorld = true`. If it can overwrite or remove external output, set `Destructive = true`.
 - Never mark a mutation or export tool as read-only just to bypass Codex or another MCP client's approval behavior. If a destructive tool needs approval UX, solve that in the panel/client flow.
 - Exception: `rhino_offline_preview_rhino_script` executes caller-supplied full-trust C# and therefore must use `ReadOnly=false, Destructive=true, OpenWorld=true`, even though model publication remains a separate copy-only apply. Its source lock is not an OS sandbox.
-- When adding, renaming, or removing an MCP tool, update `Project_Test/260506_TEST_mcp-tool-safety-annotations/DeveloperCommandHandler.McpToolSafetyAnnotationsSmokeTest.cs` and run `mcp-tool-safety-annotations-smoke-test`. The smoke must fail if any method-level `[McpServerTool]` is missing explicit `ReadOnly`, `Destructive`, or `OpenWorld` metadata.
+- When adding, renaming, or removing an MCP tool, update `Project_Archive/Project_Test/260506_TEST_mcp-tool-safety-annotations/DeveloperCommandHandler.McpToolSafetyAnnotationsSmokeTest.cs` and run `mcp-tool-safety-annotations-smoke-test`. The smoke must fail if any method-level `[McpServerTool]` is missing explicit `ReadOnly`, `Destructive`, or `OpenWorld` metadata.
 - MCP resources have no equivalent mutation-safety annotation in the current SDK surface. Therefore resources in this repository are restricted to reference-only content by architecture rule.
 
 ## 执行模式指南（Live + explicit offline scripts）
@@ -305,4 +305,4 @@ Rhino plug-in 能力经 RhinoCommon 操作运行中的 `RhinoDoc`。Router 另�
 
 ## 计划 / 执行 / 测试产物沉淀
 
-每次能力演进对应的 Plan、EXET、TEST 三份产物的命名与内容规范，见同目录下的 `MCP_Rhino Plan Log.md`。
+Follow `MCP_Rhino Plan Log.md` for proportional records: substantial changes require a PLAN and EXET with meaningful validation; small changes use one concise EXET. Create TEST assets only when needed, and link existing tests instead of duplicating them. Routine runtime scripts do not require construction records. The recordkeeping level never waives the build, safety, identity, or installation validation required by this architecture guide.

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define the runtime protocol for handling user tasks with existing `tool / skill / agent` capabilities, and define when to stop and ask for capability construction under `Project_Guides`.
+Define the runtime protocol for handling user tasks with existing `tool / skill / agent` capabilities, including task-specific scripts through supported tools, and define when to stop and ask for capability construction under `Project_Guides`.
 
 ## Scope
 
@@ -20,6 +20,8 @@ When adding a new rule file, decide by intent: *how to build* goes to `Project_G
 4. Prefer `Skill` for fixed, repeatable multi-step workflows.
 5. Prefer `Agent` for goal-driven tasks with branching, sequencing, or cross-skill orchestration.
 6. If an atomic tool chain and a skill tool can both complete the task, prefer the skill tool.
+7. When existing task-specific tools or skills do not fit, use supported script-execution tools for ad hoc work. Writing and running the task script is runtime work, not capability construction, and does not itself require a PLAN. Script execution remains a Tool path; it is not another capability layer.
+8. Assess supported scripting before declaring a capability gap. A missing dedicated tool alone does not justify stopping or constructing a new one. Follow the selected runner's contract and verify its availability; scripting does not bypass document routing, execution-mode limits, or authorization requirements.
 
 ## Runtime Steps
 
@@ -64,14 +66,15 @@ When adding a new rule file, decide by intent: *how to build* goes to `Project_G
 Before execution, assess:
 
 - task type
-- current `tool / skill / agent` coverage
+- current `tool / skill / agent` coverage, including supported script runners and their availability
 - current reference `resource` coverage, if the task asks for static documentation or guidance
+- whether an ad hoc script can reliably cover an operation without a suitable task-specific tool or skill, within the selected runner's constraints
 - execution reliability
 
 Assessment may lead to only one of two branches:
 
 - **Execute branch**: state the chosen path and execute
-- **Gap branch**: stop, explain the gap, and wait for user confirmation
+- **Gap branch**: only when neither existing task-specific capabilities nor supported scripting can reliably complete the task, stop, explain the remaining gap, and wait for user confirmation before construction
 
 Do not wait for execution failure before declaring a capability gap.
 
@@ -80,7 +83,7 @@ Do not wait for execution failure before declaring a capability gap.
 Choose one path:
 
 - **Resource**: static reference or documentation lookup only. *Examples: read local RhinoCommon reference notes, browse generated tool help, inspect modeling policy text.* If the requested information depends on the current Rhino document, do not use a resource.
-- **Tool**: clear target, clear inputs, few calls, no complex branching. *Examples: read layers, export files, create basic geometry, read attributes or measurements.*
+- **Tool**: clear target and inputs, with bounded execution through an atomic tool or a supported script runner. *Examples: read layers, export files, create basic geometry, read attributes or measurements, or perform an ad hoc operation with a task-specific script.* Use the applicable live or offline script sequence above; a live compile-only preview is not a geometry dry run.
 - **Skill**: fixed workflow, repeated pattern, clear boundary, existing skill coverage. *Examples: filter-then-confirm, preview-then-apply.*
 - **Agent**: dynamic next-step selection, branching, cross-skill coordination. *Examples: audit-then-choose-analysis-path, state-driven branching.*
 
@@ -95,10 +98,16 @@ Do not introduce a top-level Orchestrator Agent unless cross-Skill dynamic orche
 
 ## Gap Handling
 
-If current capabilities are insufficient, stop and report:
+Missing a dedicated tool is not itself a capability gap. First assess whether existing tools,
+skills, agents, or supported scripting can reliably complete the task. Script writing alone
+does not trigger construction. Unavailable live routing or script runners and operations outside
+the supported execution contracts can still leave genuine gaps; do not bypass them with another
+transport, implicit offline fallback, or unauthorized UI automation.
+
+If current capabilities, including supported scripting, are insufficient, stop and report:
 
 1. why the task cannot be completed reliably
-2. what capability is missing
+2. what capability is missing and why supported scripting does not cover it
 3. which layer it belongs to:
    - reference-only content -> `Resource`
    - atomic capability -> `Tool`
@@ -111,12 +120,17 @@ If current capabilities are insufficient, stop and report:
 
 Only enter construction after explicit user confirmation.
 
-When confirmed, follow:
+Do not create a dedicated tool for each new Rhino operation. A new tool should be explicitly
+requested by the user or justified by demonstrated reuse, reliability requirements, or execution
+needs beyond a task-specific script. Recurring multi-step work may be better served by a reusable
+script or skill; repetition alone does not require another MCP tool. These considerations can
+justify a proposal, but do not replace user confirmation to build.
 
-1. `Project_Plan/YYMMDD_PLAN_<capability-name>.md`
-2. implementation
-3. `Project_Test/YYMMDD_TEST_<capability-name>/`
-4. `Project_Exet/YYMMDD_EXET_<capability-name>.md`
+When confirmed, choose the recordkeeping level in `Project_Guides/MCP_Rhino Plan Log.md`:
+
+- Substantial capability or architecture work: PLAN before implementation, appropriate validation, and EXET after execution. Add a matching TEST folder only when new standalone validation assets are needed; otherwise link existing tests and results.
+- Small fixes, documentation changes, and routine housekeeping: one concise EXET record with the reason, changes, validation, and remaining work. No separate PLAN or empty TEST folder is required.
+- Routine runtime tasks and ad hoc scripts remain runtime work: use the activity log below and preserve useful evidence in the task response or actual output artifacts, without construction records.
 
 All construction must follow all Markdown guide files under `Project_Guides/`.
 

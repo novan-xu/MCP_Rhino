@@ -12,7 +12,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MCP_Rhino.Router", "src\MCP
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Project_Test", "Project_Test", "{8C8B1339-3AC2-4D86-B34F-4AE7EC221C84}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RouterProtocolSmoke", "Project_Test\260729_TEST_multi-document-rhino-router\RouterProtocolSmoke\RouterProtocolSmoke.csproj", "{BA63139B-44A7-48ED-9302-EED701188539}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RouterProtocolSmoke", "Project_Archive\Project_Test\260729_TEST_multi-document-rhino-router\RouterProtocolSmoke\RouterProtocolSmoke.csproj", "{BA63139B-44A7-48ED-9302-EED701188539}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MCP_Rhino.Offline", "src\MCP_Rhino.Offline\MCP_Rhino.Offline.csproj", "{C2E753F1-2812-4BC7-B2DD-42A2F15E1003}"
 EndProject

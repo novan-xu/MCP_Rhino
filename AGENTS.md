@@ -28,7 +28,11 @@ Treat the request as a runtime task when the user wants the model to use existin
 - inspect, query, filter, analyze, export, or modify Rhino data
 - read reference-only MCP resources that do not inspect or mutate Rhino data
 - complete a task with current tools
+- write and run task-specific scripts through existing supported script-execution tools
 - choose among existing `tool / skill / agent / resource` paths
+
+Writing and running a task-specific script through an existing supported runner is runtime work;
+it does not by itself require `PLAN` work or capability construction.
 
 If the request is a runtime task, immediately follow:
 
@@ -52,11 +56,14 @@ If the request is capability construction, immediately follow:
 
 Use this default rule:
 
-- if the task can be completed reliably with existing capabilities, it is a runtime task
-- if the task cannot be completed reliably with existing capabilities, report the gap first
+- prefer existing task-specific tools and skills when they fit the task; otherwise assess supported script execution
+- if existing capabilities, including supported scripting, can complete the task reliably, it is a runtime task
+- a missing dedicated tool is not by itself a capability gap; report a gap only when neither existing task-specific capabilities nor supported scripting can complete the task reliably
 - only after explicit user confirmation to build, switch to capability construction
 
-Do not enter construction mode automatically just because the task is hard.
+Do not enter construction mode automatically just because the task is hard or unfamiliar.
+Do not add a dedicated tool for every new operation. New tools require an explicit user request
+or a demonstrated reuse, reliability, or execution need, with construction confirmed by the user.
 
 ## Step 3: Required Routing Behavior
 
@@ -67,7 +74,9 @@ Follow `Runtime_Workflow/MCP_Rhino Workflow.md` and:
 - assess before execution
 - choose `Tool`, `Skill`, `Agent`, or reference `Resource` where the runtime workflow allows it
 - prefer `Skill` over an equivalent atomic tool chain
-- stop and report capability gaps instead of forcing execution
+- use supported scripting for ad hoc work when existing task-specific tools or skills do not fit
+- assess scripting within the runtime workflow's execution constraints before reporting a capability gap
+- stop and report genuine capability gaps instead of bypassing execution constraints
 
 ### When in Construction Mode
 
@@ -75,7 +84,8 @@ Follow `Project_Guides/` and:
 
 - respect architecture ownership and layer boundaries
 - follow naming and execution-mode constraints
-- use the required `PLAN -> EXET -> TEST` chain
+- choose the recordkeeping level defined in `Project_Guides/MCP_Rhino Plan Log.md`: full records for substantial changes, one concise EXET record for small changes
+- validate according to the actual change; do not create empty test folders or duplicate records merely to complete a three-artifact set
 
 ## Laptop-Specific GitHub Publishing
 
@@ -97,10 +107,11 @@ portable GitHub CLI. For commit / push / pull-request / merge requests on this l
 
 ## Project Cleanup And Archive Rule
 
-- Keep active construction artifacts in `Project_Plan/`, `Project_Exet/`, and `Project_Test/`.
-- When a project plan has been successfully executed and more than three days have elapsed since the EXET execution date, the matching PLAN, EXET, and TEST artifacts may be archived under `Project_Archive/Project_Plan/`, `Project_Archive/Project_Exet/`, and `Project_Archive/Project_Test/`.
-- Archive all three matching artifacts together and preserve their original names.
-- Do not archive incomplete, failed, current, unmatched, or still-active work.
+- Keep active construction records in `Project_Plan/`, `Project_Exet/`, and `Project_Test/`, creating only the artifacts required by the chosen recordkeeping level.
+- Archive completed, successful work only after more than three days have elapsed since its EXET execution date and it is no longer active or under recent revalidation.
+- Move each eligible work item's existing records and supporting test assets together into the corresponding `Project_Archive/` subfolders; preserve original names and build/test behavior.
+- A documented lightweight EXET does not need a PLAN or TEST companion. Missing required records in a legacy or full-record set still block archival.
+- Do not archive incomplete, failed, current, ambiguous, or still-active work.
 - Follow `Project_Guides/MCP_Rhino Plan Log.md` for the detailed archive contract.
 
 ## Hard Constraints

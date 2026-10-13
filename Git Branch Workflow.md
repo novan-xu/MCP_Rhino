@@ -65,10 +65,10 @@
 推荐顺序：
 
 1. 创建工作分支
-2. 在该分支内完成 `Project_Plan/`
+2. 按 `Project_Guides/MCP_Rhino Plan Log.md` 选择记录级别；重大改动先完成 `Project_Plan/`，小改动无需单独 PLAN
 3. 实现代码与文档变更
-4. 补充 `Project_Test/`
-5. 完成验证后补充 `Project_Exet/`
+4. 执行适当验证，仅在需要新增独立测试资产时补充 `Project_Test/`
+5. 完成验证后补充 `Project_Exet/`；小改动只需这一份简洁记录，并链接现有测试证据
 6. 再合并回 `master`
 
 这样可以让：
