@@ -58,3 +58,9 @@ Package 1.3.4 is built/staged, not activated. AGENTS.md requires independent hos
 ## Conclusion
 
 Capability construction and the requested offline lintel bake are complete and validated. The requested output is a separate `.3dm`; source and previous outputs remain intact.
+
+## GitHub publication - 2026-10-13
+
+Published with [PR #11](https://github.com/novan-xu/MCP_Rhino/pull/11), source commit `cae9c71`.
+The branch integrates `origin/master` at `f6dc9d0`. Publication validation is recorded in
+`Project_Exet/261012_EXET_live-custom-scripts.md`. Earlier acceptance boundaries in this record remain applicable.

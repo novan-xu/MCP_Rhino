@@ -113,3 +113,9 @@ Detailed observed results are in `Project_Test/260901_TEST_stone-wireframe-bake/
 MCP_Rhino 1.3.1 is installed and startup-routable. The target live document contains 36 reusable one-line
 wireframe block definitions and 1,143 correctly transformed, parent-attributed instances, with clean second-run
 idempotency verification.
+
+## GitHub publication - 2026-10-13
+
+Published with [PR #11](https://github.com/novan-xu/MCP_Rhino/pull/11), source commit `cae9c71`.
+The branch integrates `origin/master` at `f6dc9d0`. Publication validation is recorded in
+`Project_Exet/261012_EXET_live-custom-scripts.md`. Earlier acceptance boundaries in this record remain applicable.

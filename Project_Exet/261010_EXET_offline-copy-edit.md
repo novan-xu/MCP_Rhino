@@ -84,3 +84,9 @@ No production installation or rollback was performed. Removing the Offline refer
 
 ## Conclusion
 Implemented, tested in Debug/Release, and staged. Offline edits always produce a clearly named duplicate, with no in-place save option. Installed production MCP has not been activated or replaced.
+
+## GitHub publication - 2026-10-13
+
+Published with [PR #11](https://github.com/novan-xu/MCP_Rhino/pull/11), source commit `cae9c71`.
+The branch integrates `origin/master` at `f6dc9d0`. Publication validation is recorded in
+`Project_Exet/261012_EXET_live-custom-scripts.md`. Earlier acceptance boundaries in this record remain applicable.

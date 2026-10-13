@@ -97,3 +97,9 @@ response, is in ignored `.validation/stone-surface-live/`.
 The requested live task is complete. No .3dm disk write or automatic save was
 performed. The separate native smoke's non-inch conversion cases and an actual
 Undo replay were not run; these are not claimed as passed.
+
+## GitHub publication - 2026-10-13
+
+Published with [PR #11](https://github.com/novan-xu/MCP_Rhino/pull/11), source commit `cae9c71`.
+The branch integrates `origin/master` at `f6dc9d0`. Publication validation is recorded in
+`Project_Exet/261012_EXET_live-custom-scripts.md`. Earlier acceptance boundaries in this record remain applicable.

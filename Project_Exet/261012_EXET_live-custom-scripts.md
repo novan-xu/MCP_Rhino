@@ -143,3 +143,26 @@ execution id; cancellation after completion left it Succeeded. Evidence is
 Construction, installation and live acceptance are complete. The earlier pending deployment
 items are resolved. The requested stone-origin operation continues as a runtime task using this
 capability, not as additional capability construction.
+
+## GitHub publication - 2026-10-13
+
+Published with [PR #11](https://github.com/novan-xu/MCP_Rhino/pull/11), source commit `cae9c71`.
+The branch integrates `origin/master` at `f6dc9d0`. Publication validation is recorded in
+`Project_Exet/261012_EXET_live-custom-scripts.md`. Earlier acceptance boundaries in this record remain applicable.
+
+### Publication validation
+
+Validated combined source commit `0eb7dfd` (source `cae9c71` plus master `f6dc9d0`):
+
+- `dotnet build .\MCP_Rhino.sln -c Debug --nologo -m:1` and the corresponding Release build passed with zero warnings/errors.
+- `Run-Validation.ps1` in `Project_Test/261012_TEST_live-custom-scripts/` passed both CLI builds, script contracts, all 176 safety annotations, and tool inventory in Debug/Release. Its native stage initially failed during sandboxed Rhino startup; the exact Release native project rerun outside the sandbox passed all 30 assertions.
+- Both CLI configurations passed `block-member-inspection-smoke-test`, `stone-wireframe-bake-smoke-test`, and `stone-surface-bake-smoke-test`.
+- `OfflineCopyEditSmoke.csproj` passed in Debug/Release with `--no-build`, including naming, source preservation, stale tokens, concurrency, bounded scripts, and real stdio preview/apply.
+- `RouterProtocolSmoke.csproj` passed in Debug/Release outside the sandbox after the sandbox denied an isolated registry file move. Both Router executables passed `--validate-install` (bundle validation only).
+- `Project_Test/261012_TEST_block-member-inspection/NativeChecks.csproj -c Release --no-restore` passed 22 native assertions outside the sandbox.
+- `Project_Test/261010_TEST_offline-rhino-dwg/OfflineRhinoSmoke.csproj -c Release --no-restore -- Release` passed native execution, exact copy publication, source locks, failure/timeout, DXF import, and stdio preview/apply outside the sandbox.
+- `GrasshopperStoneBake.Tests.csproj -c Release -- Scripts/Grasshopper/StoneSurfaceBake.cs` passed script/setup compilation and managed placement/ownership regressions.
+- `node Project_Test/261012_TEST_block-member-inspection/Compare-StoneSizes.test.mjs` passed.
+- `git diff origin/master...HEAD --check` passed before the publication documentation update.
+
+This publication performed no installation/activation, production model edits, or interactive Grasshopper solve. Native tests used synthetic local fixtures. `Runtime_Test/local/` is now explicitly ignored, matching the repository fixture policy. GitHub connector PR creation returned 403; the existing authenticated Git credentials were used for the GitHub API fallback without storing credentials in repository files.

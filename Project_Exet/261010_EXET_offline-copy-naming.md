@@ -37,3 +37,9 @@ Requested name shape, local time, both offline workflows, source preservation an
 ## Remaining items and conclusion
 
 Package 1.3.5 is staged and validated, not production-installed; the existing registry-attestation requirement remains in force. The current file and future offline copy naming implementation are updated as requested. No new tools, transports, schemas or safety annotations were introduced.
+
+## GitHub publication - 2026-10-13
+
+Published with [PR #11](https://github.com/novan-xu/MCP_Rhino/pull/11), source commit `cae9c71`.
+The branch integrates `origin/master` at `f6dc9d0`. Publication validation is recorded in
+`Project_Exet/261012_EXET_live-custom-scripts.md`. Earlier acceptance boundaries in this record remain applicable.

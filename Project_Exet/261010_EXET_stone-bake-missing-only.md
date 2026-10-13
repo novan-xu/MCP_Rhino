@@ -51,3 +51,9 @@ Untracked moved outputs cannot be inferred safely by block name alone. Old indiv
 ## Conclusion
 
 The requested linked script is updated and verified in Debug and Release. Existing output updates/deletions have been removed; missing outputs alone enter the bake path. Native Rhino execution remains untested and no live bake was performed.
+
+## GitHub publication - 2026-10-13
+
+Published with [PR #11](https://github.com/novan-xu/MCP_Rhino/pull/11), source commit `cae9c71`.
+The branch integrates `origin/master` at `f6dc9d0`. Publication validation is recorded in
+`Project_Exet/261012_EXET_live-custom-scripts.md`. Earlier acceptance boundaries in this record remain applicable.

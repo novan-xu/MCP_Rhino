@@ -285,3 +285,9 @@ modify a definition shared with an unselected reference, and stable/distinct
 scope names. Full compile and previous attribute, geometry, and Undo checks pass.
 Native visibility evaluation and scoped rebaking remain host acceptance checks;
 no live Rhino mutation or UI automation was performed.
+
+## GitHub publication - 2026-10-13
+
+Published with [PR #11](https://github.com/novan-xu/MCP_Rhino/pull/11), source commit `cae9c71`.
+The branch integrates `origin/master` at `f6dc9d0`. Publication validation is recorded in
+`Project_Exet/261012_EXET_live-custom-scripts.md`. Earlier acceptance boundaries in this record remain applicable.

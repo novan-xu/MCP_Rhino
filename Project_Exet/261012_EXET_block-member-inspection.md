@@ -99,3 +99,9 @@ The installed Router then selected the user's live combined document, exposed `i
 - Runtime activity was appended through `append_activity_log`; no model writes, selection changes or saves were performed.
 
 Construction and requested live inspection are complete. The task's read-only comparison result does not authorize changing stone IDs or geometry.
+
+## GitHub publication - 2026-10-13
+
+Published with [PR #11](https://github.com/novan-xu/MCP_Rhino/pull/11), source commit `cae9c71`.
+The branch integrates `origin/master` at `f6dc9d0`. Publication validation is recorded in
+`Project_Exet/261012_EXET_live-custom-scripts.md`. Earlier acceptance boundaries in this record remain applicable.

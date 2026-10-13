@@ -95,3 +95,9 @@ with exact parent Assembly_ID and source geometry preserved. Independent host
 install/restart attestation and live verification passed. See
 [surface bake execution](261009_EXET_stone-surface-bake.md) for the final evidence.
 The original curve-only bake was never applied.
+
+## GitHub publication - 2026-10-13
+
+Published with [PR #11](https://github.com/novan-xu/MCP_Rhino/pull/11), source commit `cae9c71`.
+The branch integrates `origin/master` at `f6dc9d0`. Publication validation is recorded in
+`Project_Exet/261012_EXET_live-custom-scripts.md`. Earlier acceptance boundaries in this record remain applicable.
