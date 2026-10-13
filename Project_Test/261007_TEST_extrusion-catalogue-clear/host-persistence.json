@@ -1,0 +1,10 @@
+{
+  "success": true,
+  "priorWriteAttestationVerified": true,
+  "priorEvidence": "../261007_TEST_material-catalogue-removal/host-persistence.json and activation-summary.json",
+  "freshHostProviderAgreement": true,
+  "launch": "Win32_Process.Create with ShowWindow=0",
+  "previousRhp": "%LOCALAPPDATA%\\PanelCladdingEditor\\plugin\\1.0.94\\PanelCladdingEditor.rhp",
+  "previousRhpSha256": "c67a378112435300ad3a49674d23b72fabc354a0c7c8a15ea2e1dbafe41dcd4f",
+  "newProbeCreated": false
+}

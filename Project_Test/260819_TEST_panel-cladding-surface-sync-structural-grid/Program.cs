@@ -73,8 +73,9 @@ internal static class Program
                     StringComparison.Ordinal),
             "PCSyncSrf must discover associated structural curves before offset inference.");
         Require(source.Contains(
-                "if (rhinoObject.Geometry is Curve curveGeometry && string.Equals(",
-                StringComparison.Ordinal),
+                "if (rhinoObject.Geometry is Curve curveGeometry &&",
+                StringComparison.Ordinal) && source.Contains(
+                "PanelCladdingSpawnPlanningService.IsManagedExtrusionLayerPath(layerPath)", StringComparison.Ordinal),
             "The shared sync-object scan must collect extrusion curves in surface scope.");
     }
 

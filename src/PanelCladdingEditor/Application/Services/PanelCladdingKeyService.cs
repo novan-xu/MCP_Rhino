@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Buffers.Binary;
 using System.Text.RegularExpressions;
 using PanelCladdingEditor.Contracts.Responses;
@@ -11,7 +11,10 @@ public sealed partial class PanelCladdingKeyService
     public const int OffsetDecimalPlaces = 5;
     // Retained only to clean up suspended cladding type metadata.
     public const string TypeCodeKey = "CW_2.14_CLADDING_TYPE";
-    public const string FrameTypologyKey = "CW_1.5D_FRAME TYPOLOGY";
+    public const string FrameConfigKey = "CW_1.08_FRAME_CONFIG";
+    public const string FrameTypeKey = "CW_1.09_FRAME_TYPE";
+    public const string LegacyFrameTypologyKey = "CW_1.5D_FRAME TYPOLOGY";
+    public const string LegacyFrameAssignmentsKey = "CW_2.09_FRAME_ASSIGNMENTS";
     public const string LegacyTypeCodeKey = "CW_4.00_CLADDING_TYPE";
     public const string SignatureKey = "Signature";
     public const string LegacySignatureKey = "CW_4.00_CLADDING_SIGNATURE";
@@ -19,7 +22,6 @@ public sealed partial class PanelCladdingKeyService
     public const string MergeMaskKey = "CW_2.10_MERGE_MASK";
     public const string HideMaskKey = "CW_2.11_HIDE_MASK";
     public const string CladdingLogicKey = "CW_2.13_CLADDING_LOGIC";
-    public const string FrameAssignmentsKey = "CW_2.09_FRAME_ASSIGNMENTS";
     public const string UnitDimensionKey = "CW_2.00_UNIT_DIMENSION";
     public const string UnitWidthKey = "CW_2.01_UNIT_WIDTH";
     public const string UnitHeightKey = "CW_2.02_UNIT_HEIGHT";
@@ -190,8 +192,9 @@ public sealed partial class PanelCladdingKeyService
             string.Equals(key, SignatureKey, StringComparison.OrdinalIgnoreCase) ||
             string.Equals(key, LegacySignatureKey, StringComparison.OrdinalIgnoreCase) ||
             string.Equals(key, CladdingLogicKey, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(key, FrameAssignmentsKey, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(key, FrameTypologyKey, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(key, FrameTypeKey, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(key, LegacyFrameAssignmentsKey, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(key, LegacyFrameTypologyKey, StringComparison.OrdinalIgnoreCase) ||
             IsTopologyKey(key);
     }
 
@@ -207,6 +210,7 @@ public sealed partial class PanelCladdingKeyService
     }
 
     public static bool IsTopologyKey(string key) =>
+        string.Equals(key, FrameConfigKey, StringComparison.OrdinalIgnoreCase) ||
         string.Equals(key, SegmentMaskKey, StringComparison.OrdinalIgnoreCase) ||
         string.Equals(key, MergeMaskKey, StringComparison.OrdinalIgnoreCase) ||
         string.Equals(key, HideMaskKey, StringComparison.OrdinalIgnoreCase);
@@ -370,7 +374,7 @@ public sealed partial class PanelCladdingKeyService
         IReadOnlyDictionary<string, string> userText,
         IReadOnlyDictionary<string, string> expectedWrites)
     {
-        foreach (string topologyKey in new[] { SegmentMaskKey, MergeMaskKey, HideMaskKey })
+        foreach (string topologyKey in new[] { FrameConfigKey, SegmentMaskKey, MergeMaskKey, HideMaskKey })
         {
             KeyValuePair<string, string>[] stored = userText
                 .Where(item => string.Equals(item.Key, topologyKey, StringComparison.OrdinalIgnoreCase))
@@ -415,9 +419,14 @@ public sealed partial class PanelCladdingKeyService
         int segmentBitCount = horizontalTrackCount * columnCount + verticalTrackCount * rowCount;
         int mergeBitCount = horizontalTrackCount * Math.Max(0, columnCount - 1) +
             verticalTrackCount * Math.Max(0, rowCount - 1);
-        userText.TryGetValue(SegmentMaskKey, out string? segmentPayload);
-        userText.TryGetValue(MergeMaskKey, out string? mergePayload);
-        userText.TryGetValue(HideMaskKey, out string? hidePayload);
+        OperationResponse<PanelCladdingTopologyPayloads> payloads = ReadFrameConfiguration(userText);
+        if (!payloads.Success || payloads.Data is null)
+        {
+            return OperationResponse<PanelCladdingTopologyState>.Fail(payloads.Message);
+        }
+        string segmentPayload = payloads.Data.SegmentMask;
+        string mergePayload = payloads.Data.MergeMask;
+        string hidePayload = payloads.Data.HideMask;
         OperationResponse<bool[]> segmentBits = DecodeMask(
             segmentPayload,
             SegmentPayloadKind,

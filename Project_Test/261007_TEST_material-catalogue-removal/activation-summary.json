@@ -1,0 +1,44 @@
+{
+  "version": "1.0.94",
+  "priorVersion": "1.0.93",
+  "installation": "passed",
+  "installedRhp": "%LOCALAPPDATA%\\PanelCladdingEditor\\plugin\\1.0.94\\PanelCladdingEditor.rhp",
+  "rhpSha256": "c67a378112435300ad3a49674d23b72fabc354a0c7c8a15ea2e1dbafe41dcd4f",
+  "hostPersistence": "Hidden host probe nonce independently matched through HKEY_USERS/current SID registry provider before activation; probe removed",
+  "installerValidation": "Host Install and mandatory Validate passed; separate post-exit host Validate passed",
+  "commandListExact": true,
+  "registeredCommands": [
+    "PCClear",
+    "PCCreate",
+    "PCCrvTemplate",
+    "PCEditor",
+    "PCMatchCrv",
+    "PCMatchSrf",
+    "PCpid",
+    "PCSpawnCrv",
+    "PCSpawnSrf",
+    "PCSyncCrv",
+    "PCSyncSrf",
+    "PCUpdate"
+  ],
+  "allThreeRegistryTimestampsAdvanced": true,
+  "installedKeyTimes": [
+    {
+      "name": "",
+      "writtenUtc": "2026-10-07T23:28:22.8584516Z"
+    },
+    {
+      "name": "\\PlugIn",
+      "writtenUtc": "2026-10-07T23:28:22.8594627Z"
+    },
+    {
+      "name": "\\CommandList",
+      "writtenUtc": "2026-10-07T23:28:22.8662597Z"
+    }
+  ],
+  "windowsRegistryProviderAgreement": true,
+  "previousRhpRollbackCopyVerified": true,
+  "rhinoProcessesAfterInstallation": 0,
+  "postStartVerification": "pending next Rhino launch",
+  "interactiveUiAcceptance": "pending next Rhino launch; offscreen UI checks passed"
+}

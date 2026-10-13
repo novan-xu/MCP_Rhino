@@ -58,6 +58,7 @@ function Get-PanelExpectedCommands {
         'PCEditor',
         'PCMatchCrv',
         'PCMatchSrf',
+        'PCpid',
         'PCSpawnCrv',
         'PCSpawnSrf',
         'PCSyncCrv',

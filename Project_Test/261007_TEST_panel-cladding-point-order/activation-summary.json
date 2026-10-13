@@ -1,0 +1,44 @@
+{
+  "version": "1.0.92",
+  "priorVersion": "1.0.91",
+  "installation": "passed",
+  "installedRhp": "%LOCALAPPDATA%\\PanelCladdingEditor\\plugin\\1.0.92\\PanelCladdingEditor.rhp",
+  "rhpSha256": "7ce0a85adf187f688eb9638a0245b375b89efc6a9c87c0dfa24e4ab8b164456f",
+  "hostPersistence": "Hidden same-user WMI-launched PowerShell nonce independently verified through HKEY_USERS/current SID StdRegProv before activation; nonce removed",
+  "installerValidation": "Install and mandatory Validate passed; separate host Validate passed after installer exit",
+  "commandListExact": true,
+  "registeredCommands": [
+    "PCClear",
+    "PCCreate",
+    "PCCrvTemplate",
+    "PCEditor",
+    "PCMatchCrv",
+    "PCMatchSrf",
+    "PCpid",
+    "PCSpawnCrv",
+    "PCSpawnSrf",
+    "PCSyncCrv",
+    "PCSyncSrf",
+    "PCUpdate"
+  ],
+  "allThreeRegistryTimestampsAdvanced": true,
+  "installedKeyTimes": [
+    {
+      "name": "",
+      "writtenUtc": "2026-10-07T21:23:58.5549664Z"
+    },
+    {
+      "name": "\\PlugIn",
+      "writtenUtc": "2026-10-07T21:23:58.5549664Z"
+    },
+    {
+      "name": "\\CommandList",
+      "writtenUtc": "2026-10-07T21:23:58.559268Z"
+    }
+  ],
+  "windowsRegistryProviderAgreement": true,
+  "previousRhpRollbackCopyVerified": true,
+  "rhinoProcessesAfterInstallation": 0,
+  "postStartVerification": "passed: exact 1.0.92 RHP loaded; root and CommandList advanced, installer-owned PlugIn unchanged",
+  "nativeCommandAcceptance": "pending; independent hidden RhinoCore host failed StartupInProcess with COMException 0x80004005 before native assertions"
+}

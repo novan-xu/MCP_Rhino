@@ -130,11 +130,10 @@ internal static class Program
         Require(topologyKeys.SequenceEqual(
                 new[]
                 {
-                    PanelCladdingKeyService.SegmentMaskKey,
-                    PanelCladdingKeyService.MergeMaskKey
+                    PanelCladdingKeyService.FrameConfigKey
                 }
                     .OrderBy(key => key, StringComparer.Ordinal)),
-            $"Expected only nondefault panel topology keys, got {string.Join(",", topologyKeys)}.");
+            $"Expected combined frame configuration, got {string.Join(",", topologyKeys)}.");
         Require(!commit.UserTextWrites.Keys.Any(key =>
                 key.Contains("INT-", StringComparison.OrdinalIgnoreCase) ||
                 key.Contains("INT_", StringComparison.OrdinalIgnoreCase)),
@@ -207,10 +206,9 @@ internal static class Program
             "Merged extrusion run did not survive Save/reload.");
         Require(!FieldValue<bool>(window, "_dirty") && !FieldValue<bool>(window, "_structuralDirty"),
             "Successful structural Save did not return the editor to Saved state.");
-        Require(repository.Current.SourceUserText.ContainsKey(PanelCladdingKeyService.SegmentMaskKey) &&
-                repository.Current.SourceUserText.ContainsKey(PanelCladdingKeyService.MergeMaskKey) &&
-                !repository.Current.SourceUserText.ContainsKey(PanelCladdingKeyService.HideMaskKey),
-            "Editor Save did not persist only the nondefault segment and merge masks.");
+        Require(repository.Current.SourceUserText.ContainsKey(PanelCladdingKeyService.FrameConfigKey) &&
+                !repository.Current.SourceUserText.Keys.Any(PanelCladdingKeyService.IsRetiredFrameKey),
+            "Editor Save did not persist combined configuration and remove legacy masks.");
     }
 
     private static void OffsetEditsPreserveMasksAndAssignments()
@@ -308,7 +306,7 @@ internal static class Program
                     $"{edit}/{scope}/{phase} changed cladding material/parent values.");
                 string profilePayload = Required(new PanelFrameAssignmentService().Encode(
                     layout.FrameAssignments, 3, 3, layout.Topology), "Encode edited profiles");
-                Require(profilePayload == baseline[PanelCladdingKeyService.FrameAssignmentsKey],
+                Require(profilePayload == baseline[PanelCladdingKeyService.FrameTypeKey],
                     $"{edit}/{scope}/{phase} changed extrusion profiles or length modifiers.");
                 IReadOnlySet<string> deleted = Field<HashSet<string>>(window, "_deletedExtrusions");
                 IReadOnlySet<string> hidden = Field<HashSet<string>>(window, "_hiddenExtrusions");
@@ -323,7 +321,7 @@ internal static class Program
             {
                 foreach ((string key, string value) in baseline.Where(pair => PanelCladdingKeyService.IsTopologyKey(pair.Key) ||
                     keys.IsCladdingCellKey(pair.Key) || pair.Key == PanelCladdingKeyService.CladdingLogicKey ||
-                    pair.Key == PanelCladdingKeyService.FrameAssignmentsKey))
+                    pair.Key == PanelCladdingKeyService.FrameTypeKey))
                 {
                     Require(repository.Current.SourceUserText.TryGetValue(key, out string? current) && current == value,
                         $"{edit}/{scope} changed saved layout attribute {key}.");

@@ -236,6 +236,7 @@ public partial class MaterialSetupDialog : Window, INotifyPropertyChanged
     {
         if (ConfiguredList.SelectedItem is not PanelCladdingMaterial material)
         {
+            UpdateMaterialActionState();
             return;
         }
 
@@ -276,6 +277,10 @@ public partial class MaterialSetupDialog : Window, INotifyPropertyChanged
 
     private void UpdateMaterialActionState()
     {
+        if (RemoveMaterialButton is not null)
+        {
+            RemoveMaterialButton.IsEnabled = ConfiguredList.SelectedItem is PanelCladdingMaterial;
+        }
         if (MaterialActionButton is null)
         {
             return;
@@ -285,6 +290,23 @@ public partial class MaterialSetupDialog : Window, INotifyPropertyChanged
         bool exists = _materials.Any(item =>
             string.Equals(item.Code, code, StringComparison.OrdinalIgnoreCase));
         MaterialActionButton.Content = exists ? "Save edits" : "Add material";
+    }
+
+    private void OnRemoveMaterialClick(object sender, RoutedEventArgs e)
+    {
+        if (ConfiguredList.SelectedItem is not PanelCladdingMaterial material)
+        {
+            return;
+        }
+
+        _materials.Remove(material);
+        ConfiguredList.SelectedItem = null;
+        CodeText.Clear();
+        NameText.Clear();
+        UpdateCatalogueItemWidth();
+        UpdateMaterialActionState();
+        ColorAssistText.Text = "Select a material to edit, or add a new one.";
+        WorkbookStatusText.Text = $"{material.Code} removed from the catalogue. Choose Confirm to save.";
     }
 
     private void OnAddCategoryClick(object sender, RoutedEventArgs e)

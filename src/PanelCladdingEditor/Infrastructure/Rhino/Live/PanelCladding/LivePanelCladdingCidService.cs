@@ -71,9 +71,9 @@ internal static class LivePanelCladdingCidService
         {
             foreach (Change change in changes)
             {
-                if (!document.Objects.ModifyAttributes(change.Panel, change.Proposed, quiet: true))
+                if (!document.Objects.ModifyAttributes(change.ObjectId, change.Proposed, quiet: true))
                 {
-                    return OperationResponse.Fail($"PANEL_CLADDING_CID_WRITE_FAILED: {change.Panel.Id:D}");
+                    return OperationResponse.Fail($"PANEL_CLADDING_CID_WRITE_FAILED: {change.ObjectId:D}");
                 }
                 change.Applied = true;
             }
@@ -90,13 +90,15 @@ internal static class LivePanelCladdingCidService
         bool restored = true;
         foreach (Change change in changes.Reverse().Where(change => change.Applied))
         {
-            restored &= document.Objects.ModifyAttributes(change.Panel.Id, change.Original, quiet: true);
+            restored &= document.Objects.ModifyAttributes(change.ObjectId, change.Original, quiet: true);
         }
         return restored;
     }
 
     internal sealed record Change(RhinoObject Panel, ObjectAttributes Original, ObjectAttributes Proposed)
     {
+        // Geometry replacement can invalidate the original RhinoObject wrapper.
+        public Guid ObjectId { get; } = Panel.Id;
         public bool Applied { get; set; }
     }
 }

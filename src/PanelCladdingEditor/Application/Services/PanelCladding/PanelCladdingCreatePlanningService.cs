@@ -183,7 +183,7 @@ public sealed partial class PanelCladdingCreatePlanningService
             return OperationResponse<PanelCladdingCreatePanelPlan>.Fail(
                 $"PANEL_CLADDING_CREATE_GRID_INVALID: {panel.ObjectId:D}: {keySet.Message}");
         }
-        OperationResponse<IReadOnlyDictionary<string, string>> masks = _keys.EncodeNonDefaultTopology(
+        OperationResponse<IReadOnlyDictionary<string, string>> masks = _keys.EncodeFrameConfigurationUserText(
             inferred.Topology,
             horizontal.Length,
             vertical.Length);
@@ -196,6 +196,8 @@ public sealed partial class PanelCladdingCreatePlanningService
         string[] deletes = panel.UserText.Keys
             .Where(key => ResetAttributeRegex().IsMatch(key) ||
                 PanelCladdingKeyService.IsTopologyKey(key) ||
+                PanelCladdingKeyService.IsRetiredFrameKey(key) ||
+                string.Equals(key, PanelCladdingKeyService.FrameTypeKey, StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(key, PanelCladdingKeyService.UnitDimensionKey, StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(key, PanelCladdingKeyService.UnitWidthKey, StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(key, PanelCladdingKeyService.UnitHeightKey, StringComparison.OrdinalIgnoreCase) ||

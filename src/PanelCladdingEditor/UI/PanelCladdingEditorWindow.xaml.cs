@@ -941,7 +941,7 @@ public partial class PanelCladdingEditorWindow : Window
         PanelGridCanvas.SetExtrusionAssignments(VisibleAssignmentMap());
         DividerOffsetList.ItemsSource = BuildOffsetDisplay(PanelCladdingGridCanvas.UnitLabel(_layout.ModelUnitScaleToMillimeters));
         UpdateWorkbookStatus();
-        UpdateFrameTypologyPreview();
+        UpdateFrameConfigurationPreview();
     }
 
     private void OnCanvasSelectionChanged(object? sender, IReadOnlyCollection<string> keys)
@@ -1329,7 +1329,7 @@ public partial class PanelCladdingEditorWindow : Window
             _deletedExtrusions,
             _hiddenExtrusions);
         PanelGridCanvas.SetExtrusionAssignments(VisibleAssignmentMap());
-        UpdateFrameTypologyPreview();
+        UpdateFrameConfigurationPreview();
     }
 
     private static string FormatSigned(double value) =>
@@ -1533,7 +1533,7 @@ public partial class PanelCladdingEditorWindow : Window
         ExtrusionLegendSection.Visibility = extrusion ? Visibility.Visible : Visibility.Collapsed;
         CladdingAssignmentSection.Visibility = extrusion ? Visibility.Collapsed : Visibility.Visible;
         ExtrusionAssignmentSection.Visibility = Visibility.Collapsed;
-        FrameTypologySection.Visibility = extrusion ? Visibility.Visible : Visibility.Collapsed;
+        FrameConfigurationSection.Visibility = extrusion ? Visibility.Visible : Visibility.Collapsed;
         ExtrusionActions.Visibility = extrusion ? Visibility.Visible : Visibility.Collapsed;
         PanelGridCanvas.SetExtrusionState(
             view,
@@ -2336,37 +2336,16 @@ public partial class PanelCladdingEditorWindow : Window
         UpdateWorkbookStatus();
     }
 
-    private void UpdateFrameTypologyPreview()
+    private void UpdateFrameConfigurationPreview()
     {
-        if (_layout is null)
-        {
-            FrameTypologyText.Text = "UNASSIGNED";
-            return;
-        }
+        PanelCladdingTopologyState topology = CaptureTopologyState();
         PanelFrameAssignmentState assignments = CaptureFrameAssignmentState();
-        if (assignments.IsEmpty)
-        {
-            FrameTypologyText.Text = "UNASSIGNED";
-            FrameTypologyText.ToolTip = "Assign at least one 1D extrusion code to calculate the frame typology.";
-            return;
-        }
-        PanelCladdingLayout previewLayout = BuildWorkingLayout();
-        OperationResponse<PanelFrameTypologyIdentity> response = _controller.PreviewFrameTypology(
-            previewLayout,
-            assignments,
-            previewLayout.SystemCode);
-        FrameTypologyText.Text = response.Success && response.Data is not null
-            ? response.Data.TypologyCode
-            : $"{NormalizeSystemCode(_layout.SystemCode)}-{_layout.ColumnCount}X{_layout.RowCount}-PENDING";
-        FrameTypologyText.ToolTip = response.Success ? null : response.Message;
+        FrameConfigurationText.Text = $"{topology.MergeRuns.Count} merged runs, " +
+            $"{topology.HiddenSegments.Count} hidden, {topology.MissingSegments.Count} deleted";
+        FrameConfigurationText.ToolTip = assignments.IsEmpty
+            ? "No profiles assigned."
+            : $"{assignments.Definitions.Count} profile definitions assigned.";
     }
-
-    private static string NormalizeSystemCode(string value)
-    {
-        string normalized = new(value.Where(char.IsLetterOrDigit).Select(char.ToUpperInvariant).ToArray());
-        return string.IsNullOrWhiteSpace(normalized) ? "PANEL" : normalized[..Math.Min(10, normalized.Length)];
-    }
-
     private void UpdateWorkbookStatus()
     {
         SetSaveButtonsEnabled(_layout?.CanSave == true);
@@ -2432,9 +2411,7 @@ public partial class PanelCladdingEditorWindow : Window
             _workbookPath = response.Data.WorkbookPath;
             if (scope is PanelCladdingSaveScope.Extrusions or PanelCladdingSaveScope.Both)
             {
-                FrameTypologyText.Text = string.IsNullOrWhiteSpace(response.Data.FrameTypology)
-                    ? "UNASSIGNED"
-                    : response.Data.FrameTypology;
+                UpdateFrameConfigurationPreview();
             }
 
             _structuralDirty = scope == PanelCladdingSaveScope.Cladding && _structuralDirty;

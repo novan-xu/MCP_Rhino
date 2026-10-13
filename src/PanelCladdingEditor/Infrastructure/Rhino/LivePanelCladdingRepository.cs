@@ -232,6 +232,8 @@ public sealed partial class LivePanelCladdingRepository : ILivePanelCladdingRepo
         {
             return OperationResponse<PanelCladdingLayout>.Fail("PANEL_CLADDING_BREP_NOT_FOUND");
         }
+        OperationResponse frameKeys = ValidateFrameAttributeNames(rhinoObject);
+        if (!frameKeys.Success) return OperationResponse<PanelCladdingLayout>.Fail(frameKeys.Message);
 
         OperationResponse<LocalMesh> localMeshResponse = BuildLocalMesh(brep, document.ModelAbsoluteTolerance);
         if (!localMeshResponse.Success || localMeshResponse.Data is null)
@@ -359,10 +361,18 @@ public sealed partial class LivePanelCladdingRepository : ILivePanelCladdingRepo
             return OperationResponse<PanelCladdingMatchPanelSnapshot>.Fail(preview.Message);
         }
 
+        string layerPath = rhinoObject.Attributes.LayerIndex >= 0
+            ? document.Layers[rhinoObject.Attributes.LayerIndex]?.FullPath ?? string.Empty
+            : string.Empty;
+        string systemCode = layerPath.Split(new[] { "::" }, StringSplitOptions.RemoveEmptyEntries)
+            .LastOrDefault() ?? "PANEL";
+        OperationResponse frameKeys = ValidateFrameAttributeNames(rhinoObject);
+        if (!frameKeys.Success) return OperationResponse<PanelCladdingMatchPanelSnapshot>.Fail(frameKeys.Message);
         return OperationResponse<PanelCladdingMatchPanelSnapshot>.Ok(
             new PanelCladdingMatchPanelSnapshot
             {
                 ObjectId = objectId,
+                SystemCode = systemCode,
                 Geometry = new PanelCladdingMatchGeometryDescriptor
                 {
                     GeometryClass = preview.Data.Classification,
@@ -503,6 +513,17 @@ public sealed partial class LivePanelCladdingRepository : ILivePanelCladdingRepo
         return plane.IsValid;
     }
 
+    private static OperationResponse ValidateFrameAttributeNames(RhinoObject rhinoObject)
+    {
+        var strings = rhinoObject.Attributes.GetUserStrings();
+        var exactKeys = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (string? key in strings?.AllKeys ?? Array.Empty<string?>())
+        {
+            if (key is not null) exactKeys[key] = strings![key] ?? string.Empty;
+        }
+        return PanelCladdingKeyService.ValidateFrameAttributeNames(exactKeys);
+    }
+
     private static IReadOnlyDictionary<string, string> ReadUserText(RhinoObject rhinoObject)
     {
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -530,7 +551,9 @@ public sealed partial class LivePanelCladdingRepository : ILivePanelCladdingRepo
         foreach ((string key, string value) in strings.OrderBy(item => item.Key, StringComparer.OrdinalIgnoreCase))
         {
             if (key.StartsWith("CW_2.", StringComparison.OrdinalIgnoreCase) ||
-                key.StartsWith("CW_4.", StringComparison.OrdinalIgnoreCase))
+                key.StartsWith("CW_4.", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(key, PanelCladdingKeyService.FrameConfigKey, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(key, PanelCladdingKeyService.FrameTypeKey, StringComparison.OrdinalIgnoreCase))
             {
                 payload.Append('|').Append(key).Append('=').Append(value);
             }

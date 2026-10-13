@@ -759,18 +759,18 @@
                                 </StackPanel>
                             </Border>
 
-                            <Border x:Name="FrameTypologySection" Style="{StaticResource SideSection}" Visibility="Collapsed">
+                            <Border x:Name="FrameConfigurationSection" Style="{StaticResource SideSection}" Visibility="Collapsed">
                                 <StackPanel>
-                                    <TextBlock Text="FRAME TYPOLOGY" Style="{StaticResource EyebrowText}" />
+                                    <TextBlock Text="FRAME CONFIGURATION" Style="{StaticResource EyebrowText}" />
                                     <Border Margin="0,11,0,0" Padding="12,11" CornerRadius="6"
                                             Background="{StaticResource RaisedBrush}" BorderBrush="{StaticResource BorderBrush}"
                                             BorderThickness="1">
                                         <StackPanel>
-                                            <TextBlock Text="CALCULATED KEY" Style="{StaticResource EyebrowText}" />
-                                            <TextBlock x:Name="FrameTypologyText" Text="UNASSIGNED"
+                                            <TextBlock Text="LAYOUT" Style="{StaticResource EyebrowText}" />
+                                            <TextBlock x:Name="FrameConfigurationText" Text="No layout changes"
                                                        FontFamily="Consolas" FontSize="16" FontWeight="SemiBold"
                                                        Margin="0,2,0,3" TextWrapping="Wrap" />
-                                            <TextBlock Text="Stored at CW_1.5D_FRAME TYPOLOGY when at least one profile code is assigned."
+                                            <TextBlock Text="Layout settings and assigned profiles are saved separately."
                                                        Foreground="{StaticResource MutedBrush}" FontSize="11"
                                                        TextWrapping="Wrap" />
                                         </StackPanel>

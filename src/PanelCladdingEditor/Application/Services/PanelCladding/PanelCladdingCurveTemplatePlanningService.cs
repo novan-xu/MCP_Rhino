@@ -92,7 +92,7 @@ public sealed class PanelCladdingCurveTemplatePlanningService
             MergeRuns = runs
         };
         OperationResponse<IReadOnlyDictionary<string, string>> encoded =
-            _keys.EncodeNonDefaultTopology(
+            _keys.EncodeFrameConfigurationUserText(
                 topology,
                 panel.HorizontalTrackCount,
                 panel.VerticalTrackCount);
@@ -100,16 +100,15 @@ public sealed class PanelCladdingCurveTemplatePlanningService
         {
             return OperationResponse<PanelCladdingCurveTemplatePanelPlan>.Fail(encoded.Message);
         }
+        OperationResponse<PanelCladdingTopologyPayloads> masks = _keys.EncodeTopology(
+            topology, panel.HorizontalTrackCount, panel.VerticalTrackCount);
 
         return OperationResponse<PanelCladdingCurveTemplatePanelPlan>.Ok(
             new PanelCladdingCurveTemplatePanelPlan
             {
                 ObjectId = panel.ObjectId,
-                MergeMask = encoded.Data.TryGetValue(
-                    PanelCladdingKeyService.MergeMaskKey,
-                    out string? mergeMask)
-                    ? mergeMask
-                    : string.Empty,
+                MergeMask = runs.Count > 0 ? masks.Data!.MergeMask : string.Empty,
+                FrameConfig = encoded.Data[PanelCladdingKeyService.FrameConfigKey],
                 UserTextDeletes = runs.Count > 0
                     ? new[]
                     {

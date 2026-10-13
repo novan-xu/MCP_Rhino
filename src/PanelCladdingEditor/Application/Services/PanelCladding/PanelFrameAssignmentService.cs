@@ -19,11 +19,15 @@ public sealed partial class PanelFrameAssignmentService
         int verticalTrackCount,
         PanelCladdingTopologyState topology)
     {
-        string payload = userText.FirstOrDefault(item => string.Equals(
-            item.Key,
-            PanelCladdingKeyService.FrameAssignmentsKey,
-            StringComparison.OrdinalIgnoreCase)).Value ?? string.Empty;
-        return Decode(payload, horizontalTrackCount, verticalTrackCount, topology);
+        OperationResponse<string> payload = PanelCladdingKeyService.ReadFrameAttribute(
+            userText, PanelCladdingKeyService.FrameTypeKey);
+        if (payload.Success && string.IsNullOrWhiteSpace(payload.Data))
+        {
+            payload = PanelCladdingKeyService.ReadFrameAttribute(userText, PanelCladdingKeyService.LegacyFrameAssignmentsKey);
+        }
+        return payload.Success
+            ? Decode(payload.Data, horizontalTrackCount, verticalTrackCount, topology)
+            : OperationResponse<PanelFrameAssignmentState>.Fail(payload.Message);
     }
 
     public OperationResponse<PanelFrameAssignmentState> Decode(

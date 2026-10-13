@@ -273,6 +273,39 @@ public sealed class LivePanelCladdingUpdateService : ILivePanelCladdingUpdateSer
         string filePath,
         IReadOnlyList<Guid> sourcePanelIds)
     {
+        var sources = ReadPanelSources(document, sourcePanelIds);
+        if (!sources.Success || sources.Data is null) return OperationResponse<PanelCladdingUpdateResult>.Fail(sources.Message);
+        var selection = PanelCladdingUpdateSelectionService.CreatePlan(sources.Data);
+        var pointOrder = new Dictionary<Guid, LivePanelCladdingPointOrderService.PreparedGeometry>();
+        try
+        {
+            foreach (var source in selection.ProcessableSources)
+            {
+                var panel = document.Objects.FindId(source.ObjectId)!;
+                if (panel.IsReference || panel.IsLocked || panel.IsHidden)
+                    return OperationResponse<PanelCladdingUpdateResult>.Fail($"PANEL_CLADDING_UPDATE_SOURCE_NOT_EDITABLE: {source.ObjectId}");
+                var prepared = new LivePanelCladdingPointOrderService().Prepare((Brep)panel.Geometry, document.ModelAbsoluteTolerance);
+                if (!prepared.Success || prepared.Data is null) return OperationResponse<PanelCladdingUpdateResult>.Fail(prepared.Message);
+                pointOrder.Add(source.ObjectId, prepared.Data);
+            }
+            return ApplyPrepared(document, filePath, sourcePanelIds, pointOrder);
+        }
+        catch (Exception exception)
+        {
+            return OperationResponse<PanelCladdingUpdateResult>.Fail($"PANEL_CLADDING_UPDATE_POINT_ORDER_FAILED: {exception.Message}");
+        }
+        finally
+        {
+            foreach (var prepared in pointOrder.Values) prepared.Dispose();
+        }
+    }
+
+    private OperationResponse<PanelCladdingUpdateResult> ApplyPrepared(
+        RhinoDoc document,
+        string filePath,
+        IReadOnlyList<Guid> sourcePanelIds,
+        IReadOnlyDictionary<Guid, LivePanelCladdingPointOrderService.PreparedGeometry> pointOrder)
+    {
         var panelCidChanges = LivePanelCladdingCidService.Prepare(document, sourcePanelIds);
         if (!panelCidChanges.Success || panelCidChanges.Data is null)
         {
@@ -286,6 +319,7 @@ public sealed class LivePanelCladdingUpdateService : ILivePanelCladdingUpdateSer
         }
         if (undoRecord == 0U)
         {
+            foreach (var change in panelCidChanges.Data) { change.Original.Dispose(); change.Proposed.Dispose(); }
             return OperationResponse<PanelCladdingUpdateResult>.Fail(
                 "PANEL_CLADDING_UPDATE_UNDO_UNAVAILABLE");
         }
@@ -296,11 +330,23 @@ public sealed class LivePanelCladdingUpdateService : ILivePanelCladdingUpdateSer
         {
             OperationResponse cidCommit = LivePanelCladdingCidService.Apply(document, panelCidChanges.Data);
             documentMutationOccurred |= panelCidChanges.Data.Any(change => change.Applied);
+            if (cidCommit.Success)
+            {
+                foreach (var (id, geometry) in pointOrder)
+                {
+                    bool applied = geometry.Apply(document, id);
+                    documentMutationOccurred |= geometry.Applied;
+                    if (!applied) throw new InvalidOperationException($"Point-order write failed for panel {id}.");
+                }
+            }
             outcome = cidCommit.Success
                 ? UpdateDependencies(document, filePath, sourcePanelIds, ref documentMutationOccurred)
                 : OperationResponse<PanelCladdingUpdateResult>.Fail(cidCommit.Message);
             if (outcome.Success && outcome.Data is not null)
             {
+                outcome.Data.ReorderedPanelIds = pointOrder.Where(p => p.Value.Changed).Select(p => p.Key).ToArray();
+                outcome.Data.PointOrderWarnings = pointOrder.Where(p => p.Value.SkipReason.Length > 0)
+                    .Select(p => $"Panel {p.Key}: {p.Value.SkipReason}").ToArray();
                 if (outcome.Data.DuplicateCidGroups.Count > 0)
                 {
                     document.Objects.UnselectAll();
@@ -319,6 +365,20 @@ public sealed class LivePanelCladdingUpdateService : ILivePanelCladdingUpdateSer
         }
         finally
         {
+            // An ambient Rhino command owns its Undo record. Restore our source
+            // geometry/CID changes explicitly without ending or undoing that record.
+            if (!ownsUndoRecord && outcome is { Success: false })
+            {
+                bool restored = true;
+                foreach (var (id, geometry) in pointOrder.Reverse())
+                {
+                    try { restored &= geometry.Restore(document, id); }
+                    catch { restored = false; }
+                }
+                try { restored &= LivePanelCladdingCidService.Restore(document, panelCidChanges.Data); }
+                catch { restored = false; }
+                if (!restored) outcome = OperationResponse<PanelCladdingUpdateResult>.Fail(outcome.Message + "; SOURCE_ROLLBACK_FAILED");
+            }
             if (ownsUndoRecord)
             {
                 document.EndUndoRecord(undoRecord);
@@ -328,6 +388,7 @@ public sealed class LivePanelCladdingUpdateService : ILivePanelCladdingUpdateSer
                         $"{outcome.Message}; PANEL_CLADDING_UPDATE_ROLLBACK_FAILED");
                 }
             }
+            foreach (var change in panelCidChanges.Data) { change.Original.Dispose(); change.Proposed.Dispose(); }
         }
         return outcome ?? OperationResponse<PanelCladdingUpdateResult>.Fail(
             "PANEL_CLADDING_UPDATE_NO_RESULT");

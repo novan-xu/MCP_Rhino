@@ -162,7 +162,8 @@ public sealed class LivePanelCladdingMatchService : ILivePanelCladdingMatchServi
             PanelCladdingMatchPlanningService.ApplyUserTextPlan(current, plan);
         foreach (string? key in existingKeys)
         {
-            if (key is not null && !desired.ContainsKey(key))
+            if (key is not null && (!desired.ContainsKey(key) ||
+                plan.UserTextDeletes.Contains(key, StringComparer.OrdinalIgnoreCase)))
             {
                 attributes.DeleteUserString(key);
             }
