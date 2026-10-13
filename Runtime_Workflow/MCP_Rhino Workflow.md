@@ -25,14 +25,28 @@ When adding a new rule file, decide by intent: *how to build* goes to `Project_G
 
 ### Current MCP Runtime Shape
 
-- Rhino-facing runtime capabilities are Live Only. They operate on the currently running Rhino 8 document through the loaded `MCP_Rhino.Server.rhp` plugin; do not fall back to direct `.3dm` disk reads.
+- For ad hoc live operations not covered by an equivalent atomic tool or skill, use
+  `preview_rhino_script` then `apply_rhino_script` on the same Router-selected saved document.
+  This accepts trusted synchronous C# with `doc`, `Parameters`, `Result`, `Log`, `CancellationToken`
+  and `Checkpoint`. Preview only compiles; validate modeling assumptions inside the script before
+  editing. Apply returns an execution id; poll `get_rhino_script_status` to a terminal result rather
+  than rerunning code. `cancel_rhino_script` is cooperative, not forced termination. Scripts are
+  full trust; assess their external effects. Keep Rhino work on the synchronous main thread and
+  use the supplied `doc`, never ActiveDoc, command scripting, manual Undo, save/close or background
+  modeling. Ordinary target-document edits share one Undo record and are rolled back on failure;
+  external effects are not. No new per-task capability is necessary when a short script suffices.
+
+- Existing Rhino plug-in capabilities operate on open Rhino 8 documents. Explicit `rhino_offline_*` tools in the Router support saved `.3dm` JavaScript edits without Rhino, or native `.dwg`/`.dxf`/`.3dm` C# jobs through an installed licensed Rhino 8 headless worker. Never fall back to offline after a live failure.
+- For offline work, inspect the absolute source path with `rhino_offline_inspect_document`, preview a restricted JavaScript modeling script with `rhino_offline_preview_script`, then publish its returned one-use `previewToken` with `rhino_offline_apply_script` in the same Router session within ten minutes. Apply refuses changed sources and writes the exact preview result to a new sibling `<stem>_YYYYMMDD_HHMMSS.3dm` using local date and 24-hour time. Same-second collisions wait for another available second, with cancellation and a bounded timeout. It never overwrites the source or an existing output; every subsequent edit creates another copy without accumulating suffixes. Return the output path to the user.
+- Bounded JavaScript scripts have an in-memory `model` bridge, no filesystem/process/network/CLR access and no raw file-write API. Read the tool's returned scripting help for supported operations and limits. Known open source paths are rejected by offline tools; unknown sessions' unsaved state is never represented by disk reads.
+- For explicit DWG/DXF conversion or native Rhino modeling offline, call `rhino_offline_preview_rhino_script(filePath, script, ...)` with trusted synchronous C# against `doc`. An empty script converts/inspects. Set `modelUnits` when source units are ambiguous. Reuse a trusted C# class via `libraryPath` + `libraryType` when appropriate. This is full-trust code; assess the script's actual external effects. Read its result/log and apply the returned token with `rhino_offline_apply_rhino_script` in the same Router session. Always return the suffixed `.3dm` output path. Source is read-locked; apply never reruns code or overwrites a file. Native failure/timeout is an error, not permission to switch to live documents or UI automation.
 - `MCP_Rhino.Router.exe` is the only supported MCP client connection. Installed clients launch
   `%LOCALAPPDATA%\MCP_Rhino\bin\MCP_Rhino.Router.exe` over stdio; each client session owns its Router
   process, and users do not start a shared Router daemon.
 - Debug and Release `MCP_Rhino.Server.rhp` builds have the same startup shape. The plugin loads at
   Rhino startup and publishes a current-user route endpoint for every saved open document in that
   Rhino process. Opening or closing documents updates discovery without loading another plugin.
-- Call `rhino_router_list_documents`, then `rhino_router_select_document` with its opaque session id
+- For live work, call `rhino_router_list_documents`, then `rhino_router_select_document` with its opaque session id
   before using tools that do not carry an unambiguous top-level `filePath`.
 - In Router mode, the endpoint is bound to one runtime serial number. A selected session plus a
   conflicting `filePath` returns `DOCUMENT_TARGET_CONFLICT`; duplicate open paths return

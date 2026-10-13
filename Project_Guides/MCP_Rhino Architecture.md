@@ -47,8 +47,10 @@
     Rhino runtime serial; the active Grasshopper canvas is never a target authority.
   - `Tools/Modeling`：thin externally callable wrappers for goal-level modeling agents. These tools only adapt MCP requests to registered Agents/Skills, own safety annotations and routing descriptions, and must not duplicate orchestration or RhinoCommon logic.
   - `Tools/Workflow`：repository workflow support tools such as activity logging.
+  - `Tools/Scripting`: compile-only previews and explicit execution/status/cancellation of trusted
+    synchronous C# against the routed live document; never an alternate transport.
 - Add a new Tool subfolder only when there are multiple related tools and a stable capability boundary. One-off tools should join the nearest existing family.
-- **执行模式约束**：所有 Tool 只能依赖 Live 适配接口获取当前 Rhino 文档真值；不得提供磁盘文件读取或写入兜底。详见「执行模式指南」章节。
+- **执行模式约束**：现有 Server Tool 仍只走 Live 适配接口。明确请求的离线工作由独立 `MCP_Rhino.Offline` 的 script tools 处理；禁止 Live 失败后自动读写磁盘。离线写入只能生成带明确后缀的新副本。详见「执行模式指南」章节。
 - **MCP 安全注解约束**：每个方法级 `[McpServerTool]` 必须显式声明 `ReadOnly`、`Destructive`、`OpenWorld`。详见「MCP Tool Safety Annotation Guidelines」章节。
 
 ### 4. Skills/
@@ -56,14 +58,14 @@
 - Skill 可以组合多个 service / use case / tool。
 - Skill 不直接承担底层文件 API 细节。
 - 命名统一使用 `*Skill` 后缀。
-- **执行模式约束**：Skill 只能组合 Live 能力；不得引入磁盘文件读取或写入分支。
+- **执行模式约束**：现有 Server Skill 只组合 Live 能力；未来离线 Skill 必须明确使用 copy-only offline tools，禁止隐式 fallback。
 
 ### 5. Agents/
 - 放置目标驱动、可做决策/调度的执行者。
 - Agent 优先调用 Skill 或 Application Service。
 - Agent 不直接写 RhinoCommon 细节。
 - 命名统一使用 `*Agent` 后缀。
-- **执行模式约束**：Agent 的 read / preview / mutation 步骤都必须走 Live 适配接口；不得在一次调用里混入磁盘文件真值。
+- **执行模式约束**：Agent 必须明确选择 Live 或 offline script 工作流，不得在一次调用里混入两种文档真值。离线结果始终是新副本。
 
 ### 6. Application/
 - 放置用例、服务、流程编排、接口抽象。
@@ -81,7 +83,7 @@
 - 所有 `RhinoDoc` / `RhinoCommon` 访问细节集中在这里。
 - 这里回答"具体如何和外部技术打交道"。
 
-- **Rhino 适配组织**：`Infrastructure/Rhino/` 承载 RhinoCommon 适配；所有与文档状态有关的适配器以 `Live*` 前缀命名。历史保留的 `Rhino/Live/` 子目录可继续作为分组使用，但项目执行模式只有 Live 一种。
+- **Rhino 适配组织**：Server 的 `Infrastructure/Rhino/` 承载 RhinoCommon Live 适配。`MCP_Rhino.Offline/Infrastructure/` 独立承载 Rhino3dm、受限脚本引擎和 copy-only writer；Rhino3dm 不得加载进 RHP。
 - **`Plugin/` 子目录**：放置 Rhino `.rhp` 宿主入口、route endpoint dispatcher、`McpNamedPipeServer` 与 routed host factory。插件只发布 `mcp_rhino_route_<ProcessId>_<RuntimeSerialNumber>` endpoints，不启动其他 MCP transport 或嵌入式 chat surface。
 - **Plugin build-mode contract**：Debug 与 Release 都返回 `PlugInLoadTime.AtStartup`，使用相同的 Router-only plugin shape、相同的 MCP tool/resource surface 与相同的 per-document route lifecycle。禁止重新引入按 configuration 分叉的连接模式。
 - **MCP update validation rule**：Any construction work that changes the MCP server, plugin host, Router compatibility, tool registration, route endpoint lifecycle, or document-session routing must compile the Debug plugin as well as the Release plugin. The validation record must include `dotnet build .\MCP_Rhino.sln -c Debug` and `dotnet build .\MCP_Rhino.sln -c Release`, or a narrower Debug/Release project build with a stated reason. If the tool surface changes, run the MCP tool safety smoke in both configurations.
@@ -146,16 +148,58 @@ Every future method-level `[McpServerTool]` must use explicit named safety annot
 - Mutation tools that only change the current live Rhino document must be annotated as `ReadOnly = false, OpenWorld = false`, with `Destructive` set to the actual behavior. Create / transform / edit / set operations are normally `Destructive = false`; delete / replace / purge operations are normally `Destructive = true`.
 - Export, logging, external-reference, or any tool that writes to caller-provided filesystem paths or external state must set `OpenWorld = true`. If it can overwrite or remove external output, set `Destructive = true`.
 - Never mark a mutation or export tool as read-only just to bypass Codex or another MCP client's approval behavior. If a destructive tool needs approval UX, solve that in the panel/client flow.
+- Exception: `rhino_offline_preview_rhino_script` executes caller-supplied full-trust C# and therefore must use `ReadOnly=false, Destructive=true, OpenWorld=true`, even though model publication remains a separate copy-only apply. Its source lock is not an OS sandbox.
 - When adding, renaming, or removing an MCP tool, update `Project_Test/260506_TEST_mcp-tool-safety-annotations/DeveloperCommandHandler.McpToolSafetyAnnotationsSmokeTest.cs` and run `mcp-tool-safety-annotations-smoke-test`. The smoke must fail if any method-level `[McpServerTool]` is missing explicit `ReadOnly`, `Destructive`, or `OpenWorld` metadata.
 - MCP resources have no equivalent mutation-safety annotation in the current SDK surface. Therefore resources in this repository are restricted to reference-only content by architecture rule.
 
-## 执行模式指南（Live Only）
+## 执行模式指南（Live + explicit offline scripts）
 
-Rhino 侧的能力只跑一种模式：经 RhinoCommon 操作运行中的 `RhinoDoc`。本仓库不再支持磁盘 `.3dm` 业务读写。
+### Live custom script contract
+
+- `preview_rhino_script` compiles inline C# without executing it and binds an expiring submission
+  to the resolved runtime serial/path and backend connection. It is a compilation preview, not a
+  dry run of geometry effects or a promise that live model state will remain unchanged.
+- `apply_rhino_script` schedules that submission once through the existing document accessor;
+  repeating its token returns the same execution. The script receives the explicit routed `doc`,
+  JSON `Parameters`, `Result`, bounded `Log`, `CancellationToken`, and `Checkpoint`. It must not
+  use ActiveDoc, switch/save/close documents, manipulate Undo, run commands, or start background
+  Rhino work. No COM, UI automation, separate script server or offline fallback is involved.
+- Execution/status are separate so busy Rhino work does not get mistaken for a failed mutation.
+  Status reads do not wait for the UI thread. Cancellation/deadlines are cooperative; never claim
+  arbitrary in-process code was force-stopped. Disconnect requests cancellation and never replay.
+- Apply and cancellation are full-trust/open-world operations, annotated ReadOnly=false,
+  Destructive=true, OpenWorld=true. Compile/status are read-only. Reject source-loading directives
+  and async/await. Standard compiler references are fixed; this is not a hostile-code sandbox.
+- Execution requires an idle document with Undo enabled, owns a dedicated record and an Undo
+  boundary even before the first edit, and rolls back ordinary target-document changes on failure.
+  Do not undo a preceding user record. External effects and deliberate full-trust API misuse cannot
+  be rolled back. Return explicit execution/error/rollback state and bound all retained submissions,
+  logs and JSON results. Package compiler dependencies in the isolated runtime; share RhinoCommon.
+
+Rhino plug-in 能力经 RhinoCommon 操作运行中的 `RhinoDoc`。Router 另提供明确的离线脚本能力，使用 Rhino3dm 编辑内存模型并只输出副本。两条路径不互相 fallback。
+
+### Offline script contract
+
+- `MCP_Rhino.Offline` is a separate layered library (Contracts, Application/interfaces, Infrastructure, Tools, Server registration) referenced only by Router and its standalone tests. It owns Rhino3dm 8.32.0 and the bounded Jint script runtime; the RHP must not reference it.
+- Expose the operation-independent bounded-JS inspect/preview-script/apply-script workflow, plus the native Rhino preview-rhino-script/apply-rhino-script pair below, using method-level MCP metadata and assembly scanning in `OfflineToolRegistration`. Router composes the generated tools with live tools and reserves `rhino_offline_`; no additional transport or hand-written tool schema catalog.
+- Offline source handles are always read-only and deny write/delete sharing. No script/caller output-path or overwrite argument exists. Output is always a new sibling `<stem>_YYYYMMDD_HHMMSS.3dm` using host local date and 24-hour time, including when editing a previous output. Replace a recognized legacy/new suffix rather than accumulating suffixes. Same-second collisions wait for an available actual second with cancellation and a ten-second retry bound; never add random identifiers to final names or overwrite. Stage with `FileMode.CreateNew`, flush, and publish with an atomic non-replacing move. The writer never truncates, replaces, deletes or renames source/prior outputs.
+- Preview executes a bounded JavaScript script over a JSON-only model bridge. Never project raw File3dm, Rhino objects, CLR types, reflection, streams, exception objects or host services into the engine. No CLR, modules, eval, filesystem, process or network capability. This is a constrained modeling interpreter, not an OS security boundary for hostile scripts.
+- Re-read serialized bytes and verify object identities/attributes/bounds, layer state and document metadata before retaining a preview. Preview tokens bind exact generated bytes to source path and SHA-256 for ten minutes in one Router session (four tokens / 512 MiB). Apply checks the pinned source again, publishes those bytes without rerunning scripts, then consumes the token. Changed source, canceled/failed script or invalid output publishes nothing.
+- Known open source paths are rejected; disk state cannot represent unsaved edits in undiscovered sessions. Missing live endpoints never invoke offline tools automatically. Geometry requiring Rhino can use the explicitly selected native worker; interactive viewport/Grasshopper operations remain live-only.
+- Regression gates must include source hash/timestamp preservation, copied-output round-trip, repeated and concurrent copies, stale/mistargeted previews, restricted host access, script limits, no-Rhino MCP availability, and Debug/Release safety tests. Binary fixtures stay under ignored `Runtime_Test/local/`.
+
+### Native offline Rhino worker contract
+
+- `MCP_Rhino.RhinoWorker` is a Windows executable, not an MCP host or RHP. It owns Rhino.Inside startup, RhinoCommon, native DWG/DXF import, synchronous trusted C# and headless document serialization. Router/Offline never load RhinoCommon; Worker never loads Rhino3dm. The contracts shared with Worker are JSON-only source files.
+- Initialize the Rhino.Inside resolver before JIT reaches Rhino code; run `RhinoCore` and all Rhino calls synchronously on the worker STA with `WindowStyle.NoWindow`. Require installed licensed Rhino 8. Do not use live `ActiveDoc`, UI automation, or bypass licensing. Timeout kills only the owned worker process tree.
+- Accept `.dwg`, `.dxf`, `.3dm` and an optional inline C# script. Empty script imports/converts only. `doc`, `Parameters`, `Result`, and `Log` are the scripting interface. Optional trusted `.cs`/`.csx` library extraction selects exactly one named class and does not execute GH top-level code. This is full-trust code, not the bounded JS interpreter or an untrusted-code sandbox; annotate accordingly.
+- Hold the original read-only denying write/delete through snapshot creation, worker execution and output verification. Worker receives owned temporary paths, never a final output path. Publish only through the shared create-new/non-replacing copy writer. Native and JS tokens are separate; each binds exact output bytes and source path/hash with the same expiry/capacity rules.
+- DWG import can explicitly specify standard model units; 3dm preserves saved units. Validate serialized object IDs and units in Rhino, then reopen/validate through Rhino3dm in Router. Count persistent top-level and definition objects, excluding deleted import intermediates; `ObjectTable.Count` is not the persisted count.
+- Distribute worker dependencies under Router's `RhinoWorker/`; never redistribute installed RhinoCommon there. Bundle validation verifies files/isolation without starting Rhino. Native integration tests require the installed Rhino/license and must cover real import, source locks, failure/timeout, exact copy publication and repeat execution.
 
 ### 通用契约
 
-- 所有能力必须由 Rhino Plugin 宿主加载，并由 Router 选择的 routed endpoint 驱动。
+- 以下 Live 契约适用于 Server 能力：由 Rhino Plugin 宿主加载，并由 Router 选择的 routed endpoint 驱动。离线脚本仅适用上文独立契约。
 - Routed path 解析为 `RhinoDoc.FromRuntimeSerialNumber(boundSerial)`。目标文档必须存在且已保存；文档关闭或未保存分别返回 `DOCUMENT_CLOSED` / `ACTIVE_DOC_UNSAVED`。显式选择与冲突 `FilePath` 由 Router 返回 `DOCUMENT_TARGET_CONFLICT`。
 - RhinoCommon 的 `RhinoDoc` / `Rhino.Geometry` API 限定在 Rhino UI 主线程。所有访问必须经 `ILiveRhinoDocumentAccessor` 封送到主线程同步执行；主线程长时间阻塞（> 10s）时返回 `RHINO_MAIN_THREAD_BUSY`。
 - 不允许在 live 失败后改读磁盘快照；调用方必须面对当前 Rhino 会话状态。
@@ -203,7 +247,7 @@ Rhino 侧的能力只跑一种模式：经 RhinoCommon 操作运行中的 `Rhino
 - `MCP_Rhino.Transport` owns only the BCL-based route protocol, path normalization, endpoint
   descriptor/attestation records, and the atomic current-user discovery registry under
   `%LOCALAPPDATA%\MCP_Rhino\Routing\v1`. It contains no Rhino or MCP business surface.
-- `MCP_Rhino.Router` is a RhinoCommon-free stdio MCP gateway. Every launching agent/MCP session owns
+- `MCP_Rhino.Router` is a RhinoCommon-free stdio MCP gateway composing the explicit Offline library. Every launching agent/MCP session owns
   its own Router process; there is no shared Router daemon. A Router discovers all live descriptors,
   establishes independent backend MCP sessions, verifies the private endpoint attestation, and
   exposes the canonical Rhino tool/resource surface plus `rhino_router_list_documents`,
@@ -247,7 +291,8 @@ Rhino 侧的能力只跑一种模式：经 RhinoCommon 操作运行中的 `Rhino
 
 - 主 Server 项目（`MCP_Rhino.Server`，产出 `.rhp`）保持单项目分层的 DDD 目录结构；当业务复杂度显著上升时再考虑拆 `Application.Core` / `Infrastructure` 等子项目。
 - **例外：`MCP_Rhino.Transport` 为独立 BCL-only csproj**，只承载 Router / plugin 共享的 discovery、descriptor、attestation 和 route pipe contract。它不得依赖 RhinoCommon 或 MCP SDK。
-- **例外：`MCP_Rhino.Router` 为独立 stdio MCP csproj**，承载每个外部 agent session 的多文档 discovery、selection 和 backend proxy。它可以依赖 Transport 和固定版本 MCP SDK，但不得依赖 Server 或 RhinoCommon，也不得承载 Rhino business logic。
+- **例外：`MCP_Rhino.Router` 为独立 stdio MCP csproj**，承载每个外部 agent session 的多文档 discovery、selection、backend proxy 及 Offline tool composition。它可依赖 Transport、Offline 和固定版本 MCP SDK，但不得依赖 Server 或 RhinoCommon，也不得直接承载 Rhino business logic。
+- **例外：`MCP_Rhino.Offline` 为独立 library csproj**，在 Rhino 外承载 Rhino3dm 脚本编辑。Application 依赖文件/模型接口，Infrastructure 拥有所有 Rhino3dm 与文件写入细节，Tools 是薄包装，Server registration 从 attributes 生成工具。不得被 Server/RHP 引用。
 - **`Packaging/MCP_Rhino/`** owns Release staging, current-user install/repair/uninstall, owned hashes,
   rollback state, and opt-in client configuration templates. Deployment code must not contain Rhino
   document routing or MCP business logic.

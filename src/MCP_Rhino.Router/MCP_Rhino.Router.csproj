@@ -17,6 +17,16 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MCP_Rhino.Transport\MCP_Rhino.Transport.csproj" />
+    <ProjectReference Include="..\MCP_Rhino.Offline\MCP_Rhino.Offline.csproj" />
+    <ProjectReference Include="..\MCP_Rhino.RhinoWorker\MCP_Rhino.RhinoWorker.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
   </ItemGroup>
 
+  <Target Name="StageRhinoWorkerForBuild" AfterTargets="Build">
+    <ItemGroup><RhinoWorkerFiles Include="$(MSBuildThisFileDirectory)..\MCP_Rhino.RhinoWorker\bin\$(Configuration)\net8.0-windows\**\*" /></ItemGroup>
+    <Copy SourceFiles="@(RhinoWorkerFiles)" DestinationFiles="@(RhinoWorkerFiles->'$(TargetDir)RhinoWorker\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="StageRhinoWorkerForPublish" AfterTargets="Publish">
+    <ItemGroup><PublishedRhinoWorkerFiles Include="$(MSBuildThisFileDirectory)..\MCP_Rhino.RhinoWorker\bin\$(Configuration)\net8.0-windows\**\*" /></ItemGroup>
+    <Copy SourceFiles="@(PublishedRhinoWorkerFiles)" DestinationFiles="@(PublishedRhinoWorkerFiles->'$(PublishDir)RhinoWorker\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
 </Project>

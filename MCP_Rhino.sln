@@ -1,4 +1,4 @@
-Microsoft Visual Studio Solution File, Format Version 12.00
+﻿Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.5.2.0
 MinimumVisualStudioVersion = 10.0.40219.1
@@ -13,6 +13,12 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Project_Test", "Project_Test", "{8C8B1339-3AC2-4D86-B34F-4AE7EC221C84}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RouterProtocolSmoke", "Project_Test\260729_TEST_multi-document-rhino-router\RouterProtocolSmoke\RouterProtocolSmoke.csproj", "{BA63139B-44A7-48ED-9302-EED701188539}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MCP_Rhino.Offline", "src\MCP_Rhino.Offline\MCP_Rhino.Offline.csproj", "{C2E753F1-2812-4BC7-B2DD-42A2F15E1003}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OfflineCopyEditSmoke", "Project_Test\261010_TEST_offline-copy-edit\OfflineCopyEditSmoke.csproj", "{72A84223-0744-42CF-AC32-5135905C8F39}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MCP_Rhino.RhinoWorker", "src\MCP_Rhino.RhinoWorker\MCP_Rhino.RhinoWorker.csproj", "{86CF3C36-0979-4610-8366-A6A55C900CB1}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -36,6 +42,18 @@ Global
 		{BA63139B-44A7-48ED-9302-EED701188539}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{BA63139B-44A7-48ED-9302-EED701188539}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{BA63139B-44A7-48ED-9302-EED701188539}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C2E753F1-2812-4BC7-B2DD-42A2F15E1003}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C2E753F1-2812-4BC7-B2DD-42A2F15E1003}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C2E753F1-2812-4BC7-B2DD-42A2F15E1003}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C2E753F1-2812-4BC7-B2DD-42A2F15E1003}.Release|Any CPU.Build.0 = Release|Any CPU
+		{72A84223-0744-42CF-AC32-5135905C8F39}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{72A84223-0744-42CF-AC32-5135905C8F39}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{72A84223-0744-42CF-AC32-5135905C8F39}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{72A84223-0744-42CF-AC32-5135905C8F39}.Release|Any CPU.Build.0 = Release|Any CPU
+		{86CF3C36-0979-4610-8366-A6A55C900CB1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{86CF3C36-0979-4610-8366-A6A55C900CB1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{86CF3C36-0979-4610-8366-A6A55C900CB1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{86CF3C36-0979-4610-8366-A6A55C900CB1}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -47,5 +65,8 @@ Global
 		{40F1A3B4-65D4-4F4B-98C5-42D46F9B58B7} = {8D05803C-2276-4D30-96E7-050375714526}
 		{E0587FBA-6926-4D37-809D-0B40179B4D79} = {8D05803C-2276-4D30-96E7-050375714526}
 		{BA63139B-44A7-48ED-9302-EED701188539} = {8C8B1339-3AC2-4D86-B34F-4AE7EC221C84}
+		{C2E753F1-2812-4BC7-B2DD-42A2F15E1003} = {8D05803C-2276-4D30-96E7-050375714526}
+		{72A84223-0744-42CF-AC32-5135905C8F39} = {8C8B1339-3AC2-4D86-B34F-4AE7EC221C84}
+		{86CF3C36-0979-4610-8366-A6A55C900CB1} = {8D05803C-2276-4D30-96E7-050375714526}
 	EndGlobalSection
 EndGlobal

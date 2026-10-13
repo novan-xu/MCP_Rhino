@@ -42,7 +42,8 @@ function Set-McpRhinoPluginRegistration(
         $existingFile = Get-ItemProperty -LiteralPath $pluginFileKey -ErrorAction SilentlyContinue
         if (($null -ne $existing -and
              -not [string]::IsNullOrWhiteSpace([string]$existing.Name) -and
-             -not ([string]$existing.Name).Equals('MCP_Rhino', [StringComparison]::OrdinalIgnoreCase)) -or
+             -not ([string]$existing.Name).Equals('MCP_Rhino', [StringComparison]::OrdinalIgnoreCase) -and
+             -not ([string]$existing.Name).Equals('MCP_Rhino.Server', [StringComparison]::OrdinalIgnoreCase)) -or
             ($null -ne $existingFile -and
              -not [string]::IsNullOrWhiteSpace([string]$existingFile.FileName) -and
              ([IO.Path]::GetFileName([string]$existingFile.FileName)) -ne 'MCP_Rhino.Server.rhp')) {
@@ -61,8 +62,8 @@ function Set-McpRhinoPluginRegistration(
     $stringValues = [ordered]@{
         Name = 'MCP_Rhino'
         # Rhino's shorthand registration requires FileName at the plug-in key
-        # root to trigger the first automatic load. Rhino then maintains the
-        # detailed PlugIn\FileName registration used below.
+        # root to trigger the first automatic load. PlugIn\FileName below is
+        # installer-owned and must remain valid after Rhino hydrates the root.
         FileName = $canonicalRhpPath
         EnglishName = 'MCP_Rhino'
         Organization = 'MCP_Rhino'
@@ -84,6 +85,9 @@ function Set-McpRhinoPluginRegistration(
 
     New-Item -Path $pluginFileKey -Force | Out-Null
     New-ItemProperty -LiteralPath $pluginFileKey -Name 'FileName' -Value $canonicalRhpPath -PropertyType String -Force | Out-Null
+    # This product exposes no production Rhino commands. Keep an exact empty
+    # CommandList record so install and subsequent Rhino-load timestamps are observable.
+    New-Item -Path (Join-Path $pluginKey 'CommandList') -Force | Out-Null
 }
 
 function Assert-McpRhinoPluginRegistration(
@@ -103,11 +107,19 @@ function Assert-McpRhinoPluginRegistration(
     if ([int]$registration.LoadMode -ne 1 -or
         [int]$registration.DirectoryInstall -ne 0 -or
         [int]$registration.IsDotNETPlugIn -ne 1 -or
-        -not ([IO.Path]::GetFullPath([string]$registration.FileName)).Equals($canonicalRhpPath, [StringComparison]::OrdinalIgnoreCase) -or
+        (-not [string]::IsNullOrWhiteSpace([string]$registration.FileName) -and
+         -not ([IO.Path]::GetFullPath([string]$registration.FileName)).Equals($canonicalRhpPath, [StringComparison]::OrdinalIgnoreCase)) -or
         -not ([IO.Path]::GetFullPath([string]$pluginFile.FileName)).Equals($canonicalRhpPath, [StringComparison]::OrdinalIgnoreCase)) {
         throw 'The canonical MCP_Rhino Rhino registration is inconsistent with the active package.'
     }
-    foreach ($retiredSubkey in @('CommandList', 'Panels')) {
+    $commandListKey = Join-Path $pluginKey 'CommandList'
+    if (Test-Path -LiteralPath $commandListKey) {
+        $commands = Get-Item -LiteralPath $commandListKey
+        if ($commands.GetValueNames().Count -ne 0 -or $commands.GetSubKeyNames().Count -ne 0) {
+            throw 'Unexpected MCP_Rhino production command registration remains.'
+        }
+    }
+    foreach ($retiredSubkey in @('Panels')) {
         if (Test-Path -LiteralPath (Join-Path $pluginKey $retiredSubkey)) {
             throw "Retired MCP_Rhino registry surface remains: $retiredSubkey"
         }

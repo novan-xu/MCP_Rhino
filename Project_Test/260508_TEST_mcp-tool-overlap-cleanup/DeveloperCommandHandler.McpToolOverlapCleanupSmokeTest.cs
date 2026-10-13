@@ -33,9 +33,14 @@ public sealed partial class DeveloperCommandHandler
         List<ToolInventoryItem> tools = GetToolInventory();
         Dictionary<string, ToolInventoryItem> byName = tools.ToDictionary(item => item.MethodName, StringComparer.Ordinal);
 
-        RequireOverlapCleanup(tools.Count == 169, $"Expected 169 MCP tools after Grasshopper authoring additions, found {tools.Count}.");
+        RequireOverlapCleanup(tools.Count == 176, $"Expected 176 MCP tools after custom scripting, found {tools.Count}.");
 
         RequirePresent(byName, "FilterObjects");
+        RequirePresent(byName, "InspectBlockMembers");
+        RequirePresent(byName, "PreviewRhinoScript");
+        RequirePresent(byName, "ApplyRhinoScript");
+        RequirePresent(byName, "GetRhinoScriptStatus");
+        RequirePresent(byName, "CancelRhinoScript");
         RequirePresent(byName, "GetObjectMetricsByFilter");
         RequirePresent(byName, "GetMassPropertiesByFilter");
         RequirePresent(byName, "GetGeometryFramesByFilter");
@@ -52,6 +57,8 @@ public sealed partial class DeveloperCommandHandler
         RequirePresent(byName, "ApplyCreateBlockDefinitions");
         RequirePresent(byName, "PreviewInsertBlockInstances");
         RequirePresent(byName, "ApplyInsertBlockInstances");
+        RequirePresent(byName, "PreviewStoneWireframeBake");
+        RequirePresent(byName, "ApplyStoneWireframeBake");
         RequirePresent(byName, "InspectTakeoffSources");
         RequirePresent(byName, "PreviewTakeoffSchedule");
         RequirePresent(byName, "ExportTakeoffSchedule");
@@ -75,7 +82,8 @@ public sealed partial class DeveloperCommandHandler
         RequireFamilyCount(tools, "Editing", 8);
         RequireFamilyCount(tools, "File", 3);
         RequireFamilyCount(tools, "Geometry/Architecture", 11);
-        RequireFamilyCount(tools, "Blocks", 14);
+        RequireFamilyCount(tools, "Blocks", 17);
+        RequireFamilyCount(tools, "Scripting", 4);
 
         MethodInfo filterObjects = byName["FilterObjects"].Method;
         RequireOverlapCleanup(
@@ -92,7 +100,7 @@ public sealed partial class DeveloperCommandHandler
             "FindLayerCandidates returns a structured OperationResponse list.");
 
         Console.WriteLine("[OK] MCP tool overlap cleanup smoke verified canonical tools and removed duplicate wrappers.");
-        Console.WriteLine("[OK] MCP tool count=169; removed duplicate wrappers=11.");
+        Console.WriteLine("[OK] MCP tool count=176; removed duplicate wrappers=11.");
     }
 
     private static List<ToolInventoryItem> GetToolInventory()

@@ -62,6 +62,7 @@ public sealed partial class DeveloperCommandHandler
     private readonly RhinoBlockDefinitionService _rhinoBlockDefinitionService;
     private readonly RhinoBlockInspectionService _rhinoBlockInspectionService;
     private readonly BlockLifecycleSkill _blockLifecycleSkill;
+    private readonly StoneWireframeBakeSkill _stoneWireframeBakeSkill;
     private readonly RhinoTakeoffScheduleService _takeoffScheduleService;
     private readonly TakeoffSpreadsheetAgent _takeoffSpreadsheetAgent;
     private readonly RhinoGrasshopperAuthoringService _grasshopperAuthoringService;
@@ -85,6 +86,10 @@ public sealed partial class DeveloperCommandHandler
     partial void RegisterMcpToolSafetyAnnotationHandlers();
     partial void RegisterArchitecturalModelingPrimitivesHandlers();
     partial void RegisterBlockCapabilitiesHandlers();
+    partial void RegisterBlockMemberInspectionHandlers();
+    partial void RegisterLiveCustomScriptsHandlers();
+    partial void RegisterStoneWireframeBakeHandlers();
+    partial void RegisterStoneSurfaceBakeHandlers();
     partial void RegisterMcpSurfaceStructureGovernanceHandlers();
     partial void RegisterDocumentVisualStateToolsHandlers();
     partial void RegisterGeneralPrimitiveCreationToolsHandlers();
@@ -129,6 +134,10 @@ public sealed partial class DeveloperCommandHandler
         RegisterMcpToolSafetyAnnotationHandlers();
         RegisterArchitecturalModelingPrimitivesHandlers();
         RegisterBlockCapabilitiesHandlers();
+        RegisterBlockMemberInspectionHandlers();
+        RegisterLiveCustomScriptsHandlers();
+        RegisterStoneWireframeBakeHandlers();
+        RegisterStoneSurfaceBakeHandlers();
         RegisterMcpSurfaceStructureGovernanceHandlers();
         RegisterDocumentVisualStateToolsHandlers();
         RegisterGeneralPrimitiveCreationToolsHandlers();
@@ -205,6 +214,7 @@ public sealed partial class DeveloperCommandHandler
         RhinoBlockDefinitionService rhinoBlockDefinitionService,
         RhinoBlockInspectionService rhinoBlockInspectionService,
         BlockLifecycleSkill blockLifecycleSkill,
+        StoneWireframeBakeSkill stoneWireframeBakeSkill,
         RhinoTakeoffScheduleService takeoffScheduleService,
         TakeoffSpreadsheetAgent takeoffSpreadsheetAgent,
         RhinoGrasshopperAuthoringService grasshopperAuthoringService)
@@ -256,6 +266,7 @@ public sealed partial class DeveloperCommandHandler
         _rhinoBlockDefinitionService = rhinoBlockDefinitionService;
         _rhinoBlockInspectionService = rhinoBlockInspectionService;
         _blockLifecycleSkill = blockLifecycleSkill;
+        _stoneWireframeBakeSkill = stoneWireframeBakeSkill;
         _takeoffScheduleService = takeoffScheduleService;
         _takeoffSpreadsheetAgent = takeoffSpreadsheetAgent;
         _grasshopperAuthoringService = grasshopperAuthoringService;

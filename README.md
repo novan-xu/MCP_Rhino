@@ -1,12 +1,14 @@
 # MCP_Rhino
 
-让兼容 MCP 的 agent 通过唯一的 Router 连接方式操作正在运行的 Rhino 8 文档：读取几何、筛选图层、创建或修改对象、执行分析与导出。所有 Rhino 写入都进入 Undo 栈，可用 `Ctrl+Z` 回退。
+让兼容 MCP 的 agent 通过唯一的 Router 连接方式操作 Rhino 8 文档：读取几何、筛选图层、创建或修改对象、执行分析与导出。Live 写入进入 Rhino Undo 栈；离线脚本编辑始终输出带明确后缀的新 `.3dm` 副本，绝不覆盖原文件。
 
 ## 项目形态
 
 - [src/MCP_Rhino.Server/](src/MCP_Rhino.Server/)：Rhino 插件，构建产出 `MCP_Rhino.Server.rhp`。Debug 与 Release 使用相同的 Router-only 启动形态，并为每个已保存打开文档发布独立 route endpoint。
 - [src/MCP_Rhino.Transport/](src/MCP_Rhino.Transport/)：Server 与 Router 共享的 BCL-only discovery、descriptor、attestation 与 route protocol。
 - [src/MCP_Rhino.Router/](src/MCP_Rhino.Router/)：唯一 MCP stdio gateway；每个 MCP client session 启动自己的 Router，并独立选择目标 Rhino 文档。
+- [src/MCP_Rhino.Offline/](src/MCP_Rhino.Offline/)：Rhino 外的受限 JavaScript 脚本编辑，使用 Rhino3dm 处理内存模型；不需要 Rhino/Python/Docker 运行。
+- [src/MCP_Rhino.RhinoWorker/](src/MCP_Rhino.RhinoWorker/)：独立 headless Rhino 8 worker，用可信 C# 脚本导入、编辑 DWG/DXF/3dm，并只生成带后缀的 3dm 副本。
 - [src/MCP_Rhino.Server/Tools/](src/MCP_Rhino.Server/Tools/)：几何、编辑、图层、分析、Grasshopper、文件、绘图与工作流等 MCP tools。
 
 项目不再构建、安装或支持 fixed debug pipe、stdio Bridge、Companion、`_Mcpchat` 或 panel-bound MCP transport。
@@ -78,6 +80,59 @@ MCP_Rhino routed document endpoint dispatcher started.
 
 多个 agent 可以同时连接同一批 Rhino 文档，并维持互不影响的选择。Route endpoint 绑定 `RhinoDoc.RuntimeSerialNumber`，不依赖当前前台窗口或 active tab。
 
+### Custom live Rhino scripts
+
+The MCP connection supports trusted synchronous C# in the same explicitly selected open, saved
+document used by other tools. No COM connection, `StartScriptServer`, foreground activation, or
+per-task plug-in is required. Preview with `preview_rhino_script`, execute the returned token with
+`apply_rhino_script`, and poll `get_rhino_script_status`. Repeating apply with the same token does
+not rerun it. `cancel_rhino_script` requests cooperative cancellation.
+
+Example script: `Result = new { doc.Name, Count = doc.Objects.Count };`.
+Globals are `doc`, `Parameters` (parsed JSON object), `Result`, `Log(string)`, `CancellationToken`,
+and `Checkpoint()`. RhinoCommon geometry and document namespaces are imported. Preview compiles
+only; scripts should validate their own model assumptions before edits. Execution owns one Undo
+record and rolls back ordinary document edits on failure. C# is full trust, not a sandbox; external
+side effects cannot be undone. Do not use async/background Rhino work, commands, ActiveDoc,
+manual Undo, or save/close documents. Source-loading directives are unsupported. Time limits are
+cooperative; code that ignores cancellation remains Running until it returns. Tokens/results are
+bounded and belong to the same backend connection. Existing Router routing rules still apply:
+untitled documents must first be saved, and duplicate paths require explicit session selection.
+
+### Offline script editing
+
+Offline tools are available through the same Router even when Rhino is closed:
+
+1. `rhino_offline_inspect_document(filePath)` reads saved disk state and returns scripting help, object IDs, layers, and metadata (objects are paged).
+2. `rhino_offline_preview_script(filePath, script)` executes a JavaScript modeling script in memory and returns a one-use preview token, counts, and log.
+3. `rhino_offline_apply_script(filePath, previewToken)` publishes the exact preview as `Model_YYYYMMDD_HHMMSS.3dm` using local date and 24-hour time. Same-second collisions wait for an available second; existing files are never overwritten. Use the returned `outputPath` for further work without accumulating suffixes.
+
+```javascript
+for (let offset = 0; ; offset += 200) {
+    const page = model.objects(offset, 200);
+    for (const object of page.items) {
+        if (!object.isDefinitionGeometry && object.name.startsWith('Panel')) {
+            model.setAttributes([object.id], {
+                color: '#4488CC', userText: { Reviewed: 'Yes' }
+            });
+        }
+    }
+    if (offset + page.items.length >= page.total) break;
+}
+model.log('Panel review metadata added');
+```
+
+Scripts support loops/conditions, object attributes and user text, document user text, layer creation/editing, affine transforms, object deletion, and point/line/polyline/sphere/box creation. They have no filesystem, process, CLR, network or module access. Full Rhino modeling, Grasshopper and viewport operations remain live-only. This is a modeling script runtime, not arbitrary Python/C# execution.
+
+The source is always read-only. Every apply creates another copy; there is no overwrite/output-path option. A changed source invalidates the preview. Tokens last ten minutes in the same Router session. Known open documents must use live tools; offline reads cannot see unsaved changes in undiscovered sessions. Source/output limit: 256 MiB. See [offline validation and examples](Project_Test/261010_TEST_offline-copy-edit/README.md).
+
+DWG/DXF and native Rhino operations use a separate script workflow, requiring licensed Rhino 8 on Windows:
+
+1. `rhino_offline_preview_rhino_script(filePath, script, modelUnits)` imports a temporary snapshot in a headless Rhino worker. An empty script converts only. C# uses `doc` (RhinoDoc), `Parameters` (JSON), `Result` (JSON-serializable), and `Log(string)`.
+2. `rhino_offline_apply_rhino_script(filePath, previewToken)` saves the exact result to a new suffixed sibling `.3dm`.
+
+For example, preview a DWG with `modelUnits="Inches"` and `script="doc.Objects.AddPoint(new Point3d(0,0,4.46645));"`, then apply its token. A trusted `.cs`/`.csx` library can provide one named class through `libraryPath` and `libraryType`. C# runs with full trust; it is not the restricted JavaScript interpreter. Scripts must be synchronous; timeout is 1–600 seconds (default 120). Original input is read-locked, and publication always creates a copy. RhinoCommon stays isolated from Router's Rhino3dm process. See [native DWG validation](Project_Test/261010_TEST_offline-rhino-dwg/README.md).
+
 ### Grasshopper authoring
 
 Grasshopper 1 tools use a second explicit target: after selecting the Rhino document through the
@@ -128,7 +183,7 @@ dotnet build .\MCP_Rhino.sln -c Release
 
 ## 架构与指南
 
-- [Project_Guides/MCP_Rhino Architecture.md](Project_Guides/MCP_Rhino%20Architecture.md)：目录归属、Router-only transport、Live Only 执行模式与安全契约。
+- [Project_Guides/MCP_Rhino Architecture.md](Project_Guides/MCP_Rhino%20Architecture.md)：目录归属、Router-only transport、Live 与 explicit offline script 执行模式及安全契约。
 - [Runtime_Workflow/MCP_Rhino Workflow.md](Runtime_Workflow/MCP_Rhino%20Workflow.md)：运行时能力路由与 gap handling。
 - [Project_Guides/MCP_Rhino Plan Log.md](Project_Guides/MCP_Rhino%20Plan%20Log.md)：PLAN / EXET / TEST 三件套规则。
 
