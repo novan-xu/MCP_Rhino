@@ -40,7 +40,17 @@ Local raw inventories, hashes, compile snapshots, and build/protocol logs are un
 `.validation/traceability-and-archive/`. This record and the manifest retain the durable summary.
 No new tests or placeholder TEST folder were needed. No installation, registry mutation, or live
 Rhino modeling was performed. The archive checks do not claim to complete the retained work's
-missing acceptance tests. Branch: `codex/traceability-and-archive`; no commit or PR created.
+missing acceptance tests. Branch: `codex/traceability-and-archive`.
+
+## GitHub publication — 2026-10-13
+
+Published the policy changes, script-runtime-routing records, and archive batch in
+[PR #13](https://github.com/novan-xu/MCP_Rhino/pull/13), based on source commit
+`cb4f346fd4c983dc0d194bb79ce29ef829bc30d3`. The user requested upload and merge.
+The pre-existing `.gitignore` modification is excluded. The GitHub connector rejected PR creation
+with HTTP 403; the portable GitHub CLI created the PR using existing repository authentication.
+The PR and Git history carry the eventual merge outcome; no additional runtime validation is
+claimed by this publication note.
 
 ## Rollback
 
