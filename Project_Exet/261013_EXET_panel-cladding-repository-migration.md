@@ -71,3 +71,12 @@ and Release with zero warnings/errors and reran its compiled identity check.
 All 97 extracted production, packaging and design Git blobs remain byte-identical
 to the original commit. The pre-existing `.gitignore` diff was restored unchanged
 on top of the upstream ignore addition, and remains uncommitted.
+
+## Completed publication
+
+MCP cleanup was merged through [PR #12](https://github.com/novan-xu/MCP_Rhino/pull/12)
+as `b4b939d1dbfb39ac39864c692e1ef267da507119`. The integrated MCP Debug/Release builds
+and compiled identity verification passed before merge. The PanelCladding remote
+reports PRIVATE, its default branch is master, and local/remote commits matched.
+Both checkouts are on master; MCP's original uncommitted `.gitignore` edits remain.
+The temporary migration branches were removed after successful publication.
