@@ -1,4 +1,4 @@
-﻿# MCP_Rhino Architecture Guides
+# MCP_Rhino Architecture Guides
 
 ## 目标
 
@@ -251,12 +251,9 @@ Rhino 侧的能力只跑一种模式：经 RhinoCommon 操作运行中的 `Rhino
 - **`Packaging/MCP_Rhino/`** owns Release staging, current-user install/repair/uninstall, owned hashes,
   rollback state, and opt-in client configuration templates. Deployment code must not contain Rhino
   document routing or MCP business logic.
-- **`Packaging/PanelCladdingEditor/`** owns the standalone editor's Release staging,
-  current-user install/repair/uninstall, owned hashes, and Package Manager migration. Its RHP must be
-  installed under `%LOCALAPPDATA%\PanelCladdingEditor\plugin\<version>` and registered once under
-  HKCU with `DirectoryInstall=0`; neither `PanelCladdingEditor` nor
-  `BayHealthPanelCladdingEditor` may remain under Rhino Package Manager discovery. The plug-in loads
-  at startup so its commands are registered before invocation.
+- PanelCladdingEditor source, packaging and product records moved to the independent
+  `C:\Projects\PanelCladding` repository on 2026-10-13
+  (`https://github.com/novan-xu/PanelCladding`). MCP_Rhino does not build or package it.
 - 任何新增功能都必须先判断归属，再决定目录位置。
 - 如果某个 Tool 开始承担复杂流程，应考虑将流程下沉到 `Application/` 或升级为 `Skill`。
 - 如果某个 Skill 开始出现目标判断与动态策略，应考虑升级为 `Agent`。

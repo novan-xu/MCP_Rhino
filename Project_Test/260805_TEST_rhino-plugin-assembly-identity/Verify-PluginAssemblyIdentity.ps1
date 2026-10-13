@@ -3,7 +3,7 @@ param(
     [ValidateSet('Debug', 'Release')]
     [string] $Configuration = 'Release',
 
-    # Optional explicit plug-in files, in product order (MCP_Rhino, PanelCladdingEditor).
+    # Optional explicit plug-in file for this repository's product.
     # Use this to check packaged bundle output instead of repository build output.
     [string[]] $PluginPath,
 
@@ -21,12 +21,6 @@ $products = @(
         Project  = Join-Path $repoRoot 'src\MCP_Rhino.Server\MCP_Rhino.Server.csproj'
         Rhp      = Join-Path $repoRoot "src\MCP_Rhino.Server\bin\$Configuration\net8.0\MCP_Rhino.Server.rhp"
         Manifest = Join-Path $repoRoot 'Packaging\MCP_Rhino\package-manifest.json'
-    },
-    [pscustomobject]@{
-        Name     = 'PanelCladdingEditor'
-        Project  = Join-Path $repoRoot 'src\PanelCladdingEditor\PanelCladdingEditor.csproj'
-        Rhp      = Join-Path $repoRoot "src\PanelCladdingEditor\bin\$Configuration\net8.0-windows\PanelCladdingEditor.rhp"
-        Manifest = Join-Path $repoRoot 'Packaging\PanelCladdingEditor\package-manifest.json'
     }
 )
 
@@ -39,8 +33,7 @@ if ($PluginPath) {
     }
 }
 elseif (-not $SkipBuild) {
-    # A solution build leaves PanelCladdingEditor's output as the test-host .dll, so rebuild each
-    # plug-in project on its own to restore the .rhp that Rhino actually loads.
+    # Build the product directly to verify the RHP that Rhino actually loads.
     foreach ($product in $products) {
         & dotnet build $product.Project -c $Configuration --nologo | Out-Host
         if ($LASTEXITCODE -ne 0) { throw "$($product.Name) RHP build failed." }

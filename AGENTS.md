@@ -1,4 +1,4 @@
-﻿# MCP_Rhino Agents Entry
+# MCP_Rhino Agents Entry
 
 Before taking any action in this repository, read this file first.
 Do not skip it.
@@ -126,7 +126,7 @@ portable GitHub CLI. For commit / push / pull-request / merge requests on this l
   treat it as a required gate, not an optional check. When a plug-in does not load, compare the
   last-write times of the plug-in key root, `PlugIn`, and `CommandList` before assuming an assembly,
   identity, or packaging fault. Evidence and reproduction:
-  `Project_Exet/260826_EXET_panel-cladding-plugin-registration.md`.
+  [PanelCladding registration record](https://github.com/novan-xu/PanelCladding/blob/master/Project_Exet/260826_EXET_panel-cladding-plugin-registration.md).
 - **Production registry attestation memo:** Installer success, `-Mode Validate`, and registry
   readback from the same agent execution context are not proof of a host-persistent registration;
   that context may virtualize registry writes while filesystem moves persist. If host-persistent

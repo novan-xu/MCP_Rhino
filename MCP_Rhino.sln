@@ -1,4 +1,4 @@
-﻿Microsoft Visual Studio Solution File, Format Version 12.00
+Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.5.2.0
 MinimumVisualStudioVersion = 10.0.40219.1
@@ -13,10 +13,6 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Project_Test", "Project_Test", "{8C8B1339-3AC2-4D86-B34F-4AE7EC221C84}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RouterProtocolSmoke", "Project_Test\260729_TEST_multi-document-rhino-router\RouterProtocolSmoke\RouterProtocolSmoke.csproj", "{BA63139B-44A7-48ED-9302-EED701188539}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PanelCladdingEditor", "src\PanelCladdingEditor\PanelCladdingEditor.csproj", "{F4DFF24D-864B-4A34-980A-3AD4F1B4647A}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PanelCladdingEditorSmoke", "Project_Test\260804_TEST_standalone-panel-cladding-editor\PanelCladdingEditorSmoke.csproj", "{302470DF-9A2D-4405-9E1D-722ABB9070F0}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -40,14 +36,6 @@ Global
 		{BA63139B-44A7-48ED-9302-EED701188539}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{BA63139B-44A7-48ED-9302-EED701188539}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{BA63139B-44A7-48ED-9302-EED701188539}.Release|Any CPU.Build.0 = Release|Any CPU
-		{F4DFF24D-864B-4A34-980A-3AD4F1B4647A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{F4DFF24D-864B-4A34-980A-3AD4F1B4647A}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{F4DFF24D-864B-4A34-980A-3AD4F1B4647A}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{F4DFF24D-864B-4A34-980A-3AD4F1B4647A}.Release|Any CPU.Build.0 = Release|Any CPU
-		{302470DF-9A2D-4405-9E1D-722ABB9070F0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{302470DF-9A2D-4405-9E1D-722ABB9070F0}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{302470DF-9A2D-4405-9E1D-722ABB9070F0}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{302470DF-9A2D-4405-9E1D-722ABB9070F0}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -59,7 +47,5 @@ Global
 		{40F1A3B4-65D4-4F4B-98C5-42D46F9B58B7} = {8D05803C-2276-4D30-96E7-050375714526}
 		{E0587FBA-6926-4D37-809D-0B40179B4D79} = {8D05803C-2276-4D30-96E7-050375714526}
 		{BA63139B-44A7-48ED-9302-EED701188539} = {8C8B1339-3AC2-4D86-B34F-4AE7EC221C84}
-		{F4DFF24D-864B-4A34-980A-3AD4F1B4647A} = {8D05803C-2276-4D30-96E7-050375714526}
-		{302470DF-9A2D-4405-9E1D-722ABB9070F0} = {8C8B1339-3AC2-4D86-B34F-4AE7EC221C84}
 	EndGlobalSection
 EndGlobal
