@@ -19,6 +19,6 @@ try {
     }
     & dotnet run --project (Join-Path $PSScriptRoot 'NativeChecks.csproj') -c Release
     if ($LASTEXITCODE -ne 0) { throw 'Native script regression failed.' }
-    & dotnet run --project (Join-Path $repo 'Project_Test\260729_TEST_multi-document-rhino-router\RouterProtocolSmoke\RouterProtocolSmoke.csproj') -c Release
+    & dotnet run --project (Join-Path $repo 'Project_Archive\Project_Test\260729_TEST_multi-document-rhino-router\RouterProtocolSmoke\RouterProtocolSmoke.csproj') -c Release
     if ($LASTEXITCODE -ne 0) { throw 'Router protocol regression failed.' }
 } finally { Stop-Transcript }

@@ -1,19 +1,10 @@
-# Project Plan Archive
+# Project_Plan
 
-This folder stores plan summary documents for successfully implemented capabilities.
+Active plans for substantial capability or architecture changes. Write the plan before implementation.
 
-## Naming Convention
+- Name: `YYMMDD_PLAN_<capability-name>.md`.
+- Link the matching EXET and meaningful validation evidence when the work is executed.
+- Small changes use a concise EXET without a separate PLAN; runtime tasks do not require construction records.
+- Completed eligible work moves to `Project_Archive/Project_Plan/` with its related records and tests.
 
-- Format: `YYMMDD_capability-name.md`
-- Use lowercase English words only
-- Separate words with hyphens
-
-## Suggested Sections
-
-1. Background
-2. Goal
-3. Architecture Mapping
-4. Key Design Decisions
-5. Files Added or Modified
-6. Usage
-7. Future Extensions
+The canonical requirements are in [the change-record guide](../Project_Guides/MCP_Rhino%20Plan%20Log.md).

@@ -18,6 +18,7 @@ public sealed partial class DeveloperCommandHandler
             string root = FindMultiDocumentRouterRepositoryRoot();
             string project = Path.Combine(
                 root,
+                "Project_Archive",
                 "Project_Test",
                 "260729_TEST_multi-document-rhino-router",
                 "RouterProtocolSmoke",

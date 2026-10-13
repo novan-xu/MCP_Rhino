@@ -19,7 +19,7 @@ This test validates the stdio-to-named-pipe bridge probe used for MCP_Rhino clie
 ## Command
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File Project_Test\260508_TEST_bridge-handshake-probe\run_bridge_handshake_validation.ps1 `
+powershell -ExecutionPolicy Bypass -File Project_Archive/Project_Test/260508_TEST_bridge-handshake-probe\run_bridge_handshake_validation.ps1 `
   -DocumentPath "<LOCAL_TEST_MODEL_PATH>"
 ```
 

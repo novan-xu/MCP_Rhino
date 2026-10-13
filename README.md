@@ -175,8 +175,8 @@ Mutation 断线后不会自动重放；结果不确定时返回 `MUTATION_OUTCOM
 ## 测试
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File Project_Test\260804_TEST_router-only-transport\RouterOnlyTransportSmoke.ps1
-dotnet run --project Project_Test\260729_TEST_multi-document-rhino-router\RouterProtocolSmoke\RouterProtocolSmoke.csproj -c Debug
+powershell -ExecutionPolicy Bypass -File Project_Archive\Project_Test\260804_TEST_router-only-transport\RouterOnlyTransportSmoke.ps1
+dotnet run --project Project_Archive\Project_Test\260729_TEST_multi-document-rhino-router\RouterProtocolSmoke\RouterProtocolSmoke.csproj -c Debug
 dotnet build .\MCP_Rhino.sln -c Debug
 dotnet build .\MCP_Rhino.sln -c Release
 ```
@@ -185,7 +185,7 @@ dotnet build .\MCP_Rhino.sln -c Release
 
 - [Project_Guides/MCP_Rhino Architecture.md](Project_Guides/MCP_Rhino%20Architecture.md)：目录归属、Router-only transport、Live 与 explicit offline script 执行模式及安全契约。
 - [Runtime_Workflow/MCP_Rhino Workflow.md](Runtime_Workflow/MCP_Rhino%20Workflow.md)：运行时能力路由与 gap handling。
-- [Project_Guides/MCP_Rhino Plan Log.md](Project_Guides/MCP_Rhino%20Plan%20Log.md)：PLAN / EXET / TEST 三件套规则。
+- [Project_Guides/MCP_Rhino Plan Log.md](Project_Guides/MCP_Rhino%20Plan%20Log.md)：按改动规模选择完整记录或单份 EXET，复用测试证据，并归档已完成工作。
 
 ## License
 

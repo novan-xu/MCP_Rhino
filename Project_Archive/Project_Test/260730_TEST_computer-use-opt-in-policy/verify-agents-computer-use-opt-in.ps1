@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 
-$repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+$repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $agentsPath = Join-Path $repositoryRoot 'AGENTS.md'
 $content = [System.IO.File]::ReadAllText($agentsPath)
 

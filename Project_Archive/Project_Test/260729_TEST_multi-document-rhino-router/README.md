@@ -3,7 +3,7 @@
 Run the deterministic protocol smoke without Rhino:
 
 ```powershell
-dotnet run --project Project_Test/260729_TEST_multi-document-rhino-router/RouterProtocolSmoke/RouterProtocolSmoke.csproj -c Debug
+dotnet run --project Project_Archive/Project_Test/260729_TEST_multi-document-rhino-router/RouterProtocolSmoke/RouterProtocolSmoke.csproj -c Debug
 ```
 
 It starts concurrent fake current-user named-pipe MCP endpoints and validates pagination, private

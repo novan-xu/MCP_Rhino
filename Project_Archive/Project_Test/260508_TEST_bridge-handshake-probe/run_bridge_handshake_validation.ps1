@@ -6,7 +6,7 @@ param(
 )
 
 if ([string]::IsNullOrWhiteSpace($RepoRoot)) {
-    $RepoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..")).Path
+    $RepoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..\..")).Path
 }
 
 $probe = Join-Path $RepoRoot "Project_Archive\Project_Test\260422_TEST_mcp-client-integration\samples\handshake_probe.ps1"

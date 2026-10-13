@@ -1,108 +1,153 @@
-﻿# MCP_Rhino Plan Log Guides
+# MCP_Rhino Change Records And Archive Guide
 
-## 目标
+## Purpose
 
-本指南用于约束 MCP_Rhino 项目每一次能力演进的计划、执行、测试产物沉淀方式，保证
-"规划 → 执行 → 测试"三份产物结构一致、可追溯、可复核。
+Keep enough durable evidence for a later agent to understand what changed, why, what was verified,
+and what remains. Match the record size to the work; do not require three separate artifacts for
+every task. This guide owns the recordkeeping rules referenced by AGENTS.md and the runtime workflow.
 
-## 命名约定（三份产物共用）
+## Choose the recordkeeping level
 
-每次能力演进必须同时产出三份产物，分别沉淀在三个根目录下：
+| Work | Required record |
+| --- | --- |
+| Substantial capability or architecture change | PLAN before implementation, EXET after execution, and meaningful validation. Create a matching TEST folder only for new standalone validation assets; otherwise link existing tests and results. |
+| Small fix, documentation edit, narrow refactor, or routine housekeeping | One concise EXET record. No separate PLAN or placeholder TEST folder. Add or update real tests only where the change warrants them. |
+| Routine Rhino task or ad hoc script using existing supported runners | Runtime activity history and useful result evidence in the task response or actual output artifacts. No construction PLAN, EXET, or TEST set. |
 
-| 产物 | 根目录 | 形态 | 命名格式 |
-| --- | --- | --- | --- |
-| 规划文件 | `Project_Plan/` | `.md` | `YYMMDD_PLAN_<capability-name>.md` |
-| 执行报告 | `Project_Exet/` | `.md` | `YYMMDD_EXET_<capability-name>.md` |
-| 测试文件夹 | `Project_Test/` | 目录 | `YYMMDD_TEST_<capability-name>/` |
+Substantial work includes new tool/skill/agent families, changed public contracts, new execution
+modes, transport or document-routing changes, broad refactors, and changes to installation or
+rollback behavior. Small means a bounded change with understood behavior and a straightforward
+rollback; line count alone does not decide the level. If a small change grows into substantial
+work, write a PLAN before the expanded implementation and link the existing record.
 
-**具体指南：**
+An explicit user instruction to implement the repository change authorizes the necessary planning;
+do not ask again merely to create its record. A runtime gap still requires explicit confirmation
+before switching to construction.
 
-- `YYMMDD` 为能力创建当日日期（6 位数字，无分隔符），三份产物必须相同。
-- 前缀 `PLAN` / `EXET` / `TEST` 全部大写，且用 `_` 与日期、能力名隔开。
-- `<capability-name>` 全小写英文，多个单词之间用 `-` 连接，禁止中文、空格、下划线或其他不稳定字符；应尽量简短、精炼。
-- 同一能力的三份产物必须共享相同的 `YYMMDD` 与 `<capability-name>`，仅中间前缀不同。
+The level changes documentation requirements, not validation requirements. Required Debug/Release
+builds, MCP safety checks, plug-in identity checks, and installation attestation remain governed by
+the Architecture guide. Report failed or incomplete validation honestly; do not mark the work
+complete to satisfy a record template.
 
-**示例（以 `geometry-analysis-tools` 能力于 2026-04-22 立项为例）：**
+## Names and locations
 
-- `Project_Plan/260422_PLAN_geometry-analysis-tools.md`
-- `Project_Exet/260422_EXET_geometry-analysis-tools.md`
-- `Project_Test/260422_TEST_geometry-analysis-tools/`
+| Artifact | Active location | Name |
+| --- | --- | --- |
+| Plan, when required | Project_Plan/ | YYMMDD_PLAN_<capability-name>.md |
+| Execution or lightweight change record | Project_Exet/ | YYMMDD_EXET_<capability-name>.md |
+| New standalone test assets, when needed | Project_Test/ | YYMMDD_TEST_<capability-name>/ |
 
-## 能力规划文档沉淀指南
+Use the work item's creation date and a short lowercase English name separated by hyphens.
+Artifacts for the same work item share that date/name. Append follow-up results to the existing
+record rather than starting another record for each retry. Include the actual execution and
+follow-up dates inside EXET; filename dates do not prove archive eligibility.
 
-- 在项目根目录维护 `Project_Plan/` 目录，用于存放每次成功新增能力之前的计划总结文档。
-- 当用户要求规划某个新能力，并且该能力随后 Execute 实现前，必须先补写一份对应的 Markdown 文档到 `Project_Plan/`，再进行实际操作。
-- 文档命名遵循 §命名约定 中的 `YYMMDD_PLAN_<capability-name>.md`。
-- 每份文档至少应包含：
-  - **背景**
-  - **目标**
-  - **架构归属**
-  - **关键设计**
-  - **涉及文件**
-  - **使用方式**
-  - **验收标准**
-  - **风险与回退方案**
-  - **后续扩展方向**
-- Plan 定稿后若在 Execute 阶段发现偏差，原则上**不回写** Plan 文档，而是在对应 EXET 文档的「与计划的偏差」章节记录；仅当偏差大到需要重新评审时才更新 Plan，并在文末追加 `## 修订记录（YYYY-MM-DD）`。
-- 该文档沉淀步骤视为"能力完成"的一部分，不应省略。
+Keep existing historical names and records. Do not retroactively remove PLAN/TEST artifacts or
+relabel an incomplete legacy set as lightweight just to make it eligible for archive.
 
-## 执行文档沉淀指南
+## Lightweight EXET
 
-- 在项目根目录维护 `Project_Exet/` 目录，用于存放每次能力落地后的执行总结文档。
-- 每一次依据 `Project_Plan/` 中计划文档进行的 Execute 流程，在代码与测试通过之后，必须补写一份对应的 Markdown 文档到 `Project_Exet/`。
-- 文档命名遵循 §命名约定 中的 `YYMMDD_EXET_<capability-name>.md`，与对应 PLAN 文档共享同一 `YYMMDD` 与 `<capability-name>`。
-- 每份文档至少应包含以下章节：
-  - **对应计划**：链接到 `Project_Plan/` 中的计划文档路径，并注明执行日期。
-  - **关联产物**：指向本次执行对应的测试文件夹路径（`Project_Test/YYMMDD_TEST_<capability-name>/`），以及相关 commit hash / PR 链接（若有）。
-  - **执行结果 / 实际落地范围**
-  - **与计划的偏差**
-  - **施工中发现并修复的问题**
-  - **测试记录**：构建命令、smoke / 集成测试命令、关键断言输出、使用的测试文件路径、最终对象数等可复核信息。
-  - **验收判据对齐**
-  - **回退验证**
-  - **当前遗留项**
-  - **结论**
-- 允许同一份 EXET 文档追加多轮复检结果，但应原地追加，不新开同主题文档。
-- 执行文档中的路径、命令、退出码、对象数等核查信息应与仓库真实运行结果一致；禁止填写臆测值或占位符。
-- 未沉淀 EXET 文档的 Execute 不视为闭环。
+State "Record level: lightweight", the execution date, and status. One short document should cover:
 
-## 测试文件夹生成指南
+- Reason and scope: what problem or request prompted the work.
+- Changes: what changed and which files or artifacts matter.
+- Validation: commands/checks and actual outcomes, or why no execution test was appropriate.
+- Remaining work and limits: unresolved issues and what was not verified.
+- Related evidence: commit/PR links when available, existing tests, output paths, or archive manifest.
+- Rollback notes when reverting is not obvious.
 
-- 在项目根目录维护 `Project_Test/` 目录，用于存放每次能力落地所需的测试代码、测试数据、smoke 脚本等产物。
-- 在实施 PLAN 过程中需要新增运行所需文件来验证功能时，把相关文件添加到对应的 test 子文件夹中，而不是散落在仓库其他位置。
-- 测试文件夹命名遵循 §命名约定 中的 `YYMMDD_TEST_<capability-name>/`，与对应 PLAN / EXET 文档共享同一 `YYMMDD` 与 `<capability-name>`。
-- 文件夹内建议包含（按实际需要裁剪）：
-  - **测试代码**：`*.cs` 集成 / smoke 测试源文件，或独立脚本。
-  - **测试数据**：`.3dm` fixture 只放在被 Git 忽略的 `Runtime_Test/local/`，文档使用匿名相对路径；JSON 请求样例与不含本机/项目元数据的参考输出可保留。
-  - **README.md（可选）**：说明运行命令、预期输出、依赖的 Rhino / MCP 环境。
-- 测试文件夹需在对应 EXET 文档的「关联产物」与「测试记录」章节被显式引用，形成 `PLAN → TEST → EXET` 的闭环。
-- 测试产物默认保留在仓库中，用于回归复查；若确认某份测试已被正式集成测试覆盖且不再需要独立留档，可在 EXET 文档中标注后整体删除该测试文件夹。
-- When construction work changes the MCP server, Rhino plugin host, Router compatibility, tool registration, route endpoint lifecycle, or document-session routing, the TEST / EXET record must include both Debug and Release plugin validation. Prefer `dotnet build .\MCP_Rhino.sln -c Debug` and `dotnet build .\MCP_Rhino.sln -c Release`; a narrower Server project build is acceptable only when the EXET explains why solution-level validation was unnecessary.
+These can be short paragraphs or bullets; separate headings for every field are unnecessary.
+Do not create empty test folders, duplicate existing tests, or write tests that only restate the
+implementation to complete a document checklist.
 
-## 完成产物归档指南
+## Substantial changes: PLAN and EXET
 
-- 在项目根目录维护 `Project_Archive/`，并按产物类型分为：
-  - `Project_Archive/Project_Plan/`
-  - `Project_Archive/Project_Exet/`
-  - `Project_Archive/Project_Test/`
-- 当某个能力已经成功执行，且距离对应 EXET 文档中的执行日期已经超过三天，可将对应三件套从活动目录移动到归档目录。
-- 归档时必须同时移动同一 `YYMMDD` 与 `<capability-name>` 的三份产物：
-  - `Project_Plan/YYMMDD_PLAN_<capability-name>.md` → `Project_Archive/Project_Plan/YYMMDD_PLAN_<capability-name>.md`
-  - `Project_Exet/YYMMDD_EXET_<capability-name>.md` → `Project_Archive/Project_Exet/YYMMDD_EXET_<capability-name>.md`
-  - `Project_Test/YYMMDD_TEST_<capability-name>/` → `Project_Archive/Project_Test/YYMMDD_TEST_<capability-name>/`
-- 保留原始文件名 / 文件夹名，不因归档改名。
-- 不归档以下内容：
-  - 尚未执行或缺少 EXET 的计划
-  - 执行失败、结论未闭环、仍有阻塞遗留项的能力
-  - 三天内仍可能继续复检或修订的近期能力
-  - 缺少匹配 PLAN / EXET / TEST 任一产物的孤立文件
-  - `README.md` 等目录说明文件
-- 归档后的 EXET 内部链接可以保留为历史路径；只有在该文档被重新编辑时才需要顺手修正为归档路径。
-- 当前 `MCP_Rhino.Server` 默认编译活动 `Project_Test/**/*.cs` 与已归档 `Project_Archive/Project_Test/**/*.cs` 中的 smoke 注册代码，以保证历史 Rhino smoke command / CLI slug 在移动到归档后仍可构建。只有当某项 capability 已在新的 PLAN / EXET 中被明确退役、其生产类型已删除且旧 smoke 无法再代表受支持行为时，才可按精确 TEST 文件夹路径从编译中排除；禁止用宽泛 glob 静默停编其他历史 smoke。不要把生产实现代码放进这两个测试根目录。
+PLAN is written before implementation and covers the background, goal, architecture ownership,
+key design, affected files, usage, acceptance criteria, risks, and rollback. Include future
+extensions only when useful. Keep it proportional to the decision being made.
+
+After execution, EXET records "Record level: full", execution date, and status, and links the PLAN.
+It covers the actual scope, meaningful deviations/issues, validation evidence, acceptance outcome,
+rollback status, and remaining work. Link the matching TEST folder when present; otherwise identify
+the existing test coverage and where results are recorded. Do not copy the PLAN into EXET.
+
+Record deviations in EXET rather than rewriting the original plan. If a material scope change
+requires a revised plan, append a dated revision note. Failed/partial attempts can and should be
+recorded; only a successfully validated result may be described as complete. Paths, commands,
+exit codes, counts, and claims must agree with actual evidence.
+
+## Test assets and evidence
+
+- Prefer updating an existing test suite when it owns the behavior. Create a matching Project_Test
+  folder only for new standalone smoke code, fixture descriptions, scripts, or useful validation
+  evidence. Do not create a README solely to make a third artifact exist.
+- Link tests and results from EXET, including the command, relevant assertion/outcome, and limits.
+  A documentation-only change can be validated by focused review and diff checks without a build.
+- Keep .3dm fixtures under ignored Runtime_Test/local/; use anonymous repository-relative fixture
+  paths in records. Sanitized JSON examples and useful non-sensitive outputs may be retained.
+- Preserve real regression assets. Remove a redundant standalone suite only when EXET identifies
+  its replacement coverage and explains why it is no longer needed.
+- Changes to the MCP server, Rhino host, Router compatibility, tool registration, endpoint lifecycle,
+  or document routing require Debug and Release validation. Prefer
+  dotnet build .\MCP_Rhino.sln -c Debug and dotnet build .\MCP_Rhino.sln -c Release;
+  explain any narrower project-level substitute in EXET.
+- For runtime history, follow Runtime_Workflow's AppendActivityLogTool contract. This policy does
+  not add parameters, results, or script bodies to its minimal activity-log schema.
+
+## Archive completed work
+
+Archive into the same artifact roots under Project_Archive/. Preserve each original filename and
+folder name. Archive records and any supporting tests for a work item together:
+
+- Full/legacy set: move its PLAN, EXET, and existing TEST assets together. A full record may
+  explicitly link existing test coverage instead of owning a TEST folder. Missing required
+  companions or unclear coverage block archival.
+- Lightweight set: move its EXET and any tests it actually owns. The documented absence of a PLAN
+  or separate TEST folder is intentional, not an unmatched set.
+- Shared test suites remain with their owning work item; do not duplicate or move them merely
+  because another EXET references them.
+
+Eligibility must be established by reading EXET, including later addenda, rather than by filename
+or a keyword alone. Require successful completion, no unresolved required acceptance work, and
+more than three days since the execution date. Also retain work with execution, revalidation,
+publication, or revisions in the last three days. Use the user's current date; if only a date is
+known, require a calendar-date difference greater than three.
+
+Do not archive incomplete, failed, blocked, current, still-active, or ambiguous work, directory
+READMEs, or legacy sets missing required companions. Clearly identified future enhancements or
+optional checks do not by themselves make a completed scope incomplete. Later supersession does
+not turn a failed attempt into a successful one.
+
+Before moving:
+
+1. Record the selected work items, completion evidence, execution dates, and reasons for retaining
+   other older work in a manifest linked from this task's EXET.
+2. Check exact source/destination paths stay inside this repository, all required companions exist,
+   and destinations do not already exist. Refuse overwrite or directory merging.
+3. Review build inputs, solution/project references, script root discovery, and active links that
+   depend on moved paths. Preserve ignored local test assets; do not delete them as archive cleanup.
+
+After moving:
+
+- Verify the entire selected set arrived intact (file inventory/hashes), preserving names and
+  recording any necessary path-only repairs separately.
+- Update active documentation and executable references so tests remain discoverable/runnable.
+  Historical prose may retain historical paths; when editing a historical record, repair its links.
+- Preserve the Server's active and archived test compilation globs and exact exclusions. Retired
+  suites stay excluded, standalone test projects stay outside the Server compile, and supported
+  smoke tests remain included. Never use a broad exclusion to hide an archive-induced build error.
+- Validate affected builds and focused tests; record results and actual limitations in EXET.
+- If a move fails partway, restore the moved members from the manifest before reporting that work
+  item as archived. Never report a partial set as successfully archived.
+
+The Server compiles both Project_Test/**/*.cs and Project_Archive/Project_Test/**/*.cs.
+Production implementation must not live in either test root. Excluding an additional retired suite
+still requires a record explaining the retired capability and why its smoke no longer represents
+supported behavior.
 
 ## Live Smoke CLI 入口约定
 
-每次能力演进的 live smoke 必须以 **唯一** 的 CLI slug 注册到 `DeveloperCommandHandler`，避免不同 Plan 之间互相抢占入口或重复注册。
+需要新增的 live smoke 必须以 **唯一** 的 CLI slug 注册到 `DeveloperCommandHandler`，避免不同 Plan 之间互相抢占入口或重复注册。
 
 - **capability-name 与 slug 分离**：
   - capability-name 用于 Plan / EXET / TEST 产物命名，例如 `geometry-analysis-tools`。
