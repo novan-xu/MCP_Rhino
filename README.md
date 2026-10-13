@@ -190,3 +190,11 @@ dotnet build .\MCP_Rhino.sln -c Release
 ## License
 
 内部项目，暂无公开 license。
+
+## Panel cladding repository
+
+The standalone PanelCladdingEditor plug-in moved to
+[novan-xu/PanelCladding](https://github.com/novan-xu/PanelCladding) on 2026-10-13.
+Its local checkout is `C:\Projects\PanelCladding`. Source, packaging, design assets
+and product-specific development records are maintained there; MCP_Rhino builds
+independently. Existing Rhino installation paths and plug-in identity are unchanged.
