@@ -3,6 +3,7 @@
 # =========================
 **/bin/
 **/obj/
+**/bin-testhost/
 
 # =========================
 # Test results & coverage
@@ -55,6 +56,11 @@ project.nuget.cache
 # =========================
 # Project-specific generated artifacts
 # =========================
+/.codex_tmp/
+/outputs/
+/Runtime_Output/
+/tmp/
+**/node_modules/
 .tmp-build/
 .tmp-install*/
 .tmp-package*/
