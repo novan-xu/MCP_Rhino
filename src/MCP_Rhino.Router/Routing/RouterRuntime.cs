@@ -77,7 +77,7 @@ public sealed class RouterRuntime
         // Offline execution must not wait for or depend on live backend handshakes.
         if (TryGetStringArgument(parameters, "filePath", out string? path) &&
             _catalog.Discover().Documents.Any(document => document.Descriptor is { } descriptor && RoutePath.Equals(path, descriptor.FilePath)))
-            return RouterErrors.Create("OFFLINE_SOURCE_OPEN", "This source is known to be open in Rhino. Select its live session and use live tools, or close it before offline editing.");
+            return RouterErrors.Create("OFFLINE_SOURCE_OPEN", "This source is open in Rhino. Select its live session and use live tools. Do not close, save, or replace the user's document; if offline work on this file is really needed, ask the user.");
         return null;
     }
 
