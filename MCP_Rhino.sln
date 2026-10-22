@@ -20,6 +20,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OfflineCopyEditSmoke", "Pro
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MCP_Rhino.RhinoWorker", "src\MCP_Rhino.RhinoWorker\MCP_Rhino.RhinoWorker.csproj", "{86CF3C36-0979-4610-8366-A6A55C900CB1}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RhinoShim", "Project_Test\261022_TEST_router-route-capacity\RhinoShim\RhinoShim.csproj", "{43A099B2-F4DC-4429-8DEE-BBFBB634573B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RouteCapacitySmoke", "Project_Test\261022_TEST_router-route-capacity\RouteCapacitySmoke\RouteCapacitySmoke.csproj", "{2E11C4B1-4732-45D7-A6FA-FB0D498C7CF1}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -54,6 +58,14 @@ Global
 		{86CF3C36-0979-4610-8366-A6A55C900CB1}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{86CF3C36-0979-4610-8366-A6A55C900CB1}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{86CF3C36-0979-4610-8366-A6A55C900CB1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{43A099B2-F4DC-4429-8DEE-BBFBB634573B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{43A099B2-F4DC-4429-8DEE-BBFBB634573B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{43A099B2-F4DC-4429-8DEE-BBFBB634573B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{43A099B2-F4DC-4429-8DEE-BBFBB634573B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2E11C4B1-4732-45D7-A6FA-FB0D498C7CF1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2E11C4B1-4732-45D7-A6FA-FB0D498C7CF1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2E11C4B1-4732-45D7-A6FA-FB0D498C7CF1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2E11C4B1-4732-45D7-A6FA-FB0D498C7CF1}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -68,5 +80,7 @@ Global
 		{C2E753F1-2812-4BC7-B2DD-42A2F15E1003} = {8D05803C-2276-4D30-96E7-050375714526}
 		{72A84223-0744-42CF-AC32-5135905C8F39} = {8C8B1339-3AC2-4D86-B34F-4AE7EC221C84}
 		{86CF3C36-0979-4610-8366-A6A55C900CB1} = {8D05803C-2276-4D30-96E7-050375714526}
+		{43A099B2-F4DC-4429-8DEE-BBFBB634573B} = {8C8B1339-3AC2-4D86-B34F-4AE7EC221C84}
+		{2E11C4B1-4732-45D7-A6FA-FB0D498C7CF1} = {8C8B1339-3AC2-4D86-B34F-4AE7EC221C84}
 	EndGlobalSection
 EndGlobal

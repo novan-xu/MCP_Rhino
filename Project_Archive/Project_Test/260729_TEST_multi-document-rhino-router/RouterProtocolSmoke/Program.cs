@@ -67,8 +67,8 @@ static async Task RunAsync(string registryPath)
         "Offline routing of a closed path does not require a live backend.");
 
     RouterCatalogSnapshot snapshot = await catalogOne.RefreshAsync(CancellationToken.None);
-    Require(snapshot.CanonicalBackend?.Resources.Count == 2, "Paginated resources are fully collected.");
-    Require(snapshot.CanonicalBackend?.ResourceTemplates.Count == 2, "Paginated resource templates are fully collected.");
+    Require(snapshot.CanonicalSurface?.Resources.Count == 2, "Paginated resources are fully collected.");
+    Require(snapshot.CanonicalSurface?.ResourceTemplates.Count == 2, "Paginated resource templates are fully collected.");
     Require(!File.Exists(registry.GetDescriptorPath(stale.ProcessId, stale.RuntimeSerialNumber)), "Proven-stale descriptor is cleaned.");
 
     CallToolResult byPath = await routerOne.CallToolCoreAsync(Call("echo_document", new { filePath = descriptorA.FilePath, value = "path" }), CancellationToken.None);

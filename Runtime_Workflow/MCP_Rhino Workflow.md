@@ -58,6 +58,11 @@ When adding a new rule file, decide by intent: *how to build* goes to `Project_G
   conflicting `filePath` returns `DOCUMENT_TARGET_CONFLICT`; duplicate open paths return
   `DOCUMENT_TARGET_AMBIGUOUS` until the caller selects a session id. A lost mutation connection is
   not replayed and reports `MUTATION_OUTCOME_UNKNOWN`.
+- `DOCUMENT_ENDPOINT_BUSY` (diagnostic `ENDPOINT_BUSY`) means the document is open but other agent
+  sessions hold every connection slot of its route. Retry after a short wait; if it persists, tell
+  the user that ending idle agent sessions frees slots. It is not a reason to use offline tools,
+  close the document, or report the document as closed. `DOCUMENT_ENDPOINT_UNAVAILABLE` carries the
+  document's own diagnostic, such as `ENDPOINT_NOT_LISTENING` or `ROUTE_ATTESTATION_MISMATCH`.
 - Fixed debug pipes, stdio bridges, embedded chat/companion surfaces, and per-document panel pipes are
   retired. Do not add a fallback transport when Router discovery or selection fails; report the live
   route capability gap instead.

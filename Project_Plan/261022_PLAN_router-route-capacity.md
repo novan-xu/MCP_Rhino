@@ -1,7 +1,8 @@
 # Router Route Capacity Plan
 
-Status: proposed, awaiting user approval. Investigation and reproduction only; nothing implemented
-or installed.
+Status: approved by the user on 2026-10-22 and implemented on branch
+`claude/router-route-capacity`; see [261022_EXET_router-route-capacity](../Project_Exet/261022_EXET_router-route-capacity.md)
+for deviations, validation and the remaining live, cap-measurement and packaging steps.
 
 ## Background
 

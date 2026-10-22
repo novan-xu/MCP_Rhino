@@ -258,6 +258,27 @@ Rhino plug-in 能力经 RhinoCommon 操作运行中的 `RhinoDoc`。Router 另�
 - Route endpoints accept bounded concurrent current-user connections. They are bound to
   `RhinoDoc.FromRuntimeSerialNumber(...)`; they do not follow foreground activation. Mutation calls
   are never automatically replayed after a disconnect.
+- Route capacity is a named plug-in constant (`ServerBootstrap.RouteMaxConcurrentConnections`, 32),
+  not a user setting. Router connections follow use, not Router lifetime:
+  - Probe connections (surface discovery per plug-in instance, attestation for
+    `list_documents`, resource reads) connect, work, and close at once.
+  - Work connections are opened only by `select_document` or a proxied call that targets a
+    document. They are cached single-flight and kept until the document closes, its generation
+    key (plug-in instance, lifecycle generation, endpoint nonce, normalized path) changes, or the
+    Router exits, because per-connection script and Grasshopper state lives on them. A plain Save
+    (only `LastUpdatedUtc` changes) never reconnects. A retired connection receives no new calls
+    and is disposed only after its in-flight calls drain.
+  - The catalog monitor re-reads descriptors only and probes just when a new plug-in instance
+    appears. Every work connection re-attests and must match the cached canonical fingerprint.
+- A connect timeout is classified without consuming a pipe instance: an existing pipe returns
+  retryable `DOCUMENT_ENDPOINT_BUSY` (`ENDPOINT_BUSY`); a missing pipe returns
+  `DOCUMENT_ENDPOINT_UNAVAILABLE` (`ENDPOINT_NOT_LISTENING`). A backend failure or
+  non-caller cancellation during a proxied call returns `MUTATION_OUTCOME_UNKNOWN` for
+  non-read-only tools and retryable `DOCUMENT_ENDPOINT_UNAVAILABLE` for reads.
+- Registry readers open descriptors with read/write/delete sharing. `RouteRegistry.Write` replaces
+  the descriptor with a POSIX-semantics rename, so readers never block it. It falls back to
+  `File.Move(overwrite)` where POSIX rename isn't supported, and it briefly retries for readers that
+  don't share delete access. In the plug-in, a failed descriptor write stops the route.
 - Unsaved documents may be listed as unavailable, but become routable on first Save. Save As keeps
   the document session/pipe and atomically republishes the verified path. Closing marks the
   descriptor unavailable before one bounded aggregate endpoint drain.
