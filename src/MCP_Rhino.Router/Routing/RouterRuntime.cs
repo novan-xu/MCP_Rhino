@@ -107,7 +107,7 @@ public sealed class RouterRuntime
         RouterCatalogSnapshot snapshot = await _catalog.RefreshAsync(cancellationToken).ConfigureAwait(false);
         return new ListResourcesResult
         {
-            Resources = snapshot.CanonicalBackend?.Resources.ToList() ?? new List<Resource>()
+            Resources = snapshot.CanonicalSurface?.Resources.ToList() ?? new List<Resource>()
         };
     }
 
@@ -119,7 +119,7 @@ public sealed class RouterRuntime
         RouterCatalogSnapshot snapshot = await _catalog.RefreshAsync(cancellationToken).ConfigureAwait(false);
         return new ListResourceTemplatesResult
         {
-            ResourceTemplates = snapshot.CanonicalBackend?.ResourceTemplates.ToList() ?? new List<ResourceTemplate>()
+            ResourceTemplates = snapshot.CanonicalSurface?.ResourceTemplates.ToList() ?? new List<ResourceTemplate>()
         };
     }
 
@@ -134,65 +134,112 @@ public sealed class RouterRuntime
         }
 
         RouterCatalogSnapshot snapshot = await _catalog.RefreshAsync(cancellationToken).ConfigureAwait(false);
-        BackendConnection backend = snapshot.CanonicalBackend
-            ?? throw new McpProtocolException("No compatible saved Rhino document endpoint is available.");
-        return await backend.Client.ReadResourceAsync(request.Params, cancellationToken).ConfigureAwait(false);
+        string? selectedSessionId = GetSelectedSessionId();
+        IEnumerable<RouteEndpointDescriptor> candidates = snapshot.CanonicalDescriptors
+            .OrderBy(descriptor => string.Equals(descriptor.DocumentSessionId, selectedSessionId, StringComparison.Ordinal) ? 0 : 1);
+        foreach (RouteEndpointDescriptor descriptor in candidates)
+        {
+            BackendLease lease;
+            try
+            {
+                lease = await _catalog.AcquireAsync(descriptor, BackendAccess.Probe, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex) when (BackendCatalog.IsConnectFailure(ex))
+            {
+                continue;
+            }
+
+            await using (lease.ConfigureAwait(false))
+            {
+                return await lease.Connection.Client.ReadResourceAsync(request.Params, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        throw new McpProtocolException("No compatible saved Rhino document endpoint is available.");
     }
 
     public async Task CheckForToolSurfaceChangeAsync(CancellationToken cancellationToken)
     {
         McpServer? frontend;
-        string? published;
         lock (_frontendLock)
         {
             frontend = _frontendServer;
+        }
+
+        if (frontend is null)
+        {
+            return;
+        }
+
+        if (await DetectToolSurfaceChangeAsync(cancellationToken).ConfigureAwait(false))
+        {
+            await frontend.SendNotificationAsync(
+                NotificationMethods.ToolListChangedNotification,
+                cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    // Reads descriptors only; probes a backend just when a new plug-in instance appears.
+    public async Task<bool> DetectToolSurfaceChangeAsync(CancellationToken cancellationToken)
+    {
+        string? published;
+        lock (_frontendLock)
+        {
             published = _publishedSurfaceFingerprint;
         }
 
-        if (frontend is null || published is null)
+        if (published is null)
         {
-            return;
+            return false;
         }
 
-        RouterCatalogSnapshot snapshot = await _catalog.RefreshAsync(cancellationToken).ConfigureAwait(false);
+        RouterCatalogSnapshot snapshot = await _catalog.RefreshAsync(
+            cancellationToken,
+            retryFailedSurfaceProbes: false).ConfigureAwait(false);
         string current = GetPublishedSurfaceFingerprint(snapshot);
         if (string.Equals(current, published, StringComparison.Ordinal))
         {
-            return;
+            return false;
         }
 
         lock (_frontendLock)
         {
             if (!string.Equals(_publishedSurfaceFingerprint, published, StringComparison.Ordinal))
             {
-                return;
+                return false;
             }
 
             _publishedSurfaceFingerprint = current;
         }
 
-        await frontend.SendNotificationAsync(
-            NotificationMethods.ToolListChangedNotification,
-            cancellationToken).ConfigureAwait(false);
+        return true;
     }
 
     private async Task<CallToolResult> ListDocumentsAsync(CancellationToken cancellationToken)
     {
         RouterCatalogSnapshot snapshot = await _catalog.RefreshAsync(cancellationToken).ConfigureAwait(false);
         string? selected = GetSelectedSessionId();
-        var connectionBySession = snapshot.ConnectionResults.ToDictionary(
-            result => result.Descriptor.DocumentSessionId,
+        var verified = await Task.WhenAll(snapshot.Routes.Select(async route => new
+        {
+            route.Descriptor.DocumentSessionId,
+            Diagnostic = await VerifyRouteAsync(snapshot, route, cancellationToken).ConfigureAwait(false)
+        })).ConfigureAwait(false);
+        var diagnosticBySession = verified.ToDictionary(
+            item => item.DocumentSessionId,
+            item => item.Diagnostic,
             StringComparer.Ordinal);
 
         var documents = snapshot.Discovery.Documents.Select(status =>
         {
             RouteEndpointDescriptor? descriptor = status.Descriptor;
-            BackendConnectionResult? connection = descriptor is not null
-                && connectionBySession.TryGetValue(descriptor.DocumentSessionId, out BackendConnectionResult? found)
-                    ? found
-                    : null;
-            bool canonical = connection?.Connection is not null
-                && snapshot.CanonicalConnections.Contains(connection.Connection);
+            string? diagnostic = null;
+            bool attested = descriptor is not null
+                && diagnosticBySession.TryGetValue(descriptor.DocumentSessionId, out diagnostic)
+                && diagnostic is null;
             return new
             {
                 sessionId = descriptor?.DocumentSessionId,
@@ -201,10 +248,9 @@ public sealed class RouterRuntime
                 processId = descriptor?.ProcessId,
                 runtimeSerialNumber = descriptor?.RuntimeSerialNumber,
                 pipeName = descriptor?.PipeName,
-                routable = status.Routable && connection?.Connection is not null && canonical,
+                routable = status.Routable && attested,
                 selected = descriptor is not null && string.Equals(selected, descriptor.DocumentSessionId, StringComparison.Ordinal),
-                status = connection?.Diagnostic
-                    ?? (connection?.Connection is not null && !canonical ? "TOOL_SURFACE_MISMATCH" : status.Status),
+                status = diagnostic ?? status.Status,
                 pluginVersion = descriptor?.PluginVersion,
                 descriptorFile = Path.GetFileName(status.DescriptorPath)
             };
@@ -218,6 +264,38 @@ public sealed class RouterRuntime
         });
     }
 
+    // Attests a canonical route with a probe connection, or reuses this Router's work connection.
+    private async Task<string?> VerifyRouteAsync(
+        RouterCatalogSnapshot snapshot,
+        DocumentRoute route,
+        CancellationToken cancellationToken)
+    {
+        if (route.Surface is null)
+        {
+            return route.Diagnostic;
+        }
+
+        if (!snapshot.IsCanonical(route))
+        {
+            return "TOOL_SURFACE_MISMATCH";
+        }
+
+        try
+        {
+            BackendLease lease = await _catalog.AcquireAsync(route.Descriptor, BackendAccess.Probe, cancellationToken).ConfigureAwait(false);
+            await lease.DisposeAsync().ConfigureAwait(false);
+            return null;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex) when (BackendCatalog.IsConnectFailure(ex))
+        {
+            return BackendCatalog.Diagnose(ex);
+        }
+    }
+
     private async Task<CallToolResult> SelectDocumentAsync(
         CallToolRequestParams parameters,
         CancellationToken cancellationToken)
@@ -228,26 +306,32 @@ public sealed class RouterRuntime
         }
 
         RouterCatalogSnapshot snapshot = await _catalog.RefreshAsync(cancellationToken).ConfigureAwait(false);
-        BackendConnection? selected = snapshot.CanonicalConnections.FirstOrDefault(connection =>
-            string.Equals(connection.Descriptor.DocumentSessionId, sessionId, StringComparison.Ordinal));
-        if (selected is null)
+        DocumentRoute? route = snapshot.Find(sessionId!);
+        if (route is null)
         {
-            bool incompatible = snapshot.HealthyConnections.Any(connection =>
-                string.Equals(connection.Descriptor.DocumentSessionId, sessionId, StringComparison.Ordinal));
-            return RouterErrors.Create(
-                incompatible ? "TOOL_SURFACE_MISMATCH" : "DOCUMENT_ENDPOINT_UNAVAILABLE",
-                incompatible
-                    ? "The document endpoint does not match the canonical Rhino MCP surface for this Router session."
-                    : "The requested document session is not open and attested.",
-                retryable: !incompatible);
+            RouteDocumentStatus? published = snapshot.Discovery.Documents.FirstOrDefault(status =>
+                string.Equals(status.Descriptor?.DocumentSessionId, sessionId, StringComparison.Ordinal));
+            return published is null
+                ? RouterErrors.Create(
+                    "DOCUMENT_ENDPOINT_UNAVAILABLE",
+                    "The requested document session is not published. List documents again.",
+                    retryable: true)
+                : RouterErrors.ForDocumentDiagnostic(published.Status);
         }
 
+        (BackendLease? lease, CallToolResult? error) = await AcquireWorkAsync(snapshot, route, cancellationToken).ConfigureAwait(false);
+        if (lease is null)
+        {
+            return error!;
+        }
+
+        await lease.DisposeAsync().ConfigureAwait(false);
         lock (_selectionLock)
         {
             _selectedSessionId = sessionId;
         }
 
-        return Success(ToDocumentPayload(selected.Descriptor, selected: true, "SELECTED"));
+        return Success(ToDocumentPayload(route.Descriptor, selected: true, "SELECTED"));
     }
 
     private async Task<CallToolResult> GetSelectedDocumentAsync(CancellationToken cancellationToken)
@@ -259,9 +343,8 @@ public sealed class RouterRuntime
         }
 
         RouterCatalogSnapshot snapshot = await _catalog.RefreshAsync(cancellationToken).ConfigureAwait(false);
-        BackendConnection? selected = snapshot.CanonicalConnections.FirstOrDefault(connection =>
-            string.Equals(connection.Descriptor.DocumentSessionId, selectedSessionId, StringComparison.Ordinal));
-        if (selected is null)
+        DocumentRoute? route = snapshot.Find(selectedSessionId);
+        if (route is null)
         {
             ClearSelectionIf(selectedSessionId);
             return RouterErrors.Create(
@@ -270,7 +353,14 @@ public sealed class RouterRuntime
                 retryable: true);
         }
 
-        return Success(ToDocumentPayload(selected.Descriptor, selected: true, "READY"));
+        (BackendLease? lease, CallToolResult? error) = await AcquireWorkAsync(snapshot, route, cancellationToken).ConfigureAwait(false);
+        if (lease is null)
+        {
+            return error!;
+        }
+
+        await lease.DisposeAsync().ConfigureAwait(false);
+        return Success(ToDocumentPayload(route.Descriptor, selected: true, "READY"));
     }
 
     private async Task<CallToolResult> ProxyToolAsync(
@@ -282,7 +372,7 @@ public sealed class RouterRuntime
         {
             snapshot = await _catalog.RefreshAsync(cancellationToken).ConfigureAwait(false);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
         }
@@ -291,7 +381,7 @@ public sealed class RouterRuntime
             return RouterErrors.Create("DOCUMENT_ENDPOINT_UNAVAILABLE", ex.Message, retryable: true);
         }
 
-        BackendConnection? canonical = snapshot.CanonicalBackend;
+        BackendSurface? canonical = snapshot.CanonicalSurface;
         if (canonical is null)
         {
             return RouterErrors.Create(
@@ -312,36 +402,94 @@ public sealed class RouterRuntime
             return RouterErrors.Create("ROUTER_CONTROL_TOOL_COLLISION", $"The backend tool '{tool.Name}' uses the reserved Router prefix.");
         }
 
-        BackendConnection? target = ResolveTarget(snapshot, tool, parameters, out CallToolResult? routingError);
+        DocumentRoute? target = ResolveTarget(snapshot, tool, parameters, out CallToolResult? routingError);
         if (target is null)
         {
             return routingError ?? RouterErrors.Create("DOCUMENT_ENDPOINT_UNAVAILABLE", "No document target is available.", retryable: true);
         }
 
+        (BackendLease? lease, CallToolResult? connectError) = await AcquireWorkAsync(snapshot, target, cancellationToken).ConfigureAwait(false);
+        if (lease is null)
+        {
+            return connectError!;
+        }
+
         bool mutation = tool.Annotations?.ReadOnlyHint != true;
-        bool dispatched = false;
-        try
+        await using (lease.ConfigureAwait(false))
         {
-            dispatched = true;
-            return await target.Client.CallToolAsync(parameters, cancellationToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex) when (ex is IOException or TimeoutException or ModelContextProtocol.McpException)
-        {
-            return mutation && dispatched
-                ? RouterErrors.Create(
-                    "MUTATION_OUTCOME_UNKNOWN",
-                    "The routed mutation disconnected after dispatch; inspect the Rhino document before retrying. " + ex.Message,
-                    retryable: false,
-                    outcomeUnknown: true)
-                : RouterErrors.Create("DOCUMENT_ENDPOINT_UNAVAILABLE", ex.Message, retryable: true);
+            try
+            {
+                return await lease.Connection.Client.CallToolAsync(parameters, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // Without caller cancellation, a cancelled or failed call means the backend went away.
+                if (ex is not McpProtocolException)
+                {
+                    _catalog.Invalidate(lease);
+                }
+
+                return mutation
+                    ? RouterErrors.Create(
+                        "MUTATION_OUTCOME_UNKNOWN",
+                        "The routed mutation disconnected after dispatch; inspect the Rhino document before retrying. " + ex.Message,
+                        retryable: false,
+                        outcomeUnknown: true)
+                    : RouterErrors.Create("DOCUMENT_ENDPOINT_UNAVAILABLE", ex.Message, retryable: true);
+            }
         }
     }
 
-    private BackendConnection? ResolveTarget(
+    // Opens or reuses this Router's work connection and checks that it serves the canonical surface.
+    private async Task<(BackendLease? Lease, CallToolResult? Error)> AcquireWorkAsync(
+        RouterCatalogSnapshot snapshot,
+        DocumentRoute route,
+        CancellationToken cancellationToken)
+    {
+        if (route.Surface is null)
+        {
+            return (null, RouterErrors.ForDocumentDiagnostic(route.Diagnostic ?? "SURFACE_UNAVAILABLE"));
+        }
+
+        if (!snapshot.IsCanonical(route))
+        {
+            return (null, SurfaceMismatch());
+        }
+
+        BackendLease lease;
+        try
+        {
+            lease = await _catalog.AcquireAsync(route.Descriptor, BackendAccess.Work, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex) when (BackendCatalog.IsConnectFailure(ex) || ex is ObjectDisposedException)
+        {
+            return (null, RouterErrors.ForDocumentDiagnostic(BackendCatalog.Diagnose(ex)));
+        }
+
+        BackendSurface? surface = lease.Connection.Surface;
+        if (surface is null || !string.Equals(surface.Fingerprint, snapshot.CanonicalFingerprint, StringComparison.Ordinal))
+        {
+            if (surface is not null)
+            {
+                _catalog.UpdateSurface(route.Descriptor, surface);
+            }
+
+            await lease.DisposeAsync().ConfigureAwait(false);
+            return (null, SurfaceMismatch());
+        }
+
+        return (lease, null);
+    }
+
+    private DocumentRoute? ResolveTarget(
         RouterCatalogSnapshot snapshot,
         Tool tool,
         CallToolRequestParams parameters,
@@ -354,8 +502,7 @@ public sealed class RouterRuntime
 
         if (selectedSessionId is not null)
         {
-            BackendConnection? selected = snapshot.CanonicalConnections.FirstOrDefault(connection =>
-                string.Equals(connection.Descriptor.DocumentSessionId, selectedSessionId, StringComparison.Ordinal));
+            DocumentRoute? selected = snapshot.Find(selectedSessionId);
             if (selected is null)
             {
                 ClearSelectionIf(selectedSessionId);
@@ -387,8 +534,8 @@ public sealed class RouterRuntime
             return null;
         }
 
-        BackendConnection[] matches = snapshot.CanonicalConnections
-            .Where(connection => RoutePath.Equals(requestedPath, connection.Descriptor.FilePath))
+        DocumentRoute[] matches = snapshot.Routes
+            .Where(route => RoutePath.Equals(requestedPath, route.Descriptor.FilePath))
             .ToArray();
         if (matches.Length == 0)
         {
@@ -407,9 +554,16 @@ public sealed class RouterRuntime
         return matches[0];
     }
 
+    private static CallToolResult SurfaceMismatch()
+    {
+        return RouterErrors.Create(
+            "TOOL_SURFACE_MISMATCH",
+            "The document endpoint does not match the canonical Rhino MCP surface for this Router session.");
+    }
+
     private static IReadOnlyList<Tool> GetCompatibleTools(RouterCatalogSnapshot snapshot)
     {
-        IReadOnlyList<Tool> tools = snapshot.CanonicalBackend?.Tools ?? Array.Empty<Tool>();
+        IReadOnlyList<Tool> tools = snapshot.CanonicalSurface?.Tools ?? Array.Empty<Tool>();
         if (tools.Any(tool => IsReservedTool(tool.Name)))
         {
             return Array.Empty<Tool>();

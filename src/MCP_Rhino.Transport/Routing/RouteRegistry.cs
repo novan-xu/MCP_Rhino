@@ -4,6 +4,10 @@ namespace MCP_Rhino.Transport.Routing;
 
 public sealed class RouteRegistry
 {
+    private const int ReplaceAttempts = 20;
+
+    private static readonly TimeSpan ReplaceRetryDelay = TimeSpan.FromMilliseconds(25);
+
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
     {
         WriteIndented = true
@@ -52,7 +56,7 @@ public sealed class RouteRegistry
         try
         {
             File.WriteAllText(temporary, JsonSerializer.Serialize(descriptor, SerializerOptions));
-            File.Move(temporary, destination, overwrite: true);
+            ReplaceWithRetry(temporary, destination);
         }
         finally
         {
@@ -75,7 +79,7 @@ public sealed class RouteRegistry
         {
             try
             {
-                string json = File.ReadAllText(path);
+                string json = ReadSharedText(path);
                 RouteEndpointDescriptor? descriptor = JsonSerializer.Deserialize<RouteEndpointDescriptor>(json, SerializerOptions);
                 if (descriptor is null || !descriptor.IsStructurallyValid())
                 {
@@ -107,7 +111,7 @@ public sealed class RouteRegistry
             }
 
             RouteEndpointDescriptor? current = JsonSerializer.Deserialize<RouteEndpointDescriptor>(
-                File.ReadAllText(path),
+                ReadSharedText(path),
                 SerializerOptions);
             if (current is null
                 || !string.Equals(current.PluginInstanceGeneration, expected.PluginInstanceGeneration, StringComparison.Ordinal)
@@ -123,6 +127,40 @@ public sealed class RouteRegistry
         {
             return false;
         }
+    }
+
+    // A POSIX-semantics rename replaces the descriptor even while readers hold it. The retry covers
+    // readers that do not share delete access (older Routers) and file systems without POSIX rename.
+    private static void ReplaceWithRetry(string source, string destination)
+    {
+        for (int attempt = 1; ; attempt++)
+        {
+            try
+            {
+                if (!PosixFileReplace.TryReplace(source, destination))
+                {
+                    File.Move(source, destination, overwrite: true);
+                }
+
+                return;
+            }
+            catch (Exception ex) when (attempt < ReplaceAttempts && ex is IOException or UnauthorizedAccessException)
+            {
+                Thread.Sleep(ReplaceRetryDelay);
+            }
+        }
+    }
+
+    // Readers share delete access so they block the writer's replace as little as possible.
+    private static string ReadSharedText(string path)
+    {
+        using var stream = new FileStream(
+            path,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.ReadWrite | FileShare.Delete);
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
     }
 }
 

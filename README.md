@@ -172,11 +172,14 @@ RhinoDoc.FromRuntimeSerialNumber(...)
 
 Mutation 断线后不会自动重放；结果不确定时返回 `MUTATION_OUTCOME_UNKNOWN`。每次成功写入由一个 Rhino Undo record 包裹。
 
+Router 按需连接：空闲的 agent session 不占用任何 route 连接；只有选中或通过 `filePath` 实际使用过的文档才保留一个工作连接，直到文档关闭、generation 变化或 Router 退出。普通 Save 不会触发重连。每个文档 route 最多 32 个并发连接；全部被其他 session 占用时返回可重试的 `DOCUMENT_ENDPOINT_BUSY`（文档仍然打开，结束空闲 session 即可释放；不要改用离线工具）。
+
 ## 测试
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File Project_Archive\Project_Test\260804_TEST_router-only-transport\RouterOnlyTransportSmoke.ps1
 dotnet run --project Project_Archive\Project_Test\260729_TEST_multi-document-rhino-router\RouterProtocolSmoke\RouterProtocolSmoke.csproj -c Debug
+dotnet run --project Project_Test\261022_TEST_router-route-capacity\RouteCapacitySmoke\RouteCapacitySmoke.csproj -c Debug
 dotnet build .\MCP_Rhino.sln -c Debug
 dotnet build .\MCP_Rhino.sln -c Release
 ```

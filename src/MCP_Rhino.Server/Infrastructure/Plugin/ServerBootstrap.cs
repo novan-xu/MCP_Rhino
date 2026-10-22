@@ -9,6 +9,10 @@ public sealed class ServerBootstrap : IDisposable
     private static readonly TimeSpan ListenerReadyTimeout = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan AggregateStopTimeout = TimeSpan.FromSeconds(5);
 
+    // Each agent session runs its own Router. Routers connect on demand, so this bounds sessions
+    // working on one document at once, plus older Routers that still hold idle connections.
+    private const int RouteMaxConcurrentConnections = 32;
+
     private readonly object _routedPipeLock = new();
     private readonly Dictionary<string, RoutedPipeRegistration> _routedPipeServers = new(StringComparer.OrdinalIgnoreCase);
 
@@ -27,7 +31,7 @@ public sealed class ServerBootstrap : IDisposable
                 RoutedHostFactory.For(runtimeSerialNumber, attestationProvider),
                 stopOnPipeCreateFailure: true,
                 pipeCreateFailureHint: "This route pipe did not start. The document remains unavailable to external MCP routers.",
-                maxConcurrentConnections: 8,
+                maxConcurrentConnections: RouteMaxConcurrentConnections,
                 currentUserOnly: true);
 
             if (!pipeServer.StartAndWait(ListenerReadyTimeout))

@@ -53,7 +53,8 @@
                       ..\..\Project_Test\260509_TEST_companion-image-attachments\**\*.cs;
                        ..\..\Project_Test\260804_TEST_direct-rhp-plugin-identity\RhpExecutableProbe\**\*.cs;
                       ..\..\Project_Test\260805_TEST_rhino-plugin-assembly-identity\PluginAssemblyIdentityProbe\**\*.cs;
-                      ..\..\Project_Test\260805_TEST_grasshopper-authoring-tools\ApiProbe\**\*.cs"
+                      ..\..\Project_Test\260805_TEST_grasshopper-authoring-tools\ApiProbe\**\*.cs;
+                      ..\..\Project_Test\261022_TEST_router-route-capacity\**\*.cs"
              LinkBase="Project_Test" />
     <Compile Include="..\..\Project_Archive\Project_Test\**\*.cs"
              Exclude="..\..\Project_Archive\Project_Test\260507_TEST_debug-bridge-only-plugin\**\*.cs;
